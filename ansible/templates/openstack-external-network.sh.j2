@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+ACTION="${1:-start}"
+EXTERNAL_INTERFACE="{{ lookup('env', 'EXTERNAL_INTERFACE') }}"
+GATEWAY_INTERFACE="{{ lookup('env', 'EXTERNAL_GATEWAY_INTERFACE') }}"
+EXTERNAL_CIDR="{{ lookup('env', 'EXTERNAL_CIDR') }}"
+EXTERNAL_GATEWAY="{{ lookup('env', 'EXTERNAL_GATEWAY') }}"
+MANAGEMENT_INTERFACE="{{ lookup('env', 'LIMA_MANAGEMENT_INTERFACE') }}"
+
+UPLINK_INTERFACE="$(
+  ip -4 route show default |
+    awk '{for (i=1; i<=NF; i++) if ($i == "dev") {print $(i+1); exit}}'
+)"
+
+[[ -n "${UPLINK_INTERFACE}" ]] || {
+  echo "no IPv4 default-route interface found" >&2
+  exit 1
+}
+
+start_network() {
+  if ! ip link show "${EXTERNAL_INTERFACE}" >/dev/null 2>&1; then
+    ip link add "${EXTERNAL_INTERFACE}" type veth \
+      peer name "${GATEWAY_INTERFACE}"
+  fi
+
+  ip link set "${EXTERNAL_INTERFACE}" up
+  ip link set "${GATEWAY_INTERFACE}" up
+  ip address replace "${EXTERNAL_GATEWAY}/24" dev "${GATEWAY_INTERFACE}"
+
+  sysctl -w net.ipv4.ip_forward=1 >/dev/null
+  install -d -m 0755 /etc/sysctl.d
+  printf 'net.ipv4.ip_forward=1\n' > /etc/sysctl.d/99-openstack-k8s-forward.conf
+
+  iptables -t nat -C POSTROUTING -s "${EXTERNAL_CIDR}" \
+    -o "${UPLINK_INTERFACE}" -j MASQUERADE 2>/dev/null ||
+    iptables -t nat -A POSTROUTING -s "${EXTERNAL_CIDR}" \
+      -o "${UPLINK_INTERFACE}" -j MASQUERADE
+
+  for pair in \
+    "${GATEWAY_INTERFACE} ${UPLINK_INTERFACE}" \
+    "${UPLINK_INTERFACE} ${GATEWAY_INTERFACE}" \
+    "${MANAGEMENT_INTERFACE} ${GATEWAY_INTERFACE}" \
+    "${GATEWAY_INTERFACE} ${MANAGEMENT_INTERFACE}"; do
+    read -r input output <<<"${pair}"
+    iptables -C FORWARD -i "${input}" -o "${output}" -j ACCEPT 2>/dev/null ||
+      iptables -A FORWARD -i "${input}" -o "${output}" -j ACCEPT
+  done
+}
+
+stop_network() {
+  if ip link show "${EXTERNAL_INTERFACE}" >/dev/null 2>&1; then
+    ip link delete "${EXTERNAL_INTERFACE}"
+  fi
+}
+
+case "${ACTION}" in
+  start) start_network ;;
+  stop) stop_network ;;
+  *) echo "usage: $0 start|stop" >&2; exit 2 ;;
+esac

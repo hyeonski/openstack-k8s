@@ -1,0 +1,47 @@
+---
+- name: Check active project swap
+  ansible.builtin.command: swapon --show=NAME --noheadings
+  register: active_swap
+  changed_when: false
+
+- name: Create project swap file
+  ansible.builtin.command:
+    cmd: "fallocate -l {{ swap_size_gib }}G /swapfile-openstack-k8s"
+    creates: /swapfile-openstack-k8s
+  when: swap_size_gib | int > 0
+
+- name: Restrict swap file permissions
+  ansible.builtin.file:
+    path: /swapfile-openstack-k8s
+    owner: root
+    group: root
+    mode: "0600"
+  when: swap_size_gib | int > 0
+
+- name: Detect swap signature
+  ansible.builtin.command: file -b /swapfile-openstack-k8s
+  register: swap_signature
+  changed_when: false
+  when: swap_size_gib | int > 0
+
+- name: Initialize project swap
+  ansible.builtin.command: mkswap /swapfile-openstack-k8s
+  when:
+    - swap_size_gib | int > 0
+    - "'swap file' not in swap_signature.stdout"
+
+- name: Activate project swap
+  ansible.builtin.command: swapon /swapfile-openstack-k8s
+  when:
+    - swap_size_gib | int > 0
+    - "'/swapfile-openstack-k8s' not in active_swap.stdout"
+
+- name: Persist project swap
+  ansible.posix.mount:
+    path: none
+    src: /swapfile-openstack-k8s
+    fstype: swap
+    opts: sw
+    state: present
+  when: swap_size_gib | int > 0
+

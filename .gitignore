@@ -1,0 +1,22 @@
+.DS_Store
+
+# Local state and secrets
+.state/
+
+# Generated run artifacts (sanitized results may be copied to results/)
+artifacts/
+
+# Python / Ansible local environments
+.venv/
+**/__pycache__/
+*.pyc
+
+# Generated Kolla and Ansible files
+generated/
+ansible/inventory/*/generated-hosts.ini
+kolla/environments/*/generated/
+
+# Temporary files
+*.tmp
+*.swp
+

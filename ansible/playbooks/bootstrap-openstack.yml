@@ -1,0 +1,178 @@
+---
+- name: Bootstrap persistent OpenStack resources
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    cloud_name: kolla-admin
+    test_project: "{{ lookup('env', 'OPENSTACK_TEST_PROJECT') }}"
+    test_user: "{{ lookup('env', 'OPENSTACK_TEST_USER') }}"
+    test_password: "{{ lookup('env', 'OPENSTACK_TEST_PASSWORD') }}"
+    external_network: "{{ lookup('env', 'EXTERNAL_NETWORK_NAME') }}"
+    tenant_network: "{{ lookup('env', 'TENANT_NETWORK_NAME') }}"
+    tenant_subnet: "{{ lookup('env', 'TENANT_SUBNET_NAME') }}"
+    tenant_router: "{{ lookup('env', 'TENANT_ROUTER_NAME') }}"
+  tasks:
+    - name: Create the CAPO test project
+      openstack.cloud.project:
+        cloud: "{{ cloud_name }}"
+        name: "{{ test_project }}"
+        domain: default
+        description: OpenStack Kubernetes CAPO test project
+        state: present
+
+    - name: Create the CAPO test user
+      openstack.cloud.identity_user:
+        cloud: "{{ cloud_name }}"
+        name: "{{ test_user }}"
+        domain: default
+        password: "{{ test_password }}"
+        default_project: "{{ test_project }}"
+        state: present
+        update_password: on_create
+      no_log: true
+
+    - name: Reconcile the persisted test-user password through Keystone CLI
+      # The pinned openstack.cloud/OpenStackSDK combination reports a changed
+      # user but does not produce a usable password update in this environment.
+      # The CLI uses Keystone's dedicated password update path and is verified
+      # later by issuing a token before the CAPO credential is persisted.
+      ansible.builtin.command:
+        argv:
+          - /opt/kolla-venv/bin/openstack
+          - --os-cloud
+          - kolla-admin
+          - user
+          - set
+          - --password
+          - "{{ test_password }}"
+          - "{{ test_user }}"
+      environment:
+        OS_CLIENT_CONFIG_FILE: /etc/kolla/clouds.yaml
+      changed_when: false
+      no_log: true
+
+    - name: Grant member role in the test project
+      openstack.cloud.role_assignment:
+        cloud: "{{ cloud_name }}"
+        user: "{{ test_user }}"
+        project: "{{ test_project }}"
+        role: member
+        state: present
+
+    - name: Create the flat external network
+      openstack.cloud.network:
+        cloud: "{{ cloud_name }}"
+        name: "{{ external_network }}"
+        external: true
+        shared: true
+        provider_network_type: flat
+        provider_physical_network: "{{ lookup('env', 'EXTERNAL_PHYSNET') }}"
+        state: present
+
+    - name: Create the external subnet
+      openstack.cloud.subnet:
+        cloud: "{{ cloud_name }}"
+        name: "{{ external_network }}-subnet"
+        network_name: "{{ external_network }}"
+        cidr: "{{ lookup('env', 'EXTERNAL_CIDR') }}"
+        gateway_ip: "{{ lookup('env', 'EXTERNAL_GATEWAY') }}"
+        enable_dhcp: false
+        allocation_pools:
+          - start: "{{ lookup('env', 'EXTERNAL_ALLOCATION_POOL_START') }}"
+            end: "{{ lookup('env', 'EXTERNAL_ALLOCATION_POOL_END') }}"
+        state: present
+
+    - name: Create the private tenant network
+      openstack.cloud.network:
+        cloud: "{{ cloud_name }}"
+        name: "{{ tenant_network }}"
+        project: "{{ test_project }}"
+        state: present
+
+    - name: Create the private tenant subnet
+      openstack.cloud.subnet:
+        cloud: "{{ cloud_name }}"
+        name: "{{ tenant_subnet }}"
+        network_name: "{{ tenant_network }}"
+        project: "{{ test_project }}"
+        cidr: "{{ lookup('env', 'TENANT_CIDR') }}"
+        gateway_ip: "{{ lookup('env', 'TENANT_GATEWAY') }}"
+        dns_nameservers:
+          - 1.1.1.1
+          - 8.8.8.8
+        state: present
+
+    - name: Connect the tenant subnet to the external network
+      openstack.cloud.router:
+        cloud: "{{ cloud_name }}"
+        name: "{{ tenant_router }}"
+        project: "{{ test_project }}"
+        network: "{{ external_network }}"
+        interfaces:
+          - "{{ tenant_subnet }}"
+        state: present
+
+    - name: Create the functional-test flavor
+      openstack.cloud.compute_flavor:
+        cloud: "{{ cloud_name }}"
+        name: "{{ lookup('env', 'OPENSTACK_TEST_FLAVOR') }}"
+        vcpus: "{{ lookup('env', 'OPENSTACK_TEST_FLAVOR_VCPUS') | int }}"
+        ram: "{{ lookup('env', 'OPENSTACK_TEST_FLAVOR_RAM_MB') | int }}"
+        disk: "{{ lookup('env', 'OPENSTACK_TEST_FLAVOR_DISK_GB') | int }}"
+        is_public: true
+        state: present
+
+    - name: Create the functional-test security group
+      openstack.cloud.security_group:
+        cloud: "{{ cloud_name }}"
+        name: capi-test-allow
+        project: "{{ test_project }}"
+        description: Ingress for controlled OpenStack functional tests
+        state: present
+
+    - name: Create functional-test ingress rules
+      openstack.cloud.security_group_rule:
+        cloud: "{{ cloud_name }}"
+        project: "{{ test_project }}"
+        security_group: capi-test-allow
+        protocol: "{{ item.protocol }}"
+        port_range_min: "{{ item.minimum | default(omit) }}"
+        port_range_max: "{{ item.maximum | default(omit) }}"
+        remote_ip_prefix: "{{ item.cidr }}"
+        direction: ingress
+        state: present
+      loop:
+        - { protocol: icmp, cidr: "0.0.0.0/0" }
+        - { protocol: tcp, minimum: 22, maximum: 22, cidr: "0.0.0.0/0" }
+        - { protocol: tcp, minimum: 6443, maximum: 6443, cidr: "0.0.0.0/0" }
+
+    - name: Upload the CirrOS ARM64 image
+      openstack.cloud.image:
+        cloud: "{{ cloud_name }}"
+        name: "{{ lookup('env', 'CIRROS_IMAGE_NAME') }}"
+        filename: "{{ lookup('env', 'KOLLA_DEPLOY_DIR') }}/cache/images/cirros-aarch64.img"
+        disk_format: qcow2
+        container_format: bare
+        is_public: true
+        properties:
+          hw_architecture: aarch64
+          hw_firmware_type: uefi
+          os_distro: cirros
+          os_version: "{{ lookup('env', 'CIRROS_VERSION') }}"
+        state: present
+
+    - name: Upload the Ubuntu ARM64 image
+      openstack.cloud.image:
+        cloud: "{{ cloud_name }}"
+        name: "{{ lookup('env', 'UBUNTU_IMAGE_NAME') }}"
+        filename: "{{ lookup('env', 'KOLLA_DEPLOY_DIR') }}/cache/images/ubuntu-24.04-arm64.img"
+        disk_format: qcow2
+        container_format: bare
+        is_public: true
+        properties:
+          hw_architecture: aarch64
+          hw_firmware_type: uefi
+          os_distro: ubuntu
+          os_version: "24.04"
+        state: present

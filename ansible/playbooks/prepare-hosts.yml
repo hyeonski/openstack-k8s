@@ -1,0 +1,169 @@
+---
+- name: Prepare all Kolla target hosts
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    swap_size_gib: "{{ lookup('env', 'GUEST_SWAP_GIB') | default('2', true) }}"
+  tasks:
+    - name: Require Ubuntu 24.04
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_version is version("24.04", ">=")
+          - ansible_architecture in ["aarch64", "arm64"]
+        fail_msg: >-
+          local-arm64 requires Ubuntu 24.04 or newer on ARM64; got
+          {{ ansible_distribution }} {{ ansible_distribution_version }}
+          {{ ansible_architecture }}
+
+    - name: Install common host packages
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+        name:
+          - chrony
+          - curl
+          - iptables
+          - jq
+          - python3
+          - python3-docker
+          - python3-libvirt
+          - rsync
+        state: present
+
+    - name: Enable time synchronization
+      ansible.builtin.systemd:
+        name: chrony
+        enabled: true
+        state: started
+
+    - name: Disable UFW in the isolated evaluation guests
+      community.general.ufw:
+        state: disabled
+
+    - name: Configure project swap
+      ansible.builtin.include_tasks: tasks/swap.yml
+
+    - name: Install deterministic host mappings
+      ansible.builtin.blockinfile:
+        path: /etc/hosts
+        marker: "# {mark} OPENSTACK-K8S MANAGED HOSTS"
+        block: |
+          {{ hostvars['controller']['ansible_host'] }} osk8s-controller controller
+          {{ hostvars['compute01']['ansible_host'] }} osk8s-compute compute01
+
+- name: Prepare controller external networking
+  hosts: controller
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Install external networking setup script
+      ansible.builtin.template:
+        src: ../templates/openstack-external-network.sh.j2
+        dest: /usr/local/sbin/openstack-external-network
+        owner: root
+        group: root
+        mode: "0755"
+      notify: Apply external networking
+
+    - name: Install external networking systemd unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/openstack-external-network.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=OpenStack evaluation external veth and NAT
+          Wants=network-online.target
+          After=network-online.target
+          Before=docker.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart=/usr/local/sbin/openstack-external-network start
+          ExecStop=/usr/local/sbin/openstack-external-network stop
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Reload systemd
+
+    - name: Enable and start external networking
+      ansible.builtin.systemd:
+        name: openstack-external-network.service
+        enabled: true
+        state: started
+        daemon_reload: true
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Apply external networking
+      ansible.builtin.command: /usr/local/sbin/openstack-external-network start
+      changed_when: true
+
+- name: Verify nested KVM on compute
+  hosts: compute
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Install ARM64 KVM verification packages
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+        name:
+          - qemu-system-arm
+          - qemu-efi-aarch64
+        state: present
+
+    - name: Stop host libvirt units before using containerized libvirt
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      failed_when: false
+      loop:
+        - libvirtd.service
+        - libvirtd.socket
+        - libvirtd-ro.socket
+        - libvirtd-admin.socket
+        - virtlogd.socket
+        - virtlockd.socket
+
+    - name: Remove host libvirt packages
+      ansible.builtin.apt:
+        name:
+          - libvirt-clients
+          - libvirt-daemon-system
+        state: absent
+        purge: true
+
+    - name: Require the KVM character device
+      ansible.builtin.stat:
+        path: /dev/kvm
+      register: kvm_device
+
+    - name: Stop when nested KVM is unavailable
+      ansible.builtin.assert:
+        that:
+          - kvm_device.stat.exists
+          - kvm_device.stat.ischr | default(false)
+        fail_msg: >-
+          /dev/kvm is unavailable in the Lima compute VM. Per the selected
+          policy, deployment stops here instead of falling back to QEMU TCG.
+
+    - name: Install nested KVM boot verifier
+      ansible.builtin.copy:
+        src: ../files/verify-nested-kvm.sh
+        dest: /usr/local/sbin/verify-nested-kvm
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Boot the host kernel in a nested KVM VM
+      ansible.builtin.command: /usr/local/sbin/verify-nested-kvm
+      changed_when: false
