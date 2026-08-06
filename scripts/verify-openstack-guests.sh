@@ -23,10 +23,11 @@ key_file="/home/${USER}/.ssh/openstack_k8s"
 public_key="${state_dir}/verification.pub"
 ssh-keygen -y -f "${key_file}" > "${public_key}"
 
-if ! openstack keypair show "${key_name}" >/dev/null 2>&1; then
-  openstack keypair create --public-key "${public_key}" "${key_name}" \
-    >/dev/null
-fi
+# This keypair is reserved for disposable verification servers. Reconcile it on
+# every run because the ignored local state (and therefore the private key) may
+# have been removed while the persistent OpenStack keypair still exists.
+openstack keypair delete "${key_name}" >/dev/null 2>&1 || true
+openstack keypair create --public-key "${public_key}" "${key_name}" >/dev/null
 
 wait_for_ssh() {
   local user="$1"
@@ -54,7 +55,7 @@ create_server_with_fip() {
   local extra=("$@")
   local fip
 
-  openstack server delete --wait "${server_name}" >/dev/null 2>&1 || true
+  delete_server_and_fips "${server_name}"
   openstack server create --wait \
     --config-drive true \
     --flavor "${OPENSTACK_TEST_FLAVOR}" \
@@ -68,6 +69,22 @@ create_server_with_fip() {
     -f value -c floating_ip_address "${EXTERNAL_NETWORK_NAME}")"
   openstack server add floating ip "${server_name}" "${fip}"
   printf '%s\n' "${fip}"
+}
+
+delete_server_and_fips() {
+  local server_name="$1"
+  local addresses
+  local address
+
+  addresses="$(
+    openstack server show "${server_name}" -f value -c addresses 2>/dev/null || true
+  )"
+  while IFS= read -r address; do
+    if openstack floating ip show "${address}" >/dev/null 2>&1; then
+      openstack floating ip delete "${address}"
+    fi
+  done < <(grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' <<<"${addresses}" | sort -u)
+  openstack server delete --wait "${server_name}" >/dev/null 2>&1 || true
 }
 
 cirros_name="verify-cirros-arm64"
@@ -119,7 +136,9 @@ chmod 0600 "${state_file}"
 # This script intentionally uses the restricted CAPO application credential.
 # Successful guest creation already exercises Nova scheduling and the Neutron
 # agents; keep the final inventory checks within tenant-level policy.
-openstack token issue
+# Validate the application credential without writing the bearer token itself
+# to the persisted verification log.
+openstack token issue -f value -c project_id >/dev/null
 openstack server list
 openstack network list
 openstack image list

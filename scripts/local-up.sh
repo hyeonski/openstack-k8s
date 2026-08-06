@@ -28,4 +28,5 @@ for assigned_ip in "${controller_ip}" "${compute_ip}"; do
 done
 
 scripts/generate-inventory.sh
+scripts/local-health.sh
 log "Local environment is running: controller=${controller_ip}, compute=${compute_ip}"

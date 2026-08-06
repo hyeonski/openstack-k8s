@@ -48,6 +48,9 @@ done
 run_on "${CONTROLLER_NAME}" bash -lc "
   set -Eeuo pipefail
   source /etc/kolla/capi-test-user.env
+  # Ansible's lookup('env', ...) reads the child-process environment.  A
+  # sourced shell variable is not inherited unless it is explicitly exported.
+  export OPENSTACK_TEST_PASSWORD
   export OS_CLIENT_CONFIG_FILE=/etc/kolla/clouds.yaml
   export ANSIBLE_CONFIG=${KOLLA_DEPLOY_DIR}/ansible/ansible.cfg
   ${remote_exports[*]}

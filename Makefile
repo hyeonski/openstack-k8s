@@ -12,7 +12,7 @@ export PROJECT_ROOT := $(CURDIR)
 export ENV
 export CONFIG
 
-.PHONY: help preflight host-setup secrets-check local-create local-up local-down \
+.PHONY: help preflight host-setup secrets-check local-create local-up local-health local-down \
 	local-destroy inventory host-prepare kolla-sync openstack-precheck \
 	openstack-pull openstack-build-overrides openstack-deploy openstack-validate \
 	openstack-post-deploy openstack-bootstrap \
@@ -29,6 +29,7 @@ help:
 	@echo "  secrets-check          Validate local secret permissions and Git ignores"
 	@echo "  local-create           Create the Lima controller and compute instances"
 	@echo "  local-up               Start project instances"
+	@echo "  local-health           Verify host networking and deployed OpenStack readiness"
 	@echo "  local-down             Remove the route and stop project instances"
 	@echo "  local-destroy          Delete only project Lima instances (CONFIRM=$(ENV))"
 	@echo "  status                 Show instance, network and local state"
@@ -63,6 +64,9 @@ local-create:
 
 local-up:
 	@scripts/local-up.sh
+
+local-health:
+	@scripts/local-health.sh
 
 local-down:
 	@scripts/local-down.sh

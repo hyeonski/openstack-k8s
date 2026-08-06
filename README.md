@@ -19,7 +19,7 @@ OpenStack 자체를 배포하고 검증하는 데까지이며, 아직 Kubernetes
 
 ## 현재 상태
 
-2026-07-24에 실행한 최신 로컬 검증을 기준으로 첫 번째 기능 마일스톤은
+2026-08-06에 실행한 최신 로컬 검증을 기준으로 첫 번째 기능 마일스톤은
 통과했다.
 
 | 범위 | 상태 | 의미 |
@@ -30,18 +30,20 @@ OpenStack 자체를 배포하고 검증하는 데까지이며, 아직 Kubernetes
 | Nova 게스트 생명주기 | 통과 | CirrOS 및 Ubuntu ARM64 인스턴스가 정상 부팅됨 |
 | Neutron 게스트 네트워크 | 통과 | DHCP, Floating IP, 외부에서의 접근, 인터넷 outbound가 동작함 |
 | Kubernetes 없는 CAPO 네트워크 게이트 | 통과 | macOS와 Docker bridge 컨테이너에서 OpenStack API 및 TCP 6443의 가상 workload API에 접근할 수 있음 |
-| clean-room 재구축 | 미검증 | 최종 자동화 코드만으로 Lima VM 두 대를 삭제 후 재구축하지는 않았음 |
+| 정지 후 재기동 readiness | 통과 | 양방향 관리망, Keystone, nova-compute, hypervisor가 준비된 뒤에만 `local-up`이 성공함 |
+| clean-room 재구축 | 통과 | Lima VM 두 대를 삭제하고 최종 자동화만으로 재생성·배포·게스트 검증·재기동 검증까지 통과함 |
 | 클라우드 VM 프로필 | 미구현 | GCP/AWS의 중첩 가상화 및 네트워크 차이를 코드화하고 검증해야 함 |
 | 물리 서버 프로필 | 미구현 | NIC/VLAN/bridge 및 스토리지 구성을 코드화하고 검증해야 함 |
 | CAPI/CAPO 및 Kubernetes | 미착수 | management 또는 workload Kubernetes 클러스터가 아직 없음 |
 | 노드 오토스케일링 | 미착수 | `MachineDeployment` 증설과 Cluster Autoscaler가 다음 마일스톤임 |
 
-현재 결과는 실행 중인 로컬 테스트베드의 기능이 정상임을 입증하지만,
-아직 완전한 재현성이나 이식성을 입증하지는 않는다. 배포 과정에서
-ARM64 펌웨어, config drive, NAT, Docker credential helper 문제를
-순차적으로 수정한 뒤 Kolla reconfigure를 수행해 성공했다. 따라서
-두 Lima VM을 삭제하고 최종 자동화만으로 다시 구축하는 clean-room
-재구축이 다음 인프라 인수 테스트다.
+최신 결과는 기존 Lima VM 두 대를 삭제한 뒤 최종 자동화만으로 호스트 준비,
+Kolla 배포, 리소스 bootstrap, 실제 게스트 검증, 완전 정지 후 재기동까지
+성공했음을 입증한다. clean-room 중 CAPO 테스트 비밀번호가 Ansible 자식 환경으로
+export되지 않아 인증이 실패하는 문제를 발견해 수정했으며, bootstrap 재실행과
+application credential 검증도 통과했다. 따라서 로컬 ARM64 프로필의 기능적
+재현성과 재시작 복구는 검증됐다. 클라우드 및 물리 서버 프로필의 이식성 검증은
+별도 마일스톤이다.
 
 로컬 프로필은 기능 검증에만 적합하다.
 
@@ -228,6 +230,7 @@ KEEP_TEST_RESOURCES=YES make openstack-verify
 
 ```bash
 make status
+make local-health
 make local-down
 make local-up
 make local-destroy CONFIRM=local-arm64
@@ -236,6 +239,12 @@ make local-destroy CONFIRM=local-arm64
 `local-down`은 일상적인 정지 작업이며 복구 가능하다. `local-destroy`는
 외부 Lima VM 두 대를 제거하므로 그 안의 OpenStack 배포와 모든 Nova VM도
 함께 제거한다. 저장소 상태, secret, 실행 artifact는 보존한다.
+
+`local-up`은 두 호스트의 양방향 관리망 통신을 확인하며, OpenStack이 이미
+배포된 환경에서는 Keystone API, `nova-compute`, hypervisor가 준비될 때까지
+대기한다. 따라서 Lima VM이나 컨테이너가 단순히 실행 중이라는 이유만으로
+성공을 보고하지 않는다. 동일 검사는 `make local-health`로 다시 실행할 수
+있다.
 
 ## 검증 자료
 
