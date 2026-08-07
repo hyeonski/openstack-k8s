@@ -18,6 +18,7 @@ for node in "${CONTROLLER_NAME}" "${COMPUTE_NAME}"; do
   fi
 done
 
+scripts/sync-guest-clocks.sh
 scripts/setup-project-ssh.sh
 
 controller_ip="$(controller_ipv4)"

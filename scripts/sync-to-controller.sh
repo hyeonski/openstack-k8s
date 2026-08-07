@@ -9,6 +9,7 @@ require_command rsync
 instance_running "${CONTROLLER_NAME}" || die "controller is not running"
 instance_running "${COMPUTE_NAME}" || die "compute is not running"
 ensure_state_dirs
+scripts/sync-guest-clocks.sh
 
 controller_ip="$(controller_ipv4)"
 key="${SECRET_DIR}/deployment_ed25519"

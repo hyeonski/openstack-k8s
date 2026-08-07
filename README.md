@@ -108,7 +108,7 @@ Kolla-Ansible로 배포하는 OpenStack 2025.2 구성은 다음과 같다.
 지속되거나 메모리 압박이 발생하면 실험을 중단해야 한다. 이 프로필에서
 측정한 값은 프로비저닝 지연시간 평가에 사용하지 않는다.
 
-로컬 ARM64 프로필에는 다음 세 가지 호환성 설정이 명시적으로 포함된다.
+로컬 ARM64 프로필에는 다음 네 가지 호환성 설정이 명시적으로 포함된다.
 
 - Kolla 2025.2 ARM64 이미지의 Debian Bookworm AAVMF가 Lima/VZ 중첩 KVM
   환경에서 현재 ARM64 EFI 게스트 로더를 실행할 때 예외를 일으키므로,
@@ -118,6 +118,10 @@ Kolla-Ansible로 배포하는 OpenStack 2025.2 구성은 다음과 같다.
   user data를 사용할 수 있도록 검증 VM에 Nova config drive를 사용한다.
 - 사용자 Docker 설정을 변경하거나 credential helper에 의존하지 않도록
   저장소의 익명 Docker 설정으로 공개 검증 이미지를 내려받는다.
+- macOS sleep 뒤 Lima/VZ guest clock이 정지한 채 남을 수 있으므로 첫 APT
+  실행 전에 VZ RTC로 시간을 bootstrap한다. 이후 `local-up`과 controller
+  동기화 경계에서 chrony로 복구하고, `local-health`는 호스트 대비 5초 이내의
+  controller/compute clock skew를 단언한다.
 
 위 설정은 로컬 가상화 계층을 위한 설정이며 GCP/AWS 또는 물리 서버
 프로필에 그대로 복사하면 안 된다.
@@ -322,11 +326,11 @@ make local-destroy CONFIRM=local-arm64
 외부 Lima VM 두 대를 제거하므로 그 안의 OpenStack 배포와 모든 Nova VM도
 함께 제거한다. 저장소 상태, secret, 실행 artifact는 보존한다.
 
-`local-up`은 두 호스트의 양방향 관리망 통신을 확인하며, OpenStack이 이미
-배포된 환경에서는 Keystone API, `nova-compute`, hypervisor가 준비될 때까지
-대기한다. 따라서 Lima VM이나 컨테이너가 단순히 실행 중이라는 이유만으로
-성공을 보고하지 않는다. 동일 검사는 `make local-health`로 다시 실행할 수
-있다.
+`local-up`은 두 guest clock을 먼저 복구한 뒤 양방향 관리망 통신을 확인하며,
+OpenStack이 이미 배포된 환경에서는 Keystone API, `nova-compute`, hypervisor가
+준비될 때까지 대기한다. 따라서 Lima VM이나 컨테이너가 단순히 실행 중이라는
+이유만으로 성공을 보고하지 않는다. `make local-health`는 시간을 변경하지 않고
+clock skew를 포함한 동일 readiness gate를 다시 실행한다.
 
 ## 검증 자료
 

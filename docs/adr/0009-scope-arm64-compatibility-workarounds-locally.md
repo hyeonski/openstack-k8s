@@ -22,6 +22,10 @@ bare-metal AMD64 프로필까지 불필요한 workaround가 전파된다.
    verification VM에 Nova config drive를 사용한다.
 4. 공개 verification image pull은 repository의 anonymous Docker config를
    사용해 사용자 credential helper 설정에 의존하지 않는다.
+5. macOS sleep 뒤 Lima/VZ guest clock이 크게 뒤처질 수 있으므로 첫 network
+   작업 전에 VZ RTC로 bootstrap하고, lifecycle 경계에서는 chrony로 복구한
+   뒤 호스트 대비 clock skew를 검증한다. 이 정책과 무제한 `makestep`은
+   `local-arm64`에만 적용한다.
 
 보정 이미지는 다른 OpenStack service image를 fork하지 않고
 `nova_libvirt_image`만 override한다.
@@ -37,6 +41,8 @@ bare-metal AMD64 프로필까지 불필요한 workaround가 전파된다.
 ## 결과
 
 - local ARM64 guest boot와 Nova/libvirt capability discovery가 동작한다.
+- APT, Keystone token과 Kubernetes 인증서 검증 전에 controller/compute 시간이
+  호스트 기준 5초 이내임을 보장한다.
 - OpenStack upgrade 시 derivative base tag와 workaround 필요성을 다시 확인해야 한다.
 - AMD64 profile은 이 설정을 기본 상속하지 않는다.
 - Kubernetes용 ARM64 Glance image도 별도 version과 checksum을 고정해야 한다.

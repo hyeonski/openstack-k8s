@@ -25,10 +25,54 @@ provision:
   - mode: system
     script: |
       #!/bin/bash
-      set -eux
+      set -Eeuxo pipefail
       hostnamectl set-hostname osk8s-compute
+      max_skew_seconds=${MAX_CLOCK_SKEW_SECONDS}
+      minimum_rtc_epoch=${RTC_MINIMUM_EPOCH}
+      [[ "$${max_skew_seconds}" =~ ^[0-9]+$$ ]] || {
+        echo "ERROR: invalid maximum clock skew: $${max_skew_seconds}" >&2
+        exit 1
+      }
+      [[ "$${minimum_rtc_epoch}" =~ ^[0-9]+$$ ]] || {
+        echo "ERROR: invalid minimum RTC epoch: $${minimum_rtc_epoch}" >&2
+        exit 1
+      }
+      rtc_epoch_file=/sys/class/rtc/rtc0/since_epoch
+      [[ -r "$${rtc_epoch_file}" ]] || {
+        echo "ERROR: local-arm64 requires a readable VZ RTC: $${rtc_epoch_file}" >&2
+        exit 1
+      }
+      rtc_epoch="$$(tr -d '[:space:]' < "$${rtc_epoch_file}")"
+      [[ "$${rtc_epoch}" =~ ^[0-9]+$$ ]] || {
+        echo "ERROR: invalid VZ RTC epoch: $${rtc_epoch}" >&2
+        exit 1
+      }
+      (( rtc_epoch >= minimum_rtc_epoch )) || {
+        echo "ERROR: VZ RTC epoch is implausibly old: $${rtc_epoch}" >&2
+        exit 1
+      }
+      system_epoch="$$(date -u +%s)"
+      clock_delta=$$((rtc_epoch - system_epoch))
+      (( clock_delta < 0 )) && clock_delta=$$((-clock_delta))
+      if (( clock_delta > max_skew_seconds )); then
+        date -u -s "@$${rtc_epoch}" >/dev/null
+      fi
+      corrected_epoch="$$(date -u +%s)"
+      corrected_delta=$$((rtc_epoch - corrected_epoch))
+      (( corrected_delta < 0 )) && corrected_delta=$$((-corrected_delta))
+      (( corrected_delta <= max_skew_seconds )) || {
+        echo "ERROR: failed to bootstrap system clock from the VZ RTC" >&2
+        exit 1
+      }
       apt-get update
       DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        ca-certificates curl jq openssh-server python3 python3-venv rsync
+        ca-certificates chrony curl jq openssh-server python3 python3-venv rsync
+      if grep -Eq '^[[:space:]]*makestep[[:space:]]+' /etc/chrony/chrony.conf; then
+        sed -i -E 's/^[[:space:]]*makestep[[:space:]].*/makestep 1.0 -1/' \
+          /etc/chrony/chrony.conf
+      else
+        printf '\nmakestep 1.0 -1\n' >> /etc/chrony/chrony.conf
+      fi
+      systemctl enable --now chrony
+      systemctl restart chrony
       systemctl enable --now ssh
-

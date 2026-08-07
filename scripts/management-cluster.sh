@@ -37,6 +37,7 @@ cluster_exists() {
 
 verify_cluster() {
   require_command kubectl
+  require_command python3
   [[ -f "${kubeconfig}" ]] || die "management kubeconfig not found: ${kubeconfig}"
   cluster_exists || die "kind cluster not found: ${MANAGEMENT_CLUSTER_NAME}"
 
@@ -49,6 +50,25 @@ verify_cluster() {
   architecture="$(kubectl --kubeconfig "${kubeconfig}" get nodes \
     -o jsonpath='{.items[0].status.nodeInfo.architecture}')"
   [[ "${architecture}" == "arm64" ]] || die "unexpected kind node architecture: ${architecture}"
+
+  local version_json server_version node_count node_name kubelet_version
+  version_json="$(kubectl --kubeconfig "${kubeconfig}" version -o json)"
+  server_version="$(python3 -c '
+import json, sys
+print(json.load(sys.stdin)["serverVersion"]["gitVersion"])
+' <<<"${version_json}")"
+  [[ "${server_version}" == "${KIND_KUBERNETES_VERSION}" ]] ||
+    die "unexpected kind API server version: ${server_version}; expected ${KIND_KUBERNETES_VERSION}"
+
+  node_count=0
+  while IFS=$'\t' read -r node_name kubelet_version; do
+    [[ -n "${node_name}" ]] || continue
+    node_count=$((node_count + 1))
+    [[ "${kubelet_version}" == "${KIND_KUBERNETES_VERSION}" ]] ||
+      die "unexpected kubelet version on ${node_name}: ${kubelet_version}; expected ${KIND_KUBERNETES_VERSION}"
+  done < <(kubectl --kubeconfig "${kubeconfig}" get nodes \
+    -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.nodeInfo.kubeletVersion}{"\n"}{end}')
+  (( node_count > 0 )) || die "management cluster has no nodes"
 
   local probe="openstack-api-probe"
   cleanup_probe() {
@@ -67,7 +87,7 @@ verify_cluster() {
   trap - EXIT
 
   kubectl --kubeconfig "${kubeconfig}" get nodes -o wide
-  kubectl --kubeconfig "${kubeconfig}" version
+  printf 'API server and kubelet version: %s\n' "${KIND_KUBERNETES_VERSION}"
   log "kind management cluster and in-cluster OpenStack API path passed"
   printf 'Kubeconfig: %s\n' "${kubeconfig}"
 }

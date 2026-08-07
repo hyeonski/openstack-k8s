@@ -7,6 +7,7 @@ source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
 instance_running "${CONTROLLER_NAME}" || die "controller is not running"
 instance_running "${COMPUTE_NAME}" || die "compute is not running"
+scripts/sync-guest-clocks.sh --check-only
 
 controller_ip="$(controller_ipv4)"
 compute_ip="$(compute_ipv4)"

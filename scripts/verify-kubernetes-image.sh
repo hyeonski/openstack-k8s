@@ -11,9 +11,18 @@ instance_running "${COMPUTE_NAME}" || die "compute is not running"
 [[ -f "${SECRET_DIR}/capi-clouds.yaml" ]] ||
   die "CAPO credentials are missing; run make openstack-bootstrap"
 
-scripts/sync-to-controller.sh
 run_dir="$(start_run)"
+sync_log="${run_dir}/logs/sync-to-controller.log"
 log_file="${run_dir}/logs/kubernetes-image-verification.log"
+
+set +e
+scripts/sync-to-controller.sh 2>&1 | tee "${sync_log}"
+sync_result="${PIPESTATUS[0]}"
+set -e
+if [[ "${sync_result}" -ne 0 ]]; then
+  warn "Controller synchronization failed; logs were preserved at ${sync_log}"
+  exit "${sync_result}"
+fi
 
 log "Booting and validating ${KUBERNETES_IMAGE_NAME}"
 set +e
