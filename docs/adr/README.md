@@ -29,8 +29,8 @@ ADR의 상태와 구현 상태는 다르다. 예를 들어 CAPI/CAPO는 설계�
 
 | ADR | 결정 | 상태 | 구현 상태 |
 |---|---|---|---|
-| [0001](0001-stage-project-around-a-scale-up-baseline.md) | scale-up 기준선을 중심으로 프로젝트를 단계화한다 | 채택됨 | OpenStack 단계 완료 |
-| [0002](0002-use-standalone-capi-capo.md) | Kubernetes lifecycle은 standalone CAPI/CAPO로 관리한다 | 채택됨 | 미구현 |
+| [0001](0001-stage-project-around-a-scale-up-baseline.md) | scale-up 기준선을 중심으로 프로젝트를 단계화한다 | 채택됨 | M0 및 M1 완료 |
+| [0002](0002-use-standalone-capi-capo.md) | Kubernetes lifecycle은 standalone CAPI/CAPO로 관리한다 | 채택됨 | 로컬 kind 완료, provider 미구현 |
 | [0003](0003-port-by-rebuilding-environment-profiles.md) | 환경 이전은 상태 이동이 아닌 프로필 기반 재구축으로 수행한다 | 채택됨 | 로컬 프로필만 구현 |
 | [0004](0004-use-lima-arm64-for-the-local-feasibility-gate.md) | 로컬 기능 게이트는 Lima 기반 ARM64 2노드 환경으로 구성한다 | 채택됨 | 구현 및 검증 완료 |
 | [0005](0005-deploy-openstack-with-kolla-ansible.md) | OpenStack 2025.2를 Kolla-Ansible로 배포한다 | 채택됨 | 구현 및 검증 완료 |
@@ -38,12 +38,13 @@ ADR의 상태와 구현 상태는 다르다. 예를 들어 CAPI/CAPO는 설계�
 | [0007](0007-split-automation-by-responsibility.md) | 자동화 도구의 책임과 실행 위치를 분리한다 | 채택됨 | 구현 완료 |
 | [0008](0008-require-layered-verification-and-safe-lifecycle.md) | 계층형 검증과 보수적인 상태·삭제 정책을 적용한다 | 채택됨 | 구현 및 clean-room 검증 완료 |
 | [0009](0009-scope-arm64-compatibility-workarounds-locally.md) | ARM64 호환성 보정은 로컬 프로필에만 한정한다 | 채택됨 | 구현 및 검증 완료 |
+| [0010](0010-build-pinned-arm64-kubernetes-image.md) | 고정 입력과 격리 builder로 ARM64 Kubernetes 노드 이미지를 만든다 | 채택됨 | Glance 및 Nova 재부팅 검증 완료 |
 
 ## 현재 마일스톤
 
 ```text
 M0  로컬 OpenStack 자동 구축·검증                     완료
-M1  Kubernetes용 ARM64 이미지와 management cluster   예정
+M1  Kubernetes용 ARM64 이미지와 management cluster   완료
 M2  CAPI/CAPO workload cluster와 수동 증설            예정
 M3  Pending Pod 기반 Cluster Autoscaler scale-up      예정
 M4  scale-down 또는 장애·지연 개선 연구               미결정
@@ -52,9 +53,9 @@ M5  클라우드 AMD64 및 물리 AMD64 프로필               예정
 
 M1부터 M3까지의 순서는 다음과 같다.
 
-1. Kubernetes용 ARM64 Glance 이미지 빌드 및 Nova 부팅 검증
-2. macOS에 별도 local management Kubernetes cluster 생성
-3. CAPI, kubeadm bootstrap/control-plane provider, CAPO 설치
+1. Kubernetes용 ARM64 Glance 이미지 빌드 및 Nova 부팅 검증 (완료)
+2. macOS에 별도 local management Kubernetes cluster 생성 (완료)
+3. CAPI, kubeadm bootstrap/control-plane provider, CAPO 설치 (다음 단계)
 4. CAPO용 OpenStack application credential 연결 및 API 접근 검증
 5. workload control plane 1대와 worker `MachineDeployment` 1대 생성
 6. CNI를 설치하고 control plane과 worker의 `Ready` 확인
@@ -69,7 +70,8 @@ M1부터 M3까지의 순서는 다음과 같다.
 
 다음 항목은 대화에서 후보나 추천안은 나왔지만 최종 결정으로 확정하지 않았다.
 
-- Kubernetes, containerd, CAPI, CAPO, Cluster Autoscaler의 정확한 버전 조합
+- cloud/bare-metal 환경의 management cluster 실행 위치와 lifecycle
+- CAPI, CAPO, Cluster Autoscaler의 정확한 버전 조합
 - CNI로 Calico와 Cilium 중 무엇을 사용할지
 - OpenStack Cloud Controller Manager를 어느 단계와 방식으로 설치할지
 - workload Kubernetes API endpoint에 Octavia를 사용할지, PoC용 단일 endpoint를 사용할지
@@ -85,5 +87,6 @@ M1부터 M3까지의 순서는 다음과 같다.
 - 프로젝트 사용법과 현재 검증 상태: [`README.md`](../../README.md)
 - 로컬 환경 변수: [`config/environments/local-arm64.env`](../../config/environments/local-arm64.env)
 - Kolla 설정: [`kolla/globals.yml.tpl`](../../kolla/globals.yml.tpl)
+- Kubernetes 이미지 입력: [`kubernetes/image-builder-variables.json`](../../kubernetes/image-builder-variables.json)
 - clean-room lifecycle 검증 커밋: `0882abf`
 - 최초 로컬 테스트베드 구현 커밋: `194d4b3`

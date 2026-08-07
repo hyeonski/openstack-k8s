@@ -15,8 +15,11 @@ export CONFIG
 .PHONY: help preflight host-setup secrets-check local-create local-up local-health local-down \
 	local-destroy inventory host-prepare kolla-sync openstack-precheck \
 	openstack-pull openstack-build-overrides openstack-deploy openstack-validate \
-	openstack-post-deploy openstack-bootstrap \
-	openstack-verify status lint
+	openstack-post-deploy openstack-bootstrap openstack-verify \
+	kubernetes-image-builder-create kubernetes-image-builder-destroy \
+	kubernetes-image-build kubernetes-image-upload kubernetes-image-verify \
+	kubernetes-image management-cluster-create management-cluster-verify \
+	management-cluster-destroy status lint
 
 help:
 	@echo "OpenStack/Kubernetes testbed automation"
@@ -46,6 +49,19 @@ help:
 	@echo "  openstack-post-deploy  Generate admin credentials"
 	@echo "  openstack-bootstrap    Create networks, images and CAPO project credentials"
 	@echo "  openstack-verify       Run CirrOS, Ubuntu and CAPO-network preflight"
+	@echo
+	@echo "Kubernetes node image:"
+	@echo "  kubernetes-image-builder-create  Create the isolated ARM64 image builder"
+	@echo "  kubernetes-image-build           Build and checksum the Kubernetes QCOW2"
+	@echo "  kubernetes-image-builder-destroy Delete only the image builder (CONFIRM=$(ENV))"
+	@echo "  kubernetes-image-upload          Upload the pinned image to Glance"
+	@echo "  kubernetes-image-verify          Boot and verify the image with Nova"
+	@echo "  kubernetes-image                 Upload and verify an existing built image"
+	@echo
+	@echo "Local management cluster:"
+	@echo "  management-cluster-create  Create and verify the pinned single-node kind cluster"
+	@echo "  management-cluster-verify  Verify Ready state and the in-cluster OpenStack API path"
+	@echo "  management-cluster-destroy Delete only the local kind cluster (CONFIRM=$(ENV))"
 	@echo
 	@echo "Development:"
 	@echo "  lint                    Static checks that do not mutate the host"
@@ -113,6 +129,32 @@ openstack-bootstrap:
 
 openstack-verify:
 	@scripts/openstack-verify.sh
+
+kubernetes-image-builder-create:
+	@scripts/kubernetes-image-builder-create.sh
+
+kubernetes-image-builder-destroy:
+	@scripts/kubernetes-image-builder-destroy.sh "$(CONFIRM)"
+
+kubernetes-image-build:
+	@scripts/build-kubernetes-image.sh
+
+kubernetes-image-upload:
+	@scripts/upload-kubernetes-image.sh
+
+kubernetes-image-verify:
+	@scripts/verify-kubernetes-image.sh
+
+kubernetes-image: kubernetes-image-upload kubernetes-image-verify
+
+management-cluster-create:
+	@scripts/management-cluster.sh create
+
+management-cluster-verify:
+	@scripts/management-cluster.sh verify
+
+management-cluster-destroy:
+	@scripts/management-cluster.sh destroy "$(CONFIRM)"
 
 status:
 	@scripts/status.sh

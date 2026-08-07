@@ -1,0 +1,15 @@
+{
+  "containerd_version": "2.3.2",
+  "cpus": "2",
+  "crictl_version": "1.35.0",
+  "disk_size": "20480",
+  "goss_arch": "arm64",
+  "kubernetes_deb_version": "1.35.7-1.1",
+  "kubernetes_rpm_version": "1.35.7",
+  "kubernetes_semver": "v1.35.7",
+  "kubernetes_series": "v1.35",
+  "memory": "3072",
+  "runc_version": "1.4.3",
+  "ubuntu_repo": "http://ports.ubuntu.com/ubuntu-ports",
+  "ubuntu_security_repo": "http://ports.ubuntu.com/ubuntu-ports"
+}

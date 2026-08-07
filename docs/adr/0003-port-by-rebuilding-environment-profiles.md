@@ -31,6 +31,7 @@ local-arm64
 다음은 환경 프로필로 분리한다.
 
 - architecture와 이미지
+- management cluster의 실행 위치와 lifecycle (`kind`는 `local-arm64`에만 적용)
 - host IP, SSH와 provisioning 방식
 - NIC 이름, CIDR, route, MTU와 external network 연결
 - nested virtualization 설정

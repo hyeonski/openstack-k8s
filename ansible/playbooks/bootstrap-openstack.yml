@@ -123,6 +123,25 @@
         is_public: true
         state: present
 
+    - name: Create Kubernetes control-plane and worker flavors
+      openstack.cloud.compute_flavor:
+        cloud: "{{ cloud_name }}"
+        name: "{{ item.name }}"
+        vcpus: "{{ item.vcpus | int }}"
+        ram: "{{ item.ram | int }}"
+        disk: "{{ item.disk | int }}"
+        is_public: true
+        state: present
+      loop:
+        - name: "{{ lookup('env', 'KUBERNETES_CONTROL_PLANE_FLAVOR') }}"
+          vcpus: "{{ lookup('env', 'KUBERNETES_CONTROL_PLANE_VCPUS') }}"
+          ram: "{{ lookup('env', 'KUBERNETES_CONTROL_PLANE_RAM_MB') }}"
+          disk: "{{ lookup('env', 'KUBERNETES_CONTROL_PLANE_DISK_GB') }}"
+        - name: "{{ lookup('env', 'KUBERNETES_WORKER_FLAVOR') }}"
+          vcpus: "{{ lookup('env', 'KUBERNETES_WORKER_VCPUS') }}"
+          ram: "{{ lookup('env', 'KUBERNETES_WORKER_RAM_MB') }}"
+          disk: "{{ lookup('env', 'KUBERNETES_WORKER_DISK_GB') }}"
+
     - name: Create the functional-test security group
       openstack.cloud.security_group:
         cloud: "{{ cloud_name }}"

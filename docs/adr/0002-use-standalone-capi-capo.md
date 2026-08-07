@@ -2,7 +2,7 @@
 
 - 상태: 채택됨
 - 결정일: 2026-08-06 (소급 기록)
-- 구현 상태: 미구현, OpenStack API 네트워크 게이트만 검증됨
+- 구현 상태: 로컬 kind management cluster와 노드 이미지 완료, provider controller 미구현
 
 ## 맥락
 
@@ -16,7 +16,9 @@ Cluster Autoscaler가 증설할 수 있어야 한다. 이후 VM 생성 지연, b
 ## 결정
 
 - OpenStack에는 Magnum을 추가하지 않고 **standalone CAPI+CAPO**를 사용한다.
-- 첫 PoC에서는 macOS의 별도 `kind` cluster를 management cluster로 사용한다.
+- `local-arm64` PoC에서는 macOS의 별도 단일 노드 `kind` cluster를
+  management cluster로 사용한다. 이는 로컬 구현 선택이며 cloud/bare-metal
+  환경의 topology로 자동 승계하지 않는다.
 - CAPI core, kubeadm bootstrap/control-plane provider와 CAPO controller는
   management cluster에서 실행한다.
 - Kubernetes control plane과 worker는 모두 OpenStack VM으로 만든다.
@@ -43,15 +45,27 @@ Cluster Autoscaler가 증설할 수 있어야 한다. 이후 VM 생성 지연, b
 ## 결과
 
 - management Kubernetes cluster가 하나 더 필요하다.
+- 16 GiB 로컬 호스트에서 OpenStack 내부에 management와 workload cluster를
+  함께 수용하면 현재 5 GiB compute VM의 메모리를 초과한다. 따라서 로컬에서는
+  Docker Desktop의 외부 `kind`를 사용하고, OpenStack 내부의 두 cluster
+  구성은 시도하지 않는다.
+- cloud/bare-metal 환경에서는 가용 자원, 장애 영역, 운영 지속성과 네트워크
+  접근성을 확인한 뒤 전용 외부 cluster, OpenStack 내부 별도 cluster 또는
+  bootstrap 후 pivot 중에서 management cluster 배치를 다시 결정한다.
+- `kind`와 Docker 의존성은 `local-arm64` 프로필에만 한정한다.
+- kind v0.31.0/Kubernetes v1.35.0 단일 노드 cluster와 프로젝트 전용
+  kubeconfig를 사용하며, Pod 내부에서 OpenStack API 접근을 검증한다.
 - VM 생성 과정은 `Cluster`, `MachineDeployment`, `Machine`,
   `OpenStackMachine` 상태로 관찰할 수 있다.
 - OpenStack API와 workload API endpoint가 management cluster에서 모두
   접근 가능해야 한다.
 - worker를 0대로 줄이려면 Cluster Autoscaler 실행 위치를 다시 검토해야 한다.
-- 정확한 버전, CNI, CCM, API endpoint 방식은 구현 전에 별도로 확정한다.
+- 노드 이미지는 Kubernetes v1.35.7과 containerd 2.3.2로 확정했다.
+  CAPI/CAPO 버전, CNI, CCM, API endpoint 방식은 구현 전에 별도로 확정한다.
 
 ## 재검토 조건
 
+- `cloud-amd64` 또는 `baremetal-amd64` 프로필의 management topology를 설계하는 경우
 - 목표가 단일 연구 cluster가 아니라 다중 tenant KaaS 제공으로 바뀌는 경우
 - Magnum+CAPI가 운영 요구사항을 크게 단순화하는 경우
 - scale-to-zero 때문에 autoscaler를 management cluster로 옮겨야 하는 경우

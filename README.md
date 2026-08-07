@@ -1,9 +1,9 @@
 # OpenStack → Kubernetes 노드 오토스케일링 테스트베드
 
-이 저장소는 이후 수행할 `Cluster API + CAPO + Cluster Autoscaler` 실험을
-위한 OpenStack 기반 환경을 구축한다. 첫 번째 마일스톤의 범위는
-OpenStack 자체를 배포하고 검증하는 데까지이며, 아직 Kubernetes는
-설치하지 않는다.
+이 저장소는 `Cluster API + CAPO + Cluster Autoscaler` 실험을 위한
+OpenStack 기반 환경을 구축한다. OpenStack 기반 마일스톤과 Kubernetes용
+ARM64 노드 이미지 게이트는 완료됐으며, 다음 단계는 별도의 로컬
+management Kubernetes cluster에 CAPI/CAPO provider를 설치하는 것이다.
 
 프로젝트의 기술 결정, 검토한 대안과 재검토 조건은
 [`docs/adr/`](docs/adr/README.md)에 기록한다.
@@ -33,11 +33,13 @@ OpenStack 자체를 배포하고 검증하는 데까지이며, 아직 Kubernetes
 | Nova 게스트 생명주기 | 통과 | CirrOS 및 Ubuntu ARM64 인스턴스가 정상 부팅됨 |
 | Neutron 게스트 네트워크 | 통과 | DHCP, Floating IP, 외부에서의 접근, 인터넷 outbound가 동작함 |
 | Kubernetes 없는 CAPO 네트워크 게이트 | 통과 | macOS와 Docker bridge 컨테이너에서 OpenStack API 및 TCP 6443의 가상 workload API에 접근할 수 있음 |
+| Kubernetes ARM64 노드 이미지 | 통과 | Ubuntu 22.04, Kubernetes v1.35.7, containerd 2.3.2 이미지를 빌드하고 Glance 업로드·Nova 부팅·재부팅까지 검증함 |
+| 로컬 management Kubernetes | 통과 | Docker Desktop 위의 단일 노드 kind v0.31.0/Kubernetes v1.35.0이 Ready이며 Pod 내부에서 OpenStack API에 접근 가능함 |
 | 정지 후 재기동 readiness | 통과 | 양방향 관리망, Keystone, nova-compute, hypervisor가 준비된 뒤에만 `local-up`이 성공함 |
-| clean-room 재구축 | 통과 | Lima VM 두 대를 삭제하고 최종 자동화만으로 재생성·배포·게스트 검증·재기동 검증까지 통과함 |
+| clean-room 재구축 | 통과 | Lima VM 두 대를 삭제하고 OpenStack 재배포·게스트 검증·Docker 콜드 스타트·kind 재생성까지 통과함 |
 | 클라우드 VM 프로필 | 미구현 | GCP/AWS의 중첩 가상화 및 네트워크 차이를 코드화하고 검증해야 함 |
 | 물리 서버 프로필 | 미구현 | NIC/VLAN/bridge 및 스토리지 구성을 코드화하고 검증해야 함 |
-| CAPI/CAPO 및 Kubernetes | 미착수 | management 또는 workload Kubernetes 클러스터가 아직 없음 |
+| CAPI/CAPO와 workload Kubernetes | 미착수 | management cluster와 노드 이미지는 준비됐지만 provider controller 및 workload cluster는 아직 없음 |
 | 노드 오토스케일링 | 미착수 | `MachineDeployment` 증설과 Cluster Autoscaler가 다음 마일스톤임 |
 
 최신 결과는 기존 Lima VM 두 대를 삭제한 뒤 최종 자동화만으로 호스트 준비,
@@ -47,6 +49,13 @@ export되지 않아 인증이 실패하는 문제를 발견해 수정했으며, 
 application credential 검증도 통과했다. 따라서 로컬 ARM64 프로필의 기능적
 재현성과 재시작 복구는 검증됐다. 클라우드 및 물리 서버 프로필의 이식성 검증은
 별도 마일스톤이다.
+
+이후 별도 6 GiB Lima builder에서 Kubernetes Image Builder v0.1.55의 정확한
+commit으로 Ubuntu 22.04 ARM64 QCOW2를 만들었다. Image Builder Goss 64개
+검사와 호스트 checksum 검증을 통과했고, Glance의
+`ubuntu-2204-kube-v1.35.7-arm64` 이미지로 등록한 뒤 실제 Nova 게스트에서
+Kubernetes 구성과 재부팅 readiness를 확인했다. management 또는 workload
+Kubernetes cluster를 생성했다는 의미는 아니다.
 
 로컬 프로필은 기능 검증에만 적합하다.
 
@@ -63,10 +72,15 @@ application credential 검증도 통과했다. 따라서 로컬 ARM64 프로필�
 
 ```text
 macOS 호스트(16 GiB, 기능 검증 전용)
+├─ Docker Desktop
+│  └─ osk8s-management: 단일 노드 kind management cluster
+│                       └─ 프로젝트 전용 kubeconfig 사용
 ├─ Lima/socket_vmnet 공유 관리 네트워크
 │  ├─ osk8s-controller: 4 vCPU, 8 GiB, 80 GiB, 게스트 swap 2 GiB
 │  └─ osk8s-compute:    4 vCPU, 5 GiB, 80 GiB, 게스트 swap 2 GiB
 │                       └─ 중첩 KVM 필수
+├─ osk8s-image-builder:  4 vCPU, 6 GiB, 50 GiB, 중첩 KVM
+│                       └─ controller/compute와 동시에 실행하지 않음
 │
 ├─ controller 내부 external-network 인터페이스 쌍
 │  ├─ veth-kolla-ex → OVS br-ex
@@ -118,6 +132,10 @@ Kolla-Ansible로 배포하는 OpenStack 2025.2 구성은 다음과 같다.
   VM 두 대만 정지한다.
 - `local-destroy`는 `CONFIRM=local-arm64` 확인값을 요구하며
   `osk8s-controller`와 `osk8s-compute`만 삭제한다.
+- `kubernetes-image-builder-destroy`도 동일한 확인값을 요구하고
+  `osk8s-image-builder`만 삭제한다. 빌드된 QCOW2와 checksum은 보존한다.
+- `management-cluster-destroy`는 `CONFIRM=local-arm64` 확인값을 요구하며
+  정확히 `osk8s-management` kind cluster와 프로젝트 전용 kubeconfig만 삭제한다.
 - socket_vmnet, credential, artifact, UTM/Tart VM, Docker 데이터,
   다른 Lima 인스턴스는 삭제하지 않는다.
 
@@ -229,6 +247,65 @@ CNI 또는 Kubernetes bootstrap 자체가 동작한다는 의미는 아니다.
 KEEP_TEST_RESOURCES=YES make openstack-verify
 ```
 
+### 5. Kubernetes ARM64 노드 이미지 빌드 및 검증
+
+로컬 16 GiB 호스트에서는 OpenStack VM 두 대와 6 GiB image builder를
+동시에 실행하지 않는다. 먼저 OpenStack을 정지하고 격리된 builder에서
+이미지를 만든다.
+
+```bash
+make local-down
+make kubernetes-image-builder-create
+make kubernetes-image-build
+make kubernetes-image-builder-destroy CONFIRM=local-arm64
+```
+
+빌드 결과는
+`.state/local-arm64/images/ubuntu-2204-kube-v1.35.7-arm64.qcow2`에 저장된다.
+builder를 삭제해도 결과는 남으며 같은 고정 입력으로 다시 만들 수 있다.
+
+현재 이미지 입력은 다음과 같다.
+
+- Ubuntu 22.04 ARM64, UEFI, QCOW2
+- Kubernetes v1.35.7, containerd 2.3.2, pause 3.10.2
+- Kubernetes Image Builder v0.1.55,
+  commit `7ffb9b7f1f26cd66891874463cc9411e3633325f`
+
+OpenStack을 다시 시작한 뒤 기존 빌드 결과를 업로드하고 검증한다.
+
+```bash
+make local-up
+make kubernetes-image-upload
+make kubernetes-image-verify
+```
+
+두 마지막 명령은 `make kubernetes-image`로 함께 실행할 수도 있다. 업로드는
+로컬 SHA-256을 먼저 확인하고 Glance에 ARM64/UEFI, OS, Kubernetes,
+Image Builder 버전과 checksum 속성을 기록한다. 검증은 전용 control-plane
+flavor로 Nova VM을 만들고 SSH, cloud-init, containerd CRI,
+`kubeadm`/`kubelet`/`kubectl`, 커널 모듈과 sysctl, swap 비활성화, pause image
+pull을 확인한다. 그 뒤 VM을 재부팅해 같은 readiness를 다시 확인하고 성공한
+테스트 리소스만 정리한다.
+
+### 6. 로컬 management cluster
+
+Docker Desktop daemon을 시작한 뒤 고정된 kind 바이너리와 node image로
+단일 노드 management cluster를 만든다.
+
+```bash
+make management-cluster-create
+make management-cluster-verify
+```
+
+kind v0.31.0 바이너리는 공식 SHA-256을 확인한 뒤
+`.state/local-arm64/bin/kind`에 저장한다. Kubernetes v1.35.0 node image도
+digest로 고정한다. kubeconfig는 사용자 전역 설정을 변경하지 않고
+`.state/local-arm64/kubeconfigs/management.yaml`에만 저장한다.
+
+검증은 node와 kube-system Pod의 `Ready`, ARM64 아키텍처, Kubernetes 버전,
+kind Pod 내부에서 OpenStack Keystone VIP로 향하는 HTTP 경로를 확인한다.
+CAPI/CAPO provider는 이 단계에서 아직 설치하지 않는다.
+
 ## 생명주기 명령
 
 ```bash
@@ -236,6 +313,8 @@ make status
 make local-health
 make local-down
 make local-up
+make management-cluster-verify
+make management-cluster-destroy CONFIRM=local-arm64
 make local-destroy CONFIRM=local-arm64
 ```
 
@@ -257,11 +336,11 @@ Kolla 로그, preflight 출력, 게스트 console 출력, CAPO network gate 결�
 
 ## 다음 마일스톤
 
-모든 OpenStack 검증 게이트를 통과한 뒤 다음 순서로 진행한다.
+현재 다음 순서로 진행한다.
 
-1. Glance용 Kubernetes 이미지 빌드
-2. 별도의 로컬 management Kubernetes cluster 생성
-3. CAPI와 CAPO 설치
+1. Glance용 Kubernetes ARM64 이미지 빌드·업로드·Nova 검증 — **완료**
+2. 별도의 로컬 management Kubernetes cluster 생성 — **완료**
+3. CAPI와 CAPO 설치 — **다음 단계**
 4. CAPO를 통해 workload control plane과 worker 한 대 생성
 5. `MachineDeployment`를 한 대에서 두 대로 수동 증설
 6. Cluster Autoscaler를 설치하고 Pending Pod 기반 scale-up 검증

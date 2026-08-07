@@ -32,8 +32,10 @@ rsync -a --delete \
 
 run_on "${CONTROLLER_NAME}" env \
   KOLLA_VENV="${KOLLA_VENV}" \
+  KOLLA_GIT_URL="${KOLLA_GIT_URL}" \
   KOLLA_GIT_REF="${KOLLA_GIT_REF}" \
+  KOLLA_COLLECTION_GIT_URL="${KOLLA_COLLECTION_GIT_URL}" \
+  KOLLA_COLLECTION_GIT_REF="${KOLLA_COLLECTION_GIT_REF}" \
   bash "${KOLLA_DEPLOY_DIR}/scripts/bootstrap-controller.sh"
 
 log "Deployment inputs synchronized to controller"
-
