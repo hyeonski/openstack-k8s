@@ -20,7 +20,7 @@ log "Running Kolla-Ansible ${command_name}"
 set +e
 scripts/run-controller.sh kolla-ansible "${command_name}" \
   -i "${KOLLA_DEPLOY_DIR}/kolla/generated/multinode" \
-  2>&1 | tee "${log_file}"
+  2>&1 | scripts/redact-output.py | tee "${log_file}"
 result="${PIPESTATUS[0]}"
 set -e
 

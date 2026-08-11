@@ -19,7 +19,10 @@ export CONFIG
 	kubernetes-image-builder-create kubernetes-image-builder-destroy \
 	kubernetes-image-build kubernetes-image-upload kubernetes-image-verify \
 	kubernetes-image management-cluster-create management-cluster-verify \
-	management-cluster-destroy status lint
+	management-cluster-destroy capi-providers-install capi-providers-verify \
+	capi-credentials-verify workload-cluster-create workload-cluster-verify \
+	workload-cluster-scale workload-cluster-diagnostics workload-cluster-destroy \
+	status lint
 
 help:
 	@echo "OpenStack/Kubernetes testbed automation"
@@ -62,6 +65,16 @@ help:
 	@echo "  management-cluster-create  Create and verify the pinned single-node kind cluster"
 	@echo "  management-cluster-verify  Verify Ready state and the in-cluster OpenStack API path"
 	@echo "  management-cluster-destroy Delete only the local kind cluster (CONFIRM=$(ENV))"
+	@echo
+	@echo "CAPI/CAPO workload cluster:"
+	@echo "  capi-providers-install    Install pinned CAPI, kubeadm, CAPO and ORC providers"
+	@echo "  capi-providers-verify     Verify provider versions and controller readiness"
+	@echo "  capi-credentials-verify   Verify the application credential from a kind Pod"
+	@echo "  workload-cluster-create   Create and verify one control plane and one worker"
+	@echo "  workload-cluster-verify   Verify the current workload cluster (WORKERS=1)"
+	@echo "  workload-cluster-scale    Manually scale the MachineDeployment from 1 to 2"
+	@echo "  workload-cluster-diagnostics Collect CAPI/Nova/bootstrap/compute diagnostics"
+	@echo "  workload-cluster-destroy  Delete exact workload Cluster (two confirmations)"
 	@echo
 	@echo "Development:"
 	@echo "  lint                    Static checks that do not mutate the host"
@@ -155,6 +168,30 @@ management-cluster-verify:
 
 management-cluster-destroy:
 	@scripts/management-cluster.sh destroy "$(CONFIRM)"
+
+capi-providers-install:
+	@scripts/capi-providers.sh install
+
+capi-providers-verify:
+	@scripts/capi-providers.sh verify
+
+capi-credentials-verify:
+	@scripts/capi-providers.sh credentials
+
+workload-cluster-create:
+	@scripts/workload-cluster.sh create
+
+workload-cluster-verify:
+	@scripts/workload-cluster.sh verify "$(or $(WORKERS),1)"
+
+workload-cluster-scale:
+	@scripts/workload-cluster.sh scale
+
+workload-cluster-diagnostics:
+	@scripts/workload-cluster.sh diagnostics
+
+workload-cluster-destroy:
+	@scripts/workload-cluster.sh destroy "$(CONFIRM)" "$(CONFIRM_CLUSTER)"
 
 status:
 	@scripts/status.sh

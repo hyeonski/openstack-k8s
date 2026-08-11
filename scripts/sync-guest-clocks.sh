@@ -51,6 +51,10 @@ is_epoch "${MAX_CLOCK_SKEW_SECONDS}" ||
   die "MAX_CLOCK_SKEW_SECONDS must be a non-negative integer"
 is_epoch "${RTC_MINIMUM_EPOCH}" ||
   die "RTC_MINIMUM_EPOCH must be a non-negative integer"
+is_epoch "${NTP_SYNC_READY_TIMEOUT_SECONDS}" ||
+  die "NTP_SYNC_READY_TIMEOUT_SECONDS must be a positive integer"
+(( NTP_SYNC_READY_TIMEOUT_SECONDS > 0 )) ||
+  die "NTP_SYNC_READY_TIMEOUT_SECONDS must be a positive integer"
 
 nodes=("${CONTROLLER_NAME}" "${COMPUTE_NAME}")
 for node in "${nodes[@]}"; do
@@ -63,6 +67,7 @@ for node in "${nodes[@]}"; do
         HOST_EPOCH="${host_before}" \
         MAX_CLOCK_SKEW_SECONDS="${MAX_CLOCK_SKEW_SECONDS}" \
         RTC_MINIMUM_EPOCH="${RTC_MINIMUM_EPOCH}" \
+        NTP_SYNC_READY_TIMEOUT_SECONDS="${NTP_SYNC_READY_TIMEOUT_SECONDS}" \
         bash -s <<'GUEST_CLOCK_SYNC'
 set -Eeuo pipefail
 
@@ -74,11 +79,50 @@ absolute_delta() {
   printf '%s\n' "${delta}"
 }
 
+chrony_tracking_ready() {
+  local tracking leap reference_id stratum
+  tracking="$(chronyc tracking 2>/dev/null || true)"
+  leap="$(awk -F: '$1 ~ /Leap status/ { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit }' <<<"${tracking}")"
+  reference_id="$(awk -F: '$1 ~ /Reference ID/ { gsub(/^[[:space:]]+/, "", $2); print $2; exit }' <<<"${tracking}")"
+  stratum="$(awk -F: '$1 ~ /Stratum/ { gsub(/[[:space:]]/, "", $2); print $2; exit }' <<<"${tracking}")"
+  [[ "${leap}" == "Normal" ]] || return 1
+  [[ "${stratum}" =~ ^[1-9][0-9]*$ ]] || return 1
+  [[ -n "${reference_id}" && "${reference_id}" != 00000000* ]]
+}
+
 method="host-gate"
 if command -v chronyc >/dev/null 2>&1; then
   if sudo chronyc -a makestep >/dev/null 2>&1; then
     method="chrony"
     chronyc waitsync 5 0.5 0.0 1 >/dev/null 2>&1 || true
+    if command -v timedatectl >/dev/null 2>&1; then
+      if [[ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null || true)" != "yes" ]]; then
+        # makestep can temporarily set the kernel unsynchronised flag while
+        # the normal chrony poll interval is already several minutes. Force a
+        # short measurement burst so systemd observes the healthy source now.
+        sudo chronyc -a burst 4/4 >/dev/null 2>&1 || true
+      fi
+      ntp_deadline=$((SECONDS + NTP_SYNC_READY_TIMEOUT_SECONDS))
+      while true; do
+        if [[ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null || true)" == "yes" ]]; then
+          method="chrony-systemd"
+          break
+        fi
+        # systemd-timesyncd's compatibility flag can remain false after a VZ
+        # RTC step even when chrony has a selected, normal upstream reference.
+        # Accept chrony's native status here; the outer host/guest epoch window
+        # remains the final independent accuracy gate.
+        if chrony_tracking_ready; then
+          method="chrony-tracking"
+          break
+        fi
+        if (( SECONDS >= ntp_deadline )); then
+          echo "ERROR: neither systemd nor chrony reported a synchronized source within ${NTP_SYNC_READY_TIMEOUT_SECONDS}s" >&2
+          exit 1
+        fi
+        sleep 2
+      done
+    fi
   fi
 fi
 

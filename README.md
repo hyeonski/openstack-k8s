@@ -2,8 +2,8 @@
 
 이 저장소는 `Cluster API + CAPO + Cluster Autoscaler` 실험을 위한
 OpenStack 기반 환경을 구축한다. OpenStack 기반 마일스톤과 Kubernetes용
-ARM64 노드 이미지 게이트는 완료됐으며, 다음 단계는 별도의 로컬
-management Kubernetes cluster에 CAPI/CAPO provider를 설치하는 것이다.
+ARM64 노드 이미지, management cluster와 CAPI/CAPO workload lifecycle
+게이트는 완료됐으며, 다음 단계는 Cluster Autoscaler의 실제 scale-up이다.
 
 프로젝트의 기술 결정, 검토한 대안과 재검토 조건은
 [`docs/adr/`](docs/adr/README.md)에 기록한다.
@@ -22,7 +22,7 @@ management Kubernetes cluster에 CAPI/CAPO provider를 설치하는 것이다.
 
 ## 현재 상태
 
-2026-08-06에 실행한 최신 로컬 검증을 기준으로 첫 번째 기능 마일스톤은
+2026-08-11에 완료한 전체 clean-room 로컬 검증을 기준으로 M0~M2 기능 마일스톤이
 통과했다.
 
 | 범위 | 상태 | 의미 |
@@ -35,27 +35,37 @@ management Kubernetes cluster에 CAPI/CAPO provider를 설치하는 것이다.
 | Kubernetes 없는 CAPO 네트워크 게이트 | 통과 | macOS와 Docker bridge 컨테이너에서 OpenStack API 및 TCP 6443의 가상 workload API에 접근할 수 있음 |
 | Kubernetes ARM64 노드 이미지 | 통과 | Ubuntu 22.04, Kubernetes v1.35.7, containerd 2.3.2 이미지를 빌드하고 Glance 업로드·Nova 부팅·재부팅까지 검증함 |
 | 로컬 management Kubernetes | 통과 | Docker Desktop 위의 단일 노드 kind v0.31.0/Kubernetes v1.35.0이 Ready이며 Pod 내부에서 OpenStack API에 접근 가능함 |
+| CAPI/CAPO provider | 통과 | CAPI/CABPK/KCP v1.13.4, CAPO v0.14.6와 ORC v2.4.0이 management cluster에서 Available임 |
+| OpenStack credential 연결 | 통과 | 기존 application credential를 namespace Secret으로 연결하고 kind Pod에서 실제 token 발급에 성공함 |
+| workload Kubernetes 기준선 | 통과 | CAPO가 OpenStack VM 기반 v1.35.7 control plane 1대와 worker 1대를 만들고 Calico, CoreDNS, API/CNI/DNS probe가 통과함 |
+| 수동 worker 증설 | 통과 | `MachineDeployment` 1→2 뒤 Nova VM 3대 ACTIVE, CAPI 3/3 Available, Kubernetes Node 3대 Ready를 확인함 |
 | 정지 후 재기동 readiness | 통과 | 양방향 관리망, Keystone, nova-compute, hypervisor가 준비된 뒤에만 `local-up`이 성공함 |
 | clean-room 재구축 | 통과 | Lima VM 두 대를 삭제하고 OpenStack 재배포·게스트 검증·Docker 콜드 스타트·kind 재생성까지 통과함 |
 | 클라우드 VM 프로필 | 미구현 | GCP/AWS의 중첩 가상화 및 네트워크 차이를 코드화하고 검증해야 함 |
 | 물리 서버 프로필 | 미구현 | NIC/VLAN/bridge 및 스토리지 구성을 코드화하고 검증해야 함 |
-| CAPI/CAPO와 workload Kubernetes | 미착수 | management cluster와 노드 이미지는 준비됐지만 provider controller 및 workload cluster는 아직 없음 |
-| 노드 오토스케일링 | 미착수 | `MachineDeployment` 증설과 Cluster Autoscaler가 다음 마일스톤임 |
+| 노드 오토스케일링 | 미착수 | 수동 `MachineDeployment` 증설은 통과했고 Cluster Autoscaler가 다음 마일스톤임 |
 
-최신 결과는 기존 Lima VM 두 대를 삭제한 뒤 최종 자동화만으로 호스트 준비,
-Kolla 배포, 리소스 bootstrap, 실제 게스트 검증, 완전 정지 후 재기동까지
-성공했음을 입증한다. clean-room 중 CAPO 테스트 비밀번호가 Ansible 자식 환경으로
-export되지 않아 인증이 실패하는 문제를 발견해 수정했으며, bootstrap 재실행과
-application credential 검증도 통과했다. 따라서 로컬 ARM64 프로필의 기능적
-재현성과 재시작 복구는 검증됐다. 클라우드 및 물리 서버 프로필의 이식성 검증은
-별도 마일스톤이다.
+최신 결과는 workload Cluster, management kind cluster와 Lima VM 두 대를 정확한
+확인값으로 삭제한 뒤 최종 자동화만으로 호스트 준비, Kolla 배포, 리소스
+bootstrap, 실제 게스트 검증, management/provider 설치와 workload 증설까지
+성공했음을 입증한다. secret, application credential, Kubernetes QCOW2, download
+cache와 기존 artifact는 삭제하지 않았다. bootstrap 중 application credential
+cloud 설정의 shell scope가 keypair 명령까지 이어지지 않는 문제를 발견했고,
+원인을 확인한 뒤 수정해 idempotent 재실행을 통과했다. 따라서 로컬 ARM64
+프로필의 M2 기능적 재현성과 재시작 복구는 검증됐다. 클라우드 및 물리 서버
+프로필의 이식성 검증은 별도 마일스톤이다.
 
 이후 별도 6 GiB Lima builder에서 Kubernetes Image Builder v0.1.55의 정확한
 commit으로 Ubuntu 22.04 ARM64 QCOW2를 만들었다. Image Builder Goss 64개
 검사와 호스트 checksum 검증을 통과했고, Glance의
 `ubuntu-2204-kube-v1.35.7-arm64` 이미지로 등록한 뒤 실제 Nova 게스트에서
-Kubernetes 구성과 재부팅 readiness를 확인했다. management 또는 workload
-Kubernetes cluster를 생성했다는 의미는 아니다.
+Kubernetes 구성과 재부팅 readiness를 확인했다.
+
+M2에서는 kind management cluster에 고정된 CAPI/CABPK/KCP v1.13.4,
+CAPO v0.14.6와 ORC v2.4.0을 설치했다. CAPO가 config drive로 같은 이미지를
+부트스트랩해 control plane 1대와 worker 1대를 만들었고, Calico v3.32.1과
+DNS/CNI/API probe가 통과했다. 이어 `MachineDeployment`를 1대에서 2대로
+늘려 세 번째 Nova VM과 Kubernetes Node가 추가되는 것을 확인했다.
 
 로컬 프로필은 기능 검증에만 적합하다.
 
@@ -74,11 +84,14 @@ Kubernetes cluster를 생성했다는 의미는 아니다.
 macOS 호스트(16 GiB, 기능 검증 전용)
 ├─ Docker Desktop
 │  └─ osk8s-management: 단일 노드 kind management cluster
-│                       └─ 프로젝트 전용 kubeconfig 사용
+│     ├─ 프로젝트 전용 kubeconfig 사용
+│     ├─ CAPI/CABPK/KCP v1.13.4
+│     └─ CAPO v0.14.6 + ORC v2.4.0
 ├─ Lima/socket_vmnet 공유 관리 네트워크
 │  ├─ osk8s-controller: 4 vCPU, 8 GiB, 80 GiB, 게스트 swap 2 GiB
-│  └─ osk8s-compute:    4 vCPU, 5 GiB, 80 GiB, 게스트 swap 2 GiB
-│                       └─ 중첩 KVM 필수
+│  └─ osk8s-compute:    4 vCPU, 10 GiB, 80 GiB, 게스트 swap 2 GiB
+│     ├─ 중첩 KVM 필수
+│     └─ workload v1.35.7: control plane 2 GiB 1대 + worker 2 GiB 2대
 ├─ osk8s-image-builder:  4 vCPU, 6 GiB, 50 GiB, 중첩 KVM
 │                       └─ controller/compute와 동시에 실행하지 않음
 │
@@ -87,7 +100,7 @@ macOS 호스트(16 GiB, 기능 검증 전용)
 │  └─ veth-kolla-gw → 172.24.4.1/24 + NAT
 │
 └─ 임시 macOS route
-   └─ 172.24.4.0/24 → controller 관리 IP
+   └─ 172.24.4.0/24 → controller 관리 IP → workload API Floating IP
 ```
 
 단일 Lima NIC를 관리/API/tunnel 트래픽에 함께 사용한다. 내부 veth 쌍은
@@ -140,6 +153,10 @@ Kolla-Ansible로 배포하는 OpenStack 2025.2 구성은 다음과 같다.
   `osk8s-image-builder`만 삭제한다. 빌드된 QCOW2와 checksum은 보존한다.
 - `management-cluster-destroy`는 `CONFIRM=local-arm64` 확인값을 요구하며
   정확히 `osk8s-management` kind cluster와 프로젝트 전용 kubeconfig만 삭제한다.
+- `workload-cluster-destroy`는 환경과 cluster 이름의 두 확인값을 요구하며
+  정확히 `osk8s-workload` Cluster만 삭제한다. CAPO가 소유한 VM, network,
+  router, security group과 Floating IP는 finalizer로 정리하지만 namespace와
+  application credential Secret은 명시적으로 삭제하지 않는다.
 - socket_vmnet, credential, artifact, UTM/Tart VM, Docker 데이터,
   다른 Lima 인스턴스는 삭제하지 않는다.
 
@@ -308,7 +325,87 @@ digest로 고정한다. kubeconfig는 사용자 전역 설정을 변경하지 �
 
 검증은 node와 kube-system Pod의 `Ready`, ARM64 아키텍처, Kubernetes 버전,
 kind Pod 내부에서 OpenStack Keystone VIP로 향하는 HTTP 경로를 확인한다.
-CAPI/CAPO provider는 이 단계에서 아직 설치하지 않는다.
+
+### 7. CAPI/CAPO provider와 workload cluster
+
+repository 전용 `clusterctl` 설정과 management kubeconfig를 사용해 provider를
+설치하고 기존 application credential를 검증한다.
+
+```bash
+make capi-providers-install
+make capi-providers-verify
+make capi-credentials-verify
+```
+
+고정한 M2 조합은 다음과 같다.
+
+- CAPI core, kubeadm bootstrap/control-plane provider, `clusterctl`: v1.13.4
+- CAPO: v0.14.6
+- OpenStack Resource Controller: v2.4.0
+- workload Kubernetes: v1.35.7
+- Calico: v3.32.1
+
+`clusterctl`과 ORC/Calico manifest는 SHA-256까지 확인한다. credential는
+`.state/local-arm64/secrets/capi-clouds.yaml`에서 읽어
+`osk8s-workload/osk8s-workload-cloud-config` Secret으로 전달하며 값은 출력하거나
+artifact에 복사하지 않는다. 별도 인증 Pod가 OpenStack token 발급에 성공해야
+다음 단계로 진행한다.
+
+workload cluster를 만들고 worker 한 대 기준선을 검증한다.
+
+```bash
+make workload-cluster-create
+make workload-cluster-verify WORKERS=1
+```
+
+CAPO가 `10.6.0.0/24` network/subnet/router와 security group을 관리하고 단일
+control plane에 Floating IP endpoint를 연결한다. Pod/Service CIDR은 각각
+`192.168.0.0/16`, `10.96.0.0/12`다. Calico IP-in-IP/BGP에 필요한 protocol 4와
+TCP 179를 control-plane/worker managed security group 사이에 허용한다.
+실패 진단용 TCP 22는 workload CIDR 내부에서만 허용하며 Nova에는 controller의
+프로젝트 전용 SSH 공개키만 등록한다. private key는 controller 밖으로 복사하지
+않는다.
+
+control plane과 worker 모두 `configDrive: true`를 사용한다. providerID는
+cloud-init이 `openstack:///INSTANCE_UUID`로 직접 설정하므로 M2에서는 OCCM과
+`cloud-provider=external`을 사용하지 않는다. 따라서 OpenStack LoadBalancer,
+volume과 cloud route integration은 이 단계의 검증 범위가 아니다.
+
+첫 worker가 Ready인 상태에서 정확히 한 번 수동 증설하고 최종 상태를 확인한다.
+
+```bash
+make workload-cluster-scale
+make workload-cluster-verify WORKERS=2
+```
+
+검증은 CAPI Machine/MachineDeployment 수, Nova server 수, Node 수를 서로
+대조한다. 모든 Node의 Ready, v1.35.7, ARM64와 OpenStack providerID, Calico
+DaemonSet/controller, management cluster에서 workload TCP 6443 접근, workload
+Pod의 `kubernetes.default.svc.cluster.local` 조회가 모두 성공해야 한다.
+
+2026-08-09 실행에서는 worker Nova VM과 OpenStackMachine이 ACTIVE/Ready였지만
+Kubernetes Node로 등록되지 않아 Machine Available 대기가 30분 뒤 실패했다.
+그 실행에는 macOS sleep이나 OpenStack/관리망 장애가 없었고 compute 메모리
+압박은 관측됐지만 worker 내부 bootstrap 로그가 없어 원인을 확정하지 못했다.
+
+2026-08-11 clean-room 재검증은 compute를 10 GiB, worker를 2 GiB로 조정한 뒤
+CP1+worker1과 CP1+worker2를 모두 통과했다. 수동 scale 명령부터 최종 CNI/DNS/API
+검증까지 약 2분이 걸렸다. 최종 3-node 상태에서 compute는 9.7 GiB 중 7.2 GiB를
+사용하고 2.5 GiB가 available이었으며 swap 사용 0 B, memory pressure 0,
+kernel OOM 기록 없음이었다. CPU pressure는 남아 있으므로 이 값은 성능 자료가
+아니며, 두 메모리 변경 중 어느 하나를 과거 실패의 단일 원인으로 단정하지 않는다.
+
+timeout 또는 수동 조사 시 다음 명령으로 같은 진단을 수집할 수 있다.
+
+```bash
+make workload-cluster-diagnostics
+```
+
+worker Available, Node 수/Ready와 Calico timeout에서는 이 수집이 자동 실행된다.
+CAPI 객체·event/controller log, Nova server/console, compute memory·pressure·OOM과
+controller qrouter를 경유한 각 VM의 cloud-init, kubeadm, kubelet, containerd
+로그를 한 디렉터리에 저장한다. 2026-08-11 성공 상태에서도 세 VM의 bootstrap
+수집과 cloud-init 완료를 확인했다.
 
 ## 생명주기 명령
 
@@ -318,6 +415,9 @@ make local-health
 make local-down
 make local-up
 make management-cluster-verify
+make capi-providers-verify
+make workload-cluster-verify WORKERS=2
+make workload-cluster-destroy CONFIRM=local-arm64 CONFIRM_CLUSTER=osk8s-workload
 make management-cluster-destroy CONFIRM=local-arm64
 make local-destroy CONFIRM=local-arm64
 ```
@@ -325,6 +425,10 @@ make local-destroy CONFIRM=local-arm64
 `local-down`은 일상적인 정지 작업이며 복구 가능하다. `local-destroy`는
 외부 Lima VM 두 대를 제거하므로 그 안의 OpenStack 배포와 모든 Nova VM도
 함께 제거한다. 저장소 상태, secret, 실행 artifact는 보존한다.
+
+`workload-cluster-destroy`는 destructive 명령이며 두 확인값이 모두 일치해야
+한다. workload cluster만 지울 때 사용하며 management provider와 credential는
+보존한다. provider 제거 자동화는 의도적으로 제공하지 않는다.
 
 `local-up`은 두 guest clock을 먼저 복구한 뒤 양방향 관리망 통신을 확인하며,
 OpenStack이 이미 배포된 환경에서는 Keystone API, `nova-compute`, hypervisor가
@@ -335,8 +439,11 @@ clock skew를 포함한 동일 readiness gate를 다시 실행한다.
 ## 검증 자료
 
 각 실행은 `artifacts/` 아래에 timestamp가 포함된 디렉터리를 생성한다.
-Kolla 로그, preflight 출력, 게스트 console 출력, CAPO network gate 결과를
-그곳에 저장한다. secret은 artifact에 복사하지 않는다.
+Kolla 로그, preflight 출력, 게스트 console 출력, CAPO network gate 결과와
+M2의 CAPI/OpenStack/Node/Pod 상태를 그곳에 저장한다. secret과 kubeconfig는
+artifact에 복사하지 않는다. Kolla 출력과 workload 진단은 bootstrap token,
+certificate key, application credential 및 알려진 basic-auth 형태를 저장 전에
+마스킹하며 진단 완료 시 모든 text artifact에 같은 redaction을 다시 적용한다.
 
 ## 다음 마일스톤
 
@@ -344,7 +451,7 @@ Kolla 로그, preflight 출력, 게스트 console 출력, CAPO network gate 결�
 
 1. Glance용 Kubernetes ARM64 이미지 빌드·업로드·Nova 검증 — **완료**
 2. 별도의 로컬 management Kubernetes cluster 생성 — **완료**
-3. CAPI와 CAPO 설치 — **다음 단계**
-4. CAPO를 통해 workload control plane과 worker 한 대 생성
-5. `MachineDeployment`를 한 대에서 두 대로 수동 증설
-6. Cluster Autoscaler를 설치하고 Pending Pod 기반 scale-up 검증
+3. CAPI/CABPK/KCP와 CAPO/ORC 설치 — **완료**
+4. CAPO를 통해 workload control plane과 worker 한 대 생성 — **완료**
+5. `MachineDeployment`를 한 대에서 두 대로 수동 증설 — **완료**
+6. Cluster Autoscaler를 설치하고 Pending Pod 기반 scale-up 검증 — **다음 단계**

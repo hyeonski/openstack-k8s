@@ -66,6 +66,8 @@ run_on "${CONTROLLER_NAME}" env \
   OPENSTACK_TEST_PROJECT="${OPENSTACK_TEST_PROJECT}" \
   OPENSTACK_TEST_USER="${OPENSTACK_TEST_USER}" \
   KOLLA_INTERNAL_VIP_ADDRESS="${KOLLA_INTERNAL_VIP_ADDRESS}" \
+  TARGET_SSH_USER="${TARGET_SSH_USER}" \
+  WORKLOAD_SSH_KEY_NAME="${WORKLOAD_SSH_KEY_NAME}" \
   bash -lc '
     set -Eeuo pipefail
     source /etc/kolla/capi-test-user.env
@@ -107,8 +109,35 @@ run_on "${CONTROLLER_NAME}" env \
     # keystoneauth selects v3applicationcredential instead of Password.
     unset OS_AUTH_URL OS_AUTH_TYPE OS_USERNAME OS_PASSWORD OS_PROJECT_NAME
     unset OS_USER_DOMAIN_NAME OS_PROJECT_DOMAIN_NAME OS_IDENTITY_API_VERSION
-    OS_CLIENT_CONFIG_FILE=/etc/kolla/capi-clouds.yaml \
-      openstack --os-cloud capi token issue >/dev/null
+    export OS_CLIENT_CONFIG_FILE=/etc/kolla/capi-clouds.yaml
+    openstack --os-cloud capi token issue >/dev/null
+
+    # Reuse the project-scoped deployment key for failure diagnostics. The
+    # private key remains on the controller; only its public half is stored in
+    # Nova. Refuse a same-name/different-key collision instead of replacing it.
+    deployment_key="/home/${TARGET_SSH_USER}/.ssh/openstack_k8s"
+    [[ -s "${deployment_key}" ]] || {
+      echo "project deployment SSH key is missing on the controller" >&2
+      exit 1
+    }
+    public_key_file="$(mktemp)"
+    trap '\''rm -f "${public_key_file}"'\'' EXIT
+    ssh-keygen -y -f "${deployment_key}" >"${public_key_file}"
+    chmod 0600 "${public_key_file}"
+    expected_key="$(awk '\''{print $1 " " $2}'\'' "${public_key_file}")"
+    if openstack --os-cloud capi keypair show "${WORKLOAD_SSH_KEY_NAME}" \
+        >/dev/null 2>&1; then
+      actual_key="$(openstack --os-cloud capi keypair show \
+        -f value -c public_key "${WORKLOAD_SSH_KEY_NAME}" |
+        awk '\''{print $1 " " $2}'\'')"
+      [[ "${actual_key}" == "${expected_key}" ]] || {
+        echo "existing workload SSH keypair does not match the project key" >&2
+        exit 1
+      }
+    else
+      openstack --os-cloud capi keypair create \
+        --public-key "${public_key_file}" "${WORKLOAD_SSH_KEY_NAME}" >/dev/null
+    fi
   '
 
 temporary="/tmp/openstack-k8s-capi-clouds.yaml"

@@ -1,0 +1,4 @@
+# Keep clusterctl configuration explicit so it does not create or depend on a
+# user-global ~/.cluster-api configuration file. Built-in provider repositories
+# are used, with exact versions supplied by the calling script.
+{}
