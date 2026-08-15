@@ -23,6 +23,8 @@ export CONFIG
 	capi-credentials-verify workload-cluster-create workload-cluster-verify \
 	workload-clock-check resume-recover workload-cluster-scale \
 	workload-cluster-diagnostics workload-cluster-destroy \
+	cluster-autoscaler-install cluster-autoscaler-verify \
+	cluster-autoscaler-test cluster-autoscaler-diagnostics \
 	status lint
 
 help:
@@ -78,6 +80,12 @@ help:
 	@echo "  workload-cluster-scale    Manually scale the MachineDeployment from 1 to 2"
 	@echo "  workload-cluster-diagnostics Collect CAPI/Nova/bootstrap/compute diagnostics"
 	@echo "  workload-cluster-destroy  Delete exact workload Cluster (two confirmations)"
+	@echo
+	@echo "M3 Cluster Autoscaler:"
+	@echo "  cluster-autoscaler-install     Install pinned CA and dual-cluster RBAC"
+	@echo "  cluster-autoscaler-verify      Verify image, arguments, access and min/max"
+	@echo "  cluster-autoscaler-test        Run Pending Pod based 1-to-2 scale-up"
+	@echo "  cluster-autoscaler-diagnostics Preserve redacted M3 failure evidence"
 	@echo
 	@echo "Development:"
 	@echo "  lint                    Static checks that do not mutate the host"
@@ -194,13 +202,25 @@ resume-recover:
 	@scripts/resume-recover.sh
 
 workload-cluster-scale:
-	@scripts/workload-cluster.sh scale
+	@scripts/workload-cluster.sh scale "$(or $(WORKERS),2)"
 
 workload-cluster-diagnostics:
 	@scripts/workload-cluster.sh diagnostics
 
 workload-cluster-destroy:
 	@scripts/workload-cluster.sh destroy "$(CONFIRM)" "$(CONFIRM_CLUSTER)"
+
+cluster-autoscaler-install:
+	@scripts/cluster-autoscaler.sh install
+
+cluster-autoscaler-verify:
+	@scripts/cluster-autoscaler.sh verify
+
+cluster-autoscaler-test:
+	@scripts/cluster-autoscaler.sh test
+
+cluster-autoscaler-diagnostics:
+	@scripts/cluster-autoscaler.sh diagnostics
 
 status:
 	@scripts/status.sh

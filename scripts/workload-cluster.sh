@@ -426,7 +426,7 @@ create_cluster() {
   verify_cluster 1
 }
 
-scale_workers() {
+scale_workers_up() {
   require_management
   [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
 
@@ -490,6 +490,51 @@ scale_workers() {
   } >"${timing_file}"
 }
 
+scale_workers_down() {
+  require_management
+  [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
+
+  local desired available started finished run_dir timing_file
+  run_dir="$(current_or_new_run)"
+  mkdir -p "${run_dir}/m3"
+  chmod 700 "${run_dir}/m3"
+  timing_file="${run_dir}/m3/manual-scale-2-to-1.txt"
+  desired="$(kubectl --kubeconfig "${management_kubeconfig}" \
+    -n "${WORKLOAD_NAMESPACE}" get machinedeployment "${machine_deployment}" \
+    -o jsonpath='{.spec.replicas}')"
+  available="$(kubectl --kubeconfig "${management_kubeconfig}" \
+    -n "${WORKLOAD_NAMESPACE}" get machinedeployment "${machine_deployment}" \
+    -o jsonpath='{.status.availableReplicas}')"
+  if [[ "${desired}" == "1" ]]; then
+    log "${machine_deployment} already desires one worker; verifying cleanup"
+    verify_cluster 1
+    return
+  fi
+  [[ "${desired}" == "2" && "${available}" == "2" ]] ||
+    die "scale-down preparation requires desired=2 available=2; found desired=${desired}, available=${available:-0}"
+
+  started="$(date +%s)"
+  printf 'status=in_progress\nstarted_epoch=%s\nstarted_utc=%s\n' \
+    "${started}" "$(date -u +%FT%TZ)" >"${timing_file}"
+  chmod 600 "${timing_file}"
+  log "Scaling ${machine_deployment} from 2 to 1 worker for the M3 baseline"
+  kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
+    scale machinedeployment "${machine_deployment}" --replicas=1
+  verify_cluster 1
+  finished="$(date +%s)"
+  printf 'status=passed\nstarted_epoch=%s\nready_epoch=%s\nelapsed_seconds=%s\n' \
+    "${started}" "${finished}" "$((finished - started))" >"${timing_file}"
+  chmod 600 "${timing_file}"
+}
+
+scale_workers() {
+  case "${1:-2}" in
+    1) scale_workers_down ;;
+    2) scale_workers_up ;;
+    *) die "WORKERS must be 1 or 2 for workload-cluster-scale" ;;
+  esac
+}
+
 destroy_cluster() {
   [[ "${2:-}" == "${ENV}" ]] ||
     die "refusing workload deletion without CONFIRM=${ENV}"
@@ -508,7 +553,7 @@ case "${action}" in
     require_management
     wait_for_control_plane_available
     ;;
-  scale) scale_workers ;;
+  scale) scale_workers "${2:-2}" ;;
   diagnostics) capture_failure_diagnostics "manual" ;;
   destroy) destroy_cluster "$@" ;;
   *) die "usage: $0 {create|verify [workers]|capi-ready|scale|diagnostics|destroy CONFIRM CONFIRM_CLUSTER}" ;;

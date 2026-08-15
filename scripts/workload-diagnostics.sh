@@ -176,7 +176,11 @@ capture_host_health() {
 capture_guest_bootstrap() {
   [[ -f "${management_kubeconfig}" ]] || return
 
-  local machine_address machine_name safe_name
+  local machine_address machine_name safe_name kubernetes_service_ip
+  kubernetes_service_ip="$(python3 -c '
+import ipaddress, sys
+print(next(ipaddress.ip_network(sys.argv[1]).hosts()))
+' "${WORKLOAD_SERVICE_CIDR}")"
   while IFS=$'\t' read -r machine_name machine_address; do
     [[ -n "${machine_name}" && -n "${machine_address}" ]] || continue
     safe_name="${machine_name//[^a-zA-Z0-9_.-]/_}"
@@ -184,6 +188,7 @@ capture_guest_bootstrap() {
       MACHINE_NAME="${machine_name}" \
       MACHINE_ADDRESS="${machine_address}" \
       WORKLOAD_NETWORK_CIDR="${WORKLOAD_NETWORK_CIDR}" \
+      KUBERNETES_SERVICE_IP="${kubernetes_service_ip}" \
       TARGET_SSH_USER="${TARGET_SSH_USER}" \
       bash -s 2>&1 <<'CONTROLLER_BOOTSTRAP' | redact_bootstrap_secrets \
         >"${status_dir}/${safe_name}-bootstrap.log" 2>&1 || true
@@ -216,7 +221,8 @@ sudo ip netns exec "${router_namespace}" ssh \
   -o ConnectTimeout=10 \
   -o StrictHostKeyChecking=no \
   -o UserKnownHostsFile=/dev/null \
-  "ubuntu@${MACHINE_ADDRESS}" bash -s <<'GUEST_BOOTSTRAP'
+  "ubuntu@${MACHINE_ADDRESS}" env \
+  KUBERNETES_SERVICE_IP="${KUBERNETES_SERVICE_IP}" bash -s <<'GUEST_BOOTSTRAP'
 set +e
 echo "identity and capacity"
 hostname
@@ -234,6 +240,21 @@ sudo tail -n 1200 /var/log/cloud-init-output.log
 echo "bootstrap service journals"
 sudo journalctl -b --no-pager -n 1600 \
   -u cloud-final.service -u kubelet.service -u containerd.service
+echo "containerd RunPodSandbox and cancellation records"
+sudo journalctl -b --no-pager -u containerd.service | \
+  grep -Ei "RunPodSandbox|sandbox.*(cancel|canceled|deadline|error)" | tail -500 || true
+echo "kubelet sandbox and CNI retry records"
+sudo journalctl -b --no-pager -u kubelet.service | \
+  grep -Ei "sandbox|cni|network plugin|CreatePodSandbox" | tail -500 || true
+echo "calico-ipam processes"
+ps -eo pid,ppid,etimes,stat,wchan:32,comm,args | grep '[c]alico-ipam' || true
+echo "Kubernetes API service path"
+ip route get "${KUBERNETES_SERVICE_IP}" || true
+ip neigh show || true
+echo "worker pressure"
+cat /proc/pressure/cpu
+cat /proc/pressure/memory
+cat /proc/loadavg
 echo "CRI containers"
 sudo crictl --runtime-endpoint unix:///run/containerd/containerd.sock ps -a
 GUEST_BOOTSTRAP
