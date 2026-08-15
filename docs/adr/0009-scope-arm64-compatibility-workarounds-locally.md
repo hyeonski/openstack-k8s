@@ -26,6 +26,10 @@ bare-metal AMD64 프로필까지 불필요한 workaround가 전파된다.
    작업 전에 VZ RTC로 bootstrap하고, lifecycle 경계에서는 chrony로 복구한
    뒤 호스트 대비 clock skew를 검증한다. 이 정책과 무제한 `makestep`은
    `local-arm64`에만 적용한다.
+6. clean-room 검증 중에는 macOS sleep을 방지한다. 예상하지 못한 resume 뒤에는
+   outer guest와 OpenStack readiness, 호스트 route를 먼저 복구하고, CAPO가 만든
+   nested workload VM의 system clock을 정상 RTC/chrony 기준으로 앞으로만
+   보정한 뒤 CAPI control-plane `Available`을 다시 검증한다.
 
 보정 이미지는 다른 OpenStack service image를 fork하지 않고
 `nova_libvirt_image`만 override한다.
@@ -43,6 +47,8 @@ bare-metal AMD64 프로필까지 불필요한 workaround가 전파된다.
 - local ARM64 guest boot와 Nova/libvirt capability discovery가 동작한다.
 - APT, Keystone token과 Kubernetes 인증서 검증 전에 controller/compute 시간이
   호스트 기준 5초 이내임을 보장한다.
+- workload 검증과 수동 scale도 모든 Machine의 system clock, InternalIP,
+  OpenStack providerID 및 KCP/Cluster `Available`을 통과해야 성공한다.
 - OpenStack upgrade 시 derivative base tag와 workaround 필요성을 다시 확인해야 한다.
 - AMD64 profile은 이 설정을 기본 상속하지 않는다.
 - Kubernetes용 ARM64 Glance image도 별도 version과 checksum을 고정해야 한다.

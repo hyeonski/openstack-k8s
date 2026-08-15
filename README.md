@@ -3,7 +3,8 @@
 이 저장소는 `Cluster API + CAPO + Cluster Autoscaler` 실험을 위한
 OpenStack 기반 환경을 구축한다. OpenStack 기반 마일스톤과 Kubernetes용
 ARM64 노드 이미지, management cluster와 CAPI/CAPO workload lifecycle
-게이트는 완료됐으며, 다음 단계는 Cluster Autoscaler의 실제 scale-up이다.
+게이트를 구현했다. 동일한 4-vCPU compute에서 개입 없는 2→1→2 재검증까지
+통과했으며, 현재 다음 작업은 Cluster Autoscaler의 실제 scale-up이다.
 
 프로젝트의 기술 결정, 검토한 대안과 재검토 조건은
 [`docs/adr/`](docs/adr/README.md)에 기록한다.
@@ -22,8 +23,11 @@ ARM64 노드 이미지, management cluster와 CAPI/CAPO workload lifecycle
 
 ## 현재 상태
 
-2026-08-11에 완료한 전체 clean-room 로컬 검증을 기준으로 M0~M2 기능 마일스톤이
-통과했다.
+M0~M2 기능 마일스톤은 구현됐다. 2026-08-15 clean-room 첫 worker 1→2에서
+일시적인 Pod sandbox failure와 orphan CNI가 한 번 발생했지만, 자원과 timeout을
+바꾸지 않은 2→1→2 재시도는 개입 없이 통과했다. 새 worker를 명시적으로 지정한
+CNI/DNS probe도 즉시 성공해 지속적인 CPU 부족은 재현되지 않았다. 첫 이상은
+관찰 대상으로 남기되 M3 구현은 진행할 수 있다.
 
 | 범위 | 상태 | 의미 |
 |---|---|---|
@@ -38,12 +42,12 @@ ARM64 노드 이미지, management cluster와 CAPI/CAPO workload lifecycle
 | CAPI/CAPO provider | 통과 | CAPI/CABPK/KCP v1.13.4, CAPO v0.14.6와 ORC v2.4.0이 management cluster에서 Available임 |
 | OpenStack credential 연결 | 통과 | 기존 application credential를 namespace Secret으로 연결하고 kind Pod에서 실제 token 발급에 성공함 |
 | workload Kubernetes 기준선 | 통과 | CAPO가 OpenStack VM 기반 v1.35.7 control plane 1대와 worker 1대를 만들고 Calico, CoreDNS, API/CNI/DNS probe가 통과함 |
-| 수동 worker 증설 | 통과 | `MachineDeployment` 1→2 뒤 Nova VM 3대 ACTIVE, CAPI 3/3 Available, Kubernetes Node 3대 Ready를 확인함 |
+| 수동 worker 증설 | 통과 | 첫 clean-room CNI 이상을 복구한 뒤 동일 4 vCPU에서 2→1→2와 새 worker targeted CNI/DNS probe가 개입 없이 통과함 |
 | 정지 후 재기동 readiness | 통과 | 양방향 관리망, Keystone, nova-compute, hypervisor가 준비된 뒤에만 `local-up`이 성공함 |
 | clean-room 재구축 | 통과 | Lima VM 두 대를 삭제하고 OpenStack 재배포·게스트 검증·Docker 콜드 스타트·kind 재생성까지 통과함 |
 | 클라우드 VM 프로필 | 미구현 | GCP/AWS의 중첩 가상화 및 네트워크 차이를 코드화하고 검증해야 함 |
 | 물리 서버 프로필 | 미구현 | NIC/VLAN/bridge 및 스토리지 구성을 코드화하고 검증해야 함 |
-| 노드 오토스케일링 | 미착수 | 수동 `MachineDeployment` 증설은 통과했고 Cluster Autoscaler가 다음 마일스톤임 |
+| 노드 오토스케일링 | 다음 단계 | 첫 cold-path CNI 이상을 계속 관찰하면서 Cluster Autoscaler와 Pending Pod 기반 scale-up을 검증함 |
 
 최신 결과는 workload Cluster, management kind cluster와 Lima VM 두 대를 정확한
 확인값으로 삭제한 뒤 최종 자동화만으로 호스트 준비, Kolla 배포, 리소스
@@ -131,10 +135,10 @@ Kolla-Ansible로 배포하는 OpenStack 2025.2 구성은 다음과 같다.
   user data를 사용할 수 있도록 검증 VM에 Nova config drive를 사용한다.
 - 사용자 Docker 설정을 변경하거나 credential helper에 의존하지 않도록
   저장소의 익명 Docker 설정으로 공개 검증 이미지를 내려받는다.
-- macOS sleep 뒤 Lima/VZ guest clock이 정지한 채 남을 수 있으므로 첫 APT
-  실행 전에 VZ RTC로 시간을 bootstrap한다. 이후 `local-up`과 controller
-  동기화 경계에서 chrony로 복구하고, `local-health`는 호스트 대비 5초 이내의
-  controller/compute clock skew를 단언한다.
+- macOS sleep 뒤 Lima/VZ guest와 그 안의 CAPO workload VM clock이 정지한 채
+  남을 수 있으므로 첫 APT 실행 전에 VZ RTC로 시간을 bootstrap한다. 이후
+  `local-up`과 controller 동기화 경계에서 outer guest를 chrony로 복구하고,
+  `resume-recover`가 nested workload VM도 호스트 대비 5초 이내인지 검사·복구한다.
 
 위 설정은 로컬 가상화 계층을 위한 설정이며 GCP/AWS 또는 물리 서버
 프로필에 그대로 복사하면 안 된다.
@@ -414,6 +418,8 @@ make status
 make local-health
 make local-down
 make local-up
+make resume-recover
+make workload-clock-check
 make management-cluster-verify
 make capi-providers-verify
 make workload-cluster-verify WORKERS=2
@@ -435,6 +441,22 @@ OpenStack이 이미 배포된 환경에서는 Keystone API, `nova-compute`, hype
 준비될 때까지 대기한다. 따라서 Lima VM이나 컨테이너가 단순히 실행 중이라는
 이유만으로 성공을 보고하지 않는다. `make local-health`는 시간을 변경하지 않고
 clock skew를 포함한 동일 readiness gate를 다시 실행한다.
+
+로컬 clean-room 검증 한 사이클 동안에는 macOS sleep을 허용하지 않는다. 별도
+터미널에서 `caffeinate -dimsu`를 실행한 상태로 검증하고, 끝나면 `Ctrl-C`로
+종료한다. 예상하지 못한 sleep 뒤에는 다음 명령 하나로 stopped Lima guest 기동,
+outer guest clock/OpenStack readiness, macOS Floating IP route, nested workload
+VM clock과 CAPI control-plane readiness를 순서대로 복구한다.
+
+```bash
+make resume-recover
+```
+
+복구는 호스트보다 뒤처진 system clock만 chrony 또는 정상 RTC를 기준으로 앞으로
+맞춘다. 호스트보다 앞선 clock은 인증서 유효성에 영향을 줄 수 있으므로 자동으로
+뒤로 돌리지 않고 실패한다. 시간을 변경하지 않는 독립 게이트가 필요하면
+`make workload-clock-check`를 사용한다. workload cluster가 아직 없는 단계에서는
+`make local-up`만 사용한다.
 
 ## 검증 자료
 
