@@ -23,8 +23,9 @@ Cluster Autoscaler가 증설할 수 있어야 한다. 이후 VM 생성 지연, b
   management cluster에서 실행한다.
 - Kubernetes control plane과 worker는 모두 OpenStack VM으로 만든다.
 - worker group은 `MachineDeployment`로 표현한다.
-- 첫 Cluster Autoscaler는 workload cluster에서 실행하고, workload API와
-  management cluster의 CAPI API 양쪽에 접근하게 한다.
+- 첫 Cluster Autoscaler의 실행 위치 결정은 ADR-0012가 대체한다. Autoscaler는
+  management cluster에서 실행하고 workload API와 management cluster의 CAPI API
+  양쪽에 접근하게 한다.
 - 첫 autoscaling trigger는 resource request 때문에 발생한 Unschedulable
   Pending Pod로 제한한다.
 

@@ -40,6 +40,7 @@ ADR의 상태와 구현 상태는 다르다. 현재 M2의 CAPI/CAPO 기준선은
 | [0009](0009-scope-arm64-compatibility-workarounds-locally.md) | ARM64 호환성 보정은 로컬 프로필에만 한정한다 | 채택됨 | 구현 및 검증 완료 |
 | [0010](0010-build-pinned-arm64-kubernetes-image.md) | 고정 입력과 격리 builder로 ARM64 Kubernetes 노드 이미지를 만든다 | 채택됨 | Glance 및 Nova 재부팅 검증 완료 |
 | [0011](0011-pin-capi-capo-workload-baseline.md) | Kubernetes v1.35 workload 기준선을 CAPI v1.13과 CAPO v0.14로 구성한다 | 채택됨 | 2026-08-11 clean-room CP1+worker2 검증 완료 |
+| [0012](0012-run-cluster-autoscaler-from-management-cluster.md) | Cluster Autoscaler를 management cluster에서 실행한다 | 채택됨 | 구현 전 |
 
 ## 현재 마일스톤
 
@@ -72,9 +73,7 @@ M1부터 M3까지의 순서는 다음과 같다.
 다음 항목은 대화에서 후보나 추천안은 나왔지만 최종 결정으로 확정하지 않았다.
 
 - cloud/bare-metal 환경의 management cluster 실행 위치와 lifecycle
-- Cluster Autoscaler의 정확한 버전과 deployment 위치
 - OCCM, Octavia와 Cinder CSI를 M3 또는 이후 어느 단계에서 도입할지
-- Cluster Autoscaler의 최종 실행 위치와 scale-to-zero 지원 여부
 - 첫 클라우드 프로필을 GCP와 AWS 중 어디로 구현할지
 - 물리 서버의 실제 NIC, VLAN, switch 및 storage 구성
 - scale-down을 필수 범위에 포함할지
