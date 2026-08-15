@@ -21,7 +21,8 @@ export CONFIG
 	kubernetes-image management-cluster-create management-cluster-verify \
 	management-cluster-destroy capi-providers-install capi-providers-verify \
 	capi-credentials-verify workload-cluster-create workload-cluster-verify \
-	workload-cluster-scale workload-cluster-diagnostics workload-cluster-destroy \
+	workload-clock-check resume-recover workload-cluster-scale \
+	workload-cluster-diagnostics workload-cluster-destroy \
 	status lint
 
 help:
@@ -72,6 +73,8 @@ help:
 	@echo "  capi-credentials-verify   Verify the application credential from a kind Pod"
 	@echo "  workload-cluster-create   Create and verify one control plane and one worker"
 	@echo "  workload-cluster-verify   Verify the current workload cluster (WORKERS=1)"
+	@echo "  workload-clock-check      Fail if a nested workload VM clock is stale"
+	@echo "  resume-recover            Repair clocks after macOS sleep and wait for CAPI"
 	@echo "  workload-cluster-scale    Manually scale the MachineDeployment from 1 to 2"
 	@echo "  workload-cluster-diagnostics Collect CAPI/Nova/bootstrap/compute diagnostics"
 	@echo "  workload-cluster-destroy  Delete exact workload Cluster (two confirmations)"
@@ -183,6 +186,12 @@ workload-cluster-create:
 
 workload-cluster-verify:
 	@scripts/workload-cluster.sh verify "$(or $(WORKERS),1)"
+
+workload-clock-check:
+	@scripts/workload-clock.sh check
+
+resume-recover:
+	@scripts/resume-recover.sh
 
 workload-cluster-scale:
 	@scripts/workload-cluster.sh scale

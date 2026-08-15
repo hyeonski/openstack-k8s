@@ -184,6 +184,71 @@ wait_for_available_workers() {
   die "timed out waiting for ${expected} available workers; found ${available:-0}"
 }
 
+wait_for_machine_identity() {
+  local expected="$1"
+  local attempts="${2:-360}"
+  local attempt machine_count complete_count
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    machine_count="$(kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${WORKLOAD_NAMESPACE}" get machines \
+      -l "cluster.x-k8s.io/cluster-name=${WORKLOAD_CLUSTER_NAME}" \
+      -o name 2>/dev/null | wc -l | tr -d ' ')"
+    complete_count="$(kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${WORKLOAD_NAMESPACE}" get machines \
+      -l "cluster.x-k8s.io/cluster-name=${WORKLOAD_CLUSTER_NAME}" \
+      -o jsonpath='{range .items[*]}{range .status.addresses[?(@.type=="InternalIP")]}{.address}{end}{"\t"}{.spec.providerID}{"\n"}{end}' \
+      2>/dev/null | awk -F '\t' '$1 != "" && $2 ~ /^openstack:\/\/\// {count++} END {print count + 0}')"
+    if [[ "${machine_count}" == "${expected}" && "${complete_count}" == "${expected}" ]]; then
+      return
+    fi
+    sleep 5
+  done
+  capture_failure_diagnostics "machine-identity-timeout"
+  die "timed out waiting for ${expected} Machines with InternalIP and OpenStack providerID; found ${complete_count:-0}/${machine_count:-0}"
+}
+
+wait_for_control_plane_available() {
+  require_kubectl_timeout WORKLOAD_CAPI_READY_TIMEOUT "${WORKLOAD_CAPI_READY_TIMEOUT}"
+
+  if ! kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${WORKLOAD_NAMESPACE}" wait \
+      --for=condition=Available "kubeadmcontrolplane/${WORKLOAD_CLUSTER_NAME}-control-plane" \
+      --timeout="${WORKLOAD_CAPI_READY_TIMEOUT}"; then
+    capture_failure_diagnostics "kcp-available-timeout"
+    die "KubeadmControlPlane did not become Available within ${WORKLOAD_CAPI_READY_TIMEOUT}"
+  fi
+  if ! kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${WORKLOAD_NAMESPACE}" wait \
+      --for=condition=Available "cluster/${WORKLOAD_CLUSTER_NAME}" \
+      --timeout="${WORKLOAD_CAPI_READY_TIMEOUT}"; then
+    capture_failure_diagnostics "cluster-available-timeout"
+    die "Cluster did not become Available within ${WORKLOAD_CAPI_READY_TIMEOUT}"
+  fi
+
+  local desired ready available
+  IFS=$'\t' read -r desired ready available < <(
+    kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${WORKLOAD_NAMESPACE}" get kubeadmcontrolplane \
+      "${WORKLOAD_CLUSTER_NAME}-control-plane" \
+      -o jsonpath='{.spec.replicas}{"\t"}{.status.readyReplicas}{"\t"}{.status.availableReplicas}{"\n"}'
+  )
+  [[ "${desired}" == "1" && "${ready}" == "1" && "${available}" == "1" ]] || {
+    capture_failure_diagnostics "kcp-replica-mismatch"
+    die "KubeadmControlPlane replicas are desired=${desired:-0}, ready=${ready:-0}, available=${available:-0}"
+  }
+
+  IFS=$'\t' read -r desired ready available < <(
+    kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${WORKLOAD_NAMESPACE}" get cluster "${WORKLOAD_CLUSTER_NAME}" \
+      -o jsonpath='{.status.controlPlane.desiredReplicas}{"\t"}{.status.controlPlane.readyReplicas}{"\t"}{.status.controlPlane.availableReplicas}{"\n"}'
+  )
+  [[ "${desired}" == "1" && "${ready}" == "1" && "${available}" == "1" ]] || {
+    capture_failure_diagnostics "cluster-control-plane-mismatch"
+    die "Cluster control plane replicas are desired=${desired:-0}, ready=${ready:-0}, available=${available:-0}"
+  }
+  log "Cluster and KubeadmControlPlane are strictly Available"
+}
+
 run_management_api_probe() {
   local endpoint probe_name
   endpoint="$(kubectl --kubeconfig "${management_kubeconfig}" \
@@ -283,9 +348,12 @@ verify_cluster() {
 
   require_management
   [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
+  wait_for_machine_identity "${expected_machines}"
+  "${PROJECT_ROOT}/scripts/workload-clock.sh" check
   tune_calico_probes_for_local_capacity
   wait_for_available_workers "${expected_workers}"
   wait_for_node_count "${expected_nodes}"
+  wait_for_control_plane_available
 
   node_count="$(kubectl --kubeconfig "${workload_kubeconfig}" get nodes -o name | wc -l | tr -d ' ')"
   [[ "${node_count}" == "${expected_nodes}" ]] || die "unexpected workload node count: ${node_count}"
@@ -436,8 +504,12 @@ destroy_cluster() {
 case "${action}" in
   create) create_cluster ;;
   verify) verify_cluster "${2:-1}" ;;
+  capi-ready)
+    require_management
+    wait_for_control_plane_available
+    ;;
   scale) scale_workers ;;
   diagnostics) capture_failure_diagnostics "manual" ;;
   destroy) destroy_cluster "$@" ;;
-  *) die "usage: $0 {create|verify [workers]|scale|diagnostics|destroy CONFIRM CONFIRM_CLUSTER}" ;;
+  *) die "usage: $0 {create|verify [workers]|capi-ready|scale|diagnostics|destroy CONFIRM CONFIRM_CLUSTER}" ;;
 esac
