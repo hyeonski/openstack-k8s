@@ -3,8 +3,8 @@
 이 저장소는 `Cluster API + CAPO + Cluster Autoscaler` 실험을 위한
 OpenStack 기반 환경을 구축한다. OpenStack 기반 마일스톤과 Kubernetes용
 ARM64 노드 이미지, management cluster와 CAPI/CAPO workload lifecycle
-게이트를 구현했다. 동일한 4-vCPU compute에서 개입 없는 2→1→2 재검증까지
-통과했으며, 현재 다음 작업은 Cluster Autoscaler의 실제 scale-up이다.
+게이트를 구현했다. 동일한 4-vCPU compute에서 Cluster Autoscaler가 CPU request
+기반 Pending Pod를 감지해 worker를 1→2로 자동 증설하는 M3까지 통과했다.
 
 프로젝트의 기술 결정, 검토한 대안과 재검토 조건은
 [`docs/adr/`](docs/adr/README.md)에 기록한다.
@@ -23,11 +23,12 @@ ARM64 노드 이미지, management cluster와 CAPI/CAPO workload lifecycle
 
 ## 현재 상태
 
-M0~M2 기능 마일스톤은 구현됐다. 2026-08-15 clean-room 첫 worker 1→2에서
+M0~M3 기능 마일스톤은 구현됐다. 2026-08-15 clean-room 첫 worker 1→2에서
 일시적인 Pod sandbox failure와 orphan CNI가 한 번 발생했지만, 자원과 timeout을
 바꾸지 않은 2→1→2 재시도는 개입 없이 통과했다. 새 worker를 명시적으로 지정한
-CNI/DNS probe도 즉시 성공해 지속적인 CPU 부족은 재현되지 않았다. 첫 이상은
-관찰 대상으로 남기되 M3 구현은 진행할 수 있다.
+CNI/DNS probe도 즉시 성공해 지속적인 CPU 부족은 재현되지 않았다. 이어 같은
+CPU와 timeout에서 M3 자동 1→2 증설, 새 worker targeted probe, workload clock,
+strict CAPI readiness와 orphan `calico-ipam` 부재를 확인했다.
 
 | 범위 | 상태 | 의미 |
 |---|---|---|
@@ -47,7 +48,7 @@ CNI/DNS probe도 즉시 성공해 지속적인 CPU 부족은 재현되지 않았
 | clean-room 재구축 | 통과 | Lima VM 두 대를 삭제하고 OpenStack 재배포·게스트 검증·Docker 콜드 스타트·kind 재생성까지 통과함 |
 | 클라우드 VM 프로필 | 미구현 | GCP/AWS의 중첩 가상화 및 네트워크 차이를 코드화하고 검증해야 함 |
 | 물리 서버 프로필 | 미구현 | NIC/VLAN/bridge 및 스토리지 구성을 코드화하고 검증해야 함 |
-| 노드 오토스케일링 | 다음 단계 | 첫 cold-path CNI 이상을 계속 관찰하면서 Cluster Autoscaler와 Pending Pod 기반 scale-up을 검증함 |
+| 노드 오토스케일링 | 통과 | management cluster의 CA v1.35.0이 `Insufficient cpu` Pending Pod를 감지해 worker를 1→2로 늘리고 새 node targeted CNI/DNS와 전체 readiness를 통과함 |
 
 최신 결과는 workload Cluster, management kind cluster와 Lima VM 두 대를 정확한
 확인값으로 삭제한 뒤 최종 자동화만으로 호스트 준비, Kolla 배포, 리소스
@@ -71,6 +72,15 @@ CAPO v0.14.6와 ORC v2.4.0을 설치했다. CAPO가 config drive로 같은 이�
 DNS/CNI/API probe가 통과했다. 이어 `MachineDeployment`를 1대에서 2대로
 늘려 세 번째 Nova VM과 Kubernetes Node가 추가되는 것을 확인했다.
 
+M3에서는 digest로 고정한 Cluster Autoscaler v1.35.0을 management cluster에서
+실행한다. management in-cluster 권한으로 CAPI/CAPO를 보고 workload 전용
+ServiceAccount kubeconfig로 Pod와 Node를 관찰한다. 실행 시 worker allocatable
+2,000m와 기존 request 250m를 확인한 뒤 Pod당 1,050m를 선택했다. 첫 Pod만 기존
+worker에서 실행되고 두 번째 Pod가 `Unschedulable`/`Insufficient cpu`가 된 뒤
+MachineDeployment가 1→2로 바뀌었다. 새 worker `osk8s-workload-md-0-ppx4r-cv577`은
+Nova ACTIVE, Node/Calico Ready가 됐고 Pending Pod와 node 지정 CNI/DNS probe를
+실행했다. 자세한 결과는 [`docs/m3-autoscaling-report-2026-08-15.md`](docs/m3-autoscaling-report-2026-08-15.md)에 기록한다.
+
 로컬 프로필은 기능 검증에만 적합하다.
 
 - AAVMF mount, controller 내부 veth/NAT, macOS route, ARM64 이미지 선택은
@@ -90,7 +100,8 @@ macOS 호스트(16 GiB, 기능 검증 전용)
 │  └─ osk8s-management: 단일 노드 kind management cluster
 │     ├─ 프로젝트 전용 kubeconfig 사용
 │     ├─ CAPI/CABPK/KCP v1.13.4
-│     └─ CAPO v0.14.6 + ORC v2.4.0
+│     ├─ CAPO v0.14.6 + ORC v2.4.0
+│     └─ Cluster Autoscaler v1.35.0, scale-down disabled
 ├─ Lima/socket_vmnet 공유 관리 네트워크
 │  ├─ osk8s-controller: 4 vCPU, 8 GiB, 80 GiB, 게스트 swap 2 GiB
 │  └─ osk8s-compute:    4 vCPU, 10 GiB, 80 GiB, 게스트 swap 2 GiB
@@ -411,6 +422,48 @@ controller qrouter를 경유한 각 VM의 cloud-init, kubeadm, kubelet, containe
 로그를 한 디렉터리에 저장한다. 2026-08-11 성공 상태에서도 세 VM의 bootstrap
 수집과 cloud-init 완료를 확인했다.
 
+### 8. Cluster Autoscaler 자동 scale-up
+
+macOS sleep 뒤에는 먼저 복구하고 별도 터미널의 `caffeinate -dimsu`를 전체
+실험 동안 유지한다. CP1+worker2 기준선을 확인한 뒤 worker 한 대를 정상
+정리하고 Autoscaler를 설치한다.
+
+```bash
+make resume-recover
+make workload-cluster-verify WORKERS=2
+make workload-cluster-scale WORKERS=1
+make cluster-autoscaler-install
+make cluster-autoscaler-verify
+make cluster-autoscaler-test
+```
+
+Autoscaler image는 v1.35.0 tag와 multi-architecture manifest digest를 함께
+고정한다. management API에는 in-cluster ServiceAccount, workload API에는 별도
+ServiceAccount kubeconfig Secret을 사용한다. `MachineDeployment`의 min/max는
+각각 1/2이며 `--scale-down-enabled=false`이므로 M3는 자동 증설만 수행한다.
+HPA와 scale-to-zero는 포함하지 않는다.
+
+`cluster-autoscaler-test`는 현재 worker allocatable과 이미 배치된 Pod request를
+먼저 계산한다. 선택한 CPU request 하나는 기존 worker에 들어가지만 두 개는
+동시에 들어가지 않아야 한다. MachineDeployment가 아직 1일 때 Pending Pod의
+`PodScheduled=False`, `reason=Unschedulable`, message의 `Insufficient cpu`를
+artifact로 고정한 뒤에만 1→2 증설을 인정한다. control plane의 기본 NoSchedule
+taint는 scheduler message에 함께 나타날 수 있지만 image/PVC/affinity 오류는
+증설 근거로 인정하지 않는다.
+
+성공 후에도 CPU test Deployment와 완료된 targeted probe를 증거로 보존한다.
+실패도 같은 원칙으로 상태를 삭제하지 않는다. 재실험 전에는 기존 리소스를
+직접 확인하고 명시적으로 정리해야 한다. M3 진단은 다음 target으로 수집한다.
+
+```bash
+make cluster-autoscaler-diagnostics
+```
+
+Autoscaler log/event와 status ConfigMap, Pending Pod, CAPI/CAPO, Nova, Calico,
+guest bootstrap/kubelet/containerd, `RunPodSandbox`/CNI retry, `calico-ipam` process,
+Kubernetes API service path와 worker/compute pressure가 기존 redaction 정책으로
+보존된다. credential와 kubeconfig 내용은 artifact에 기록하지 않는다.
+
 ## 생명주기 명령
 
 ```bash
@@ -422,6 +475,7 @@ make resume-recover
 make workload-clock-check
 make management-cluster-verify
 make capi-providers-verify
+make cluster-autoscaler-verify
 make workload-cluster-verify WORKERS=2
 make workload-cluster-destroy CONFIRM=local-arm64 CONFIRM_CLUSTER=osk8s-workload
 make management-cluster-destroy CONFIRM=local-arm64

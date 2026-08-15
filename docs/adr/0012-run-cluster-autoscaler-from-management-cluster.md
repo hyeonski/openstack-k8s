@@ -2,7 +2,7 @@
 
 - 상태: 채택됨
 - 결정일: 2026-08-15
-- 구현 상태: 구현 전
+- 구현 상태: 2026-08-15 실제 Pending Pod 기반 1→2 증설 검증 완료
 - 대체 대상: ADR-0002의 Cluster Autoscaler 실행 위치 결정
 
 ## 맥락
@@ -52,10 +52,11 @@ ADR-0002는 첫 Autoscaler를 workload cluster에서 실행하기로 했지만, 
   명시적으로 유지하고 workload kubeconfig로 management API 접근이 fallback되는
   것을 막는다.
 - management 권한은 `osk8s-workload` namespace의 `MachineDeployment`, scale
-  subresource, `Machine`, `MachineSet`, `MachinePool`에 필요한 읽기와 update로
-  제한한다. workload에는 upstream Cluster API provider 예제의 Pod, Node,
-  controller, storage, event, leader-election/status 권한을 전용 ServiceAccount에
-  부여한다.
+  subresource, `Machine`, `MachineSet`, `MachinePool`과 CAPO
+  `OpenStackMachineTemplate`에 필요한 권한으로 제한한다. v1.35는 scale
+  subresource를 patch하므로 `get/patch/update`를 허용한다. workload에는 upstream
+  v1.35 Helm Role의 Pod, Node, controller, storage, DRA `resource.k8s.io`, event,
+  leader-election/status 권한을 전용 ServiceAccount에 부여한다.
 - workload ServiceAccount token과 CA를 사용해 kubeconfig를 만들고 management
   namespace의 Secret으로만 연결한다. 임시 파일은 private state directory에서
   mode `0600`으로 다루며 성공과 실패 모두에서 제거한다. token, kubeconfig와
@@ -104,15 +105,36 @@ ADR-0002는 첫 Autoscaler를 workload cluster에서 실행하기로 했지만, 
 - **scale-down도 함께 검증:** scale-up 장애 원인과 drain/축소 정책이 섞인다.
   ADR-0001에 따라 scale-down은 M4에서 별도 검증한다.
 
-## 예상 결과와 제한
+## 실행 및 검증 결과
+
+- CP1+worker2 전체 검증 뒤 MachineDeployment를 2→1로 줄였고 CAPI Machine,
+  OpenStackMachine, Nova server와 Kubernetes Node 정리를 확인했다.
+- worker allocatable 2,000m, 기존 request 250m를 측정하고 각 test Pod request를
+  1,050m로 정했다. 하나는 Running, 다른 하나는 MachineDeployment=1 상태에서
+  `PodScheduled=False`, `reason=Unschedulable`, `Insufficient cpu`가 됐다.
+- Autoscaler가 `TriggeredScaleUp`과 `ScaledUpGroup` event를 기록하고
+  MachineDeployment를 1→2로 patch했다. 새 Machine
+  `osk8s-workload-md-0-ppx4r-cv577`은 10:24:34Z 생성, Nova ACTIVE 뒤 Node가
+  10:25:48Z Ready가 됐다.
+- 기존 Pending Pod가 새 worker에서 Running이 됐고, 같은 node를 직접 지정한
+  CNI/DNS probe가 성공했다. CP1+worker2 전체 검증, workload clock, strict CAPI
+  readiness, Calico와 orphan `calico-ipam` 부재를 다시 통과했다.
+- 첫 설치에서 non-root Pod의 Secret mode, v1.35 DRA informer, CAPO template
+  read와 scale subresource patch 권한 누락을 각각 진단했다. CPU나 기존 timeout을
+  바꾸지 않고 `fsGroup`/`0440`과 공식 v1.35 최소 read/patch 권한으로 수정했다.
+- 성공과 실패 진단 artifact에 credential, kubeconfig data나 알려진 token 패턴이
+  없고 모든 M3 파일은 group/other 읽기 권한이 없다.
+
+## 제한
 
 - management cluster 장애 시 자동 증설 판단도 중단되지만 workload cluster의
   기존 node와 workload 실행은 유지된다.
 - workload ServiceAccount token은 management Secret에 존재하므로 management
   namespace 읽기 권한은 최소화해야 한다. credential rotation은 이번 단일 M3
   실행 뒤 별도로 개선할 수 있다.
-- min=1이므로 scale-from-zero capacity annotation과 infrastructure template
-  read 권한은 필요하지 않다.
+- min=1이므로 scale-from-zero capacity annotation은 필요하지 않다. CAPO의
+  node template 용량을 구성하는 v1.35 실행 경로가 `OpenStackMachineTemplate`을
+  조회하므로 해당 infrastructure template read 권한은 필요했다.
 - 로컬 4 vCPU compute 결과는 기능 검증이며 provisioning 성능이나 적정 CPU
   sizing 결론으로 사용하지 않는다.
 

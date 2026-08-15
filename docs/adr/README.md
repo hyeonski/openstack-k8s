@@ -29,7 +29,7 @@ ADR의 상태와 구현 상태는 다르다. 현재 M2의 CAPI/CAPO 기준선은
 
 | ADR | 결정 | 상태 | 구현 상태 |
 |---|---|---|---|
-| [0001](0001-stage-project-around-a-scale-up-baseline.md) | scale-up 기준선을 중심으로 프로젝트를 단계화한다 | 채택됨 | M0~M2 완료 |
+| [0001](0001-stage-project-around-a-scale-up-baseline.md) | scale-up 기준선을 중심으로 프로젝트를 단계화한다 | 채택됨 | M0~M3 완료 |
 | [0002](0002-use-standalone-capi-capo.md) | Kubernetes lifecycle은 standalone CAPI/CAPO로 관리한다 | 채택됨 | provider와 workload 검증 완료 |
 | [0003](0003-port-by-rebuilding-environment-profiles.md) | 환경 이전은 상태 이동이 아닌 프로필 기반 재구축으로 수행한다 | 채택됨 | 로컬 프로필만 구현 |
 | [0004](0004-use-lima-arm64-for-the-local-feasibility-gate.md) | 로컬 기능 게이트는 Lima 기반 ARM64 2노드 환경으로 구성한다 | 채택됨 | 구현 및 검증 완료 |
@@ -40,7 +40,7 @@ ADR의 상태와 구현 상태는 다르다. 현재 M2의 CAPI/CAPO 기준선은
 | [0009](0009-scope-arm64-compatibility-workarounds-locally.md) | ARM64 호환성 보정은 로컬 프로필에만 한정한다 | 채택됨 | 구현 및 검증 완료 |
 | [0010](0010-build-pinned-arm64-kubernetes-image.md) | 고정 입력과 격리 builder로 ARM64 Kubernetes 노드 이미지를 만든다 | 채택됨 | Glance 및 Nova 재부팅 검증 완료 |
 | [0011](0011-pin-capi-capo-workload-baseline.md) | Kubernetes v1.35 workload 기준선을 CAPI v1.13과 CAPO v0.14로 구성한다 | 채택됨 | 2026-08-11 clean-room CP1+worker2 검증 완료 |
-| [0012](0012-run-cluster-autoscaler-from-management-cluster.md) | Cluster Autoscaler를 management cluster에서 실행한다 | 채택됨 | 구현 전 |
+| [0012](0012-run-cluster-autoscaler-from-management-cluster.md) | Cluster Autoscaler를 management cluster에서 실행한다 | 채택됨 | 2026-08-15 실제 1→2 증설 검증 완료 |
 
 ## 현재 마일스톤
 
@@ -48,8 +48,8 @@ ADR의 상태와 구현 상태는 다르다. 현재 M2의 CAPI/CAPO 기준선은
 M0  로컬 OpenStack 자동 구축·검증                     완료
 M1  Kubernetes용 ARM64 이미지와 management cluster   완료
 M2  CAPI/CAPO workload cluster와 수동 증설            완료
-M3  Pending Pod 기반 Cluster Autoscaler scale-up      예정
-M4  scale-down 또는 장애·지연 개선 연구               미결정
+M3  Pending Pod 기반 Cluster Autoscaler scale-up      완료
+M4  scale-down 또는 장애·지연 개선 연구               다음 단계
 M5  클라우드 AMD64 및 물리 AMD64 프로필               예정
 ```
 
@@ -62,7 +62,7 @@ M1부터 M3까지의 순서는 다음과 같다.
 5. workload control plane 1대와 worker `MachineDeployment` 1대 생성 (완료)
 6. CNI를 설치하고 control plane과 worker의 `Ready` 확인 (완료)
 7. `MachineDeployment`를 1대에서 2대로 수동 증설 (완료)
-8. Cluster Autoscaler를 설치하고 Pending Pod 기반 scale-up 검증 (다음 단계)
+8. Cluster Autoscaler를 설치하고 Pending Pod 기반 scale-up 검증 (완료)
 
 첫 scale-up 실험은 HPA를 제외하고 resource request와 Deployment replica를
 직접 조정한다. 이렇게 해야 Pod 증가 판단과 node 증가 판단을 분리해 문제를

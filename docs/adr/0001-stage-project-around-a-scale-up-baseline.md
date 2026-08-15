@@ -2,7 +2,7 @@
 
 - 상태: 채택됨
 - 결정일: 2026-08-06 (소급 기록)
-- 구현 상태: M0 및 M1 완료
+- 구현 상태: M0~M3 완료
 
 ## 맥락
 
@@ -47,6 +47,8 @@ M3의 첫 실험에는 HPA를 포함하지 않는다.
 - M0는 clean-room 재구축, 실제 게스트, 정지 후 재기동까지 통과했다.
 - M1의 ARM64 Kubernetes 이미지 빌드, Glance 업로드, Nova 부팅·재부팅
   게이트와 별도 로컬 kind management cluster 생성·OpenStack API 경로 검증을
+  통과했다.
+- M2의 CAPI/CAPO workload lifecycle과 M3의 Pending Pod 기반 자동 1→2 증설을
   통과했다.
 - scale-down은 M3 성공 전까지 필수 범위가 아니다.
 - 후속 연구 주제는 실제 M3 계측 결과를 보고 선택한다.
