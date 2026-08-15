@@ -111,14 +111,15 @@ instance_exists() {
   limactl list --json 2>/dev/null | python3 -c '
 import json, sys
 target = sys.argv[1]
+found = False
 for line in sys.stdin:
     line = line.strip()
     if not line:
         continue
     item = json.loads(line)
     if item.get("name") == target:
-        raise SystemExit(0)
-raise SystemExit(1)
+        found = True
+raise SystemExit(0 if found else 1)
 ' "${name}"
 }
 
@@ -127,11 +128,12 @@ lima_network_exists() {
   limactl network list --json 2>/dev/null | python3 -c '
 import json, sys
 target = sys.argv[1]
+found = False
 for line in sys.stdin:
     line = line.strip()
     if line and json.loads(line).get("name") == target:
-        raise SystemExit(0)
-raise SystemExit(1)
+        found = True
+raise SystemExit(0 if found else 1)
 ' "${name}"
 }
 
@@ -140,15 +142,17 @@ instance_status() {
   limactl list --json 2>/dev/null | python3 -c '
 import json, sys
 target = sys.argv[1]
+status = None
 for line in sys.stdin:
     line = line.strip()
     if not line:
         continue
     item = json.loads(line)
     if item.get("name") == target:
-        print(item.get("status", "Unknown"))
-        raise SystemExit(0)
-raise SystemExit(1)
+        status = item.get("status", "Unknown")
+if status is None:
+    raise SystemExit(1)
+print(status)
 ' "${name}"
 }
 
