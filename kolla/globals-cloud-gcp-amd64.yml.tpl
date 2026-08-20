@@ -34,6 +34,7 @@ enable_neutron: "yes"
 enable_nova: "yes"
 
 # This is a three-host functional lab with one controller, not an HA control
-# plane. The VIP remains a GCP alias IP assigned to the controller NIC.
+# plane. GCP owns and routes the alias VIP to the controller, so HAProxy binds
+# the non-local address while keepalived must not try to manage it.
 enable_haproxy: "yes"
-enable_keepalived: "yes"
+enable_keepalived: "no"

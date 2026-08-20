@@ -62,8 +62,11 @@ else
 fi
 
 if command -v docker >/dev/null 2>&1; then
-  docker_state="installed"
+  systemctl is-active --quiet docker
+  docker_version="$(docker version --format '{{.Server.Version}}')"
+  docker_state="active"
 else
+  docker_version="not-installed"
   docker_state="deferred-to-kolla-bootstrap"
 fi
 
@@ -74,6 +77,7 @@ echo "ip_forward=1"
 echo "swap=2GiB"
 echo "root_filesystem=${root_gib}GiB"
 echo "docker=${docker_state}"
+echo "docker_version=${docker_version}"
 echo "reboot_required=${reboot_required}"
 if [[ "${role}" == compute* ]]; then
   echo "nested_kvm=available"

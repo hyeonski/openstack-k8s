@@ -55,11 +55,16 @@ apply는 실행하지 않았다. network, subnetwork, internal address와 instan
 - controller에서 `10.20.0.21`, `10.20.0.22`로 batch SSH 성공
 - controller `openstack-external-network.service`, 외부 veth와
   `172.24.4.1/24` 게이트웨이 활성화
+- controller와 compute01/02 Docker daemon 활성화
 
 배포 입력은 controller의 `/opt/openstack-k8s`에 동기화했다. controller의
 `/opt/kolla-venv`에는 Kolla-Ansible 21.2.0과 고정된 Kolla collection 및
-OpenStack CLI/SDK가 설치됐다. Docker는 아직 설치하지 않았으며 다음 Kolla
-`bootstrap-servers` checkpoint에서 수행한다.
+OpenStack CLI/SDK가 설치됐다. Kolla `bootstrap-servers`가 세 호스트에 Docker와
+containerd를 설치했으며 전체 precheck도 통과했다.
+
+GCP가 `10.20.0.250` alias VIP를 controller NIC에 귀속하고 라우팅하므로 이
+환경에서는 HAProxy만 활성화하고 keepalived는 비활성화한다. keepalived가 이미
+사용 중인 alias VIP의 소유권을 다시 관리하지 않도록 하는 public-cloud 경계다.
 
 GCP Ubuntu 이미지에는 UFW 실행 파일이 없으므로 UFW가 설치된 호스트에서만
 비활성화하도록 host prepare를 수정했다. 또한 GCP 커널은 대응하는
@@ -68,13 +73,12 @@ GCP Ubuntu 이미지에는 UFW 실행 파일이 없으므로 UFW가 설치된 �
 
 ## 다음 checkpoint
 
-1. Kolla `bootstrap-servers`와 precheck를 실행한다.
-2. 공식 AMD64 컨테이너 이미지를 pull한다.
-3. Kolla deploy와 post-deploy를 독립적으로 기록한다.
-4. OpenStack API와 controller external veth/NAT를 함께 검증한 후에만
+1. 공식 AMD64 컨테이너 이미지를 pull한다.
+2. Kolla deploy와 post-deploy를 독립적으로 기록한다.
+3. OpenStack API와 controller external veth/NAT를 함께 검증한 후에만
    `172.24.4.0/24 -> osk8s-controller` route를 활성화한다.
-5. CirrOS/Ubuntu AMD64 guest, DHCP, outbound와 Floating IP data path를 검증한다.
-6. 별도 builder와 management cluster checkpoint로 이동한다.
+4. CirrOS/Ubuntu AMD64 guest, DHCP, outbound와 Floating IP data path를 검증한다.
+5. 별도 builder와 management cluster checkpoint로 이동한다.
 
 36,000초 자동 STOP은 변경하지 않는다. 각 checkpoint는 VM 재기동 후 readiness를
 다시 확인하고 완료된 단계부터 idempotent하게 재개할 수 있어야 한다.
