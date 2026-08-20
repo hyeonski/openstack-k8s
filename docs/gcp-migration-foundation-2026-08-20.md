@@ -62,6 +62,15 @@ apply는 실행하지 않았다. network, subnetwork, internal address와 instan
 OpenStack CLI/SDK가 설치됐다. Kolla `bootstrap-servers`가 세 호스트에 Docker와
 containerd를 설치했으며 전체 precheck도 통과했다.
 
+Kolla pull은 약 8분 44초 만에 완료됐다. controller에는 24개, 각 compute에는
+8개의 `quay.io/openstack.kolla` 이미지가 배치됐으며 모든 이미지가
+`2025.2-ubuntu-noble`, `amd64`임을 확인했다. pull 후 가용 디스크는 controller
+67 GiB, compute별 105 GiB다.
+
+Kolla `validate-config`는 실행 중인 HAProxy 등 서비스 컨테이너 내부의 설정을
+검사하므로 pull 직후가 아니라 deploy 이후에 실행한다. 배포 전 설정 gate는
+이미 통과한 `prechecks`다.
+
 GCP가 `10.20.0.250` alias VIP를 controller NIC에 귀속하고 라우팅하므로 이
 환경에서는 HAProxy만 활성화하고 keepalived는 비활성화한다. keepalived가 이미
 사용 중인 alias VIP의 소유권을 다시 관리하지 않도록 하는 public-cloud 경계다.
@@ -73,8 +82,9 @@ GCP Ubuntu 이미지에는 UFW 실행 파일이 없으므로 UFW가 설치된 �
 
 ## 다음 checkpoint
 
-1. 공식 AMD64 컨테이너 이미지를 pull한다.
-2. Kolla deploy와 post-deploy를 독립적으로 기록한다.
+1. Kolla deploy를 실행한다.
+2. 실행 중인 서비스의 `validate-config`, post-deploy와 admin clouds 수집을
+   독립적으로 기록한다.
 3. OpenStack API와 controller external veth/NAT를 함께 검증한 후에만
    `172.24.4.0/24 -> osk8s-controller` route를 활성화한다.
 4. CirrOS/Ubuntu AMD64 guest, DHCP, outbound와 Floating IP data path를 검증한다.
