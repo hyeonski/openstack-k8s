@@ -24,17 +24,33 @@ cleanup() {
 }
 trap cleanup EXIT
 
+case "$(uname -m)" in
+  aarch64|arm64)
+    qemu_binary="qemu-system-aarch64"
+    machine_args=( -machine virt,accel=kvm -cpu host )
+    console="ttyAMA0"
+    ;;
+  x86_64)
+    qemu_binary="qemu-system-x86_64"
+    machine_args=( -machine accel=kvm -cpu host )
+    console="ttyS0"
+    ;;
+  *)
+    echo "unsupported KVM verification architecture: $(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
 set +e
-timeout 45 qemu-system-aarch64 \
-  -machine virt,accel=kvm \
-  -cpu host \
+timeout 45 "${qemu_binary}" \
+  "${machine_args[@]}" \
   -m 512 \
   -smp 1 \
   -nographic \
   -no-reboot \
   -kernel "${kernel}" \
   -initrd "${initrd}" \
-  -append "console=ttyAMA0 rdinit=/bin/sh panic=-1" \
+  -append "console=${console} rdinit=/bin/sh panic=-1" \
   >"${output}" 2>&1
 result=$?
 set -e
@@ -47,4 +63,3 @@ fi
 echo "Nested KVM boot did not reach the Linux kernel (qemu exit ${result})" >&2
 tail -n 100 "${output}" >&2
 exit 1
-

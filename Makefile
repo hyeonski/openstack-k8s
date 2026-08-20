@@ -14,6 +14,9 @@ export CONFIG
 
 .PHONY: help preflight host-setup secrets-check local-create local-up local-health local-down \
 	local-destroy inventory host-prepare kolla-sync openstack-precheck \
+	gcp-iac-init gcp-iac-validate gcp-iac-import gcp-iac-plan gcp-iac-show-plan \
+	gcp-status gcp-start gcp-stop gcp-host-verify gcp-deployment-key-setup \
+	gcp-sync-inputs \
 	openstack-pull openstack-build-overrides openstack-deploy openstack-validate \
 	openstack-post-deploy openstack-bootstrap openstack-verify \
 	kubernetes-image-builder-create kubernetes-image-builder-destroy \
@@ -30,7 +33,7 @@ export CONFIG
 help:
 	@echo "OpenStack/Kubernetes testbed automation"
 	@echo
-	@echo "Usage: make <target> ENV=local-arm64"
+	@echo "Usage: make <target> ENV=local-arm64|cloud-gcp-amd64"
 	@echo
 	@echo "Host and VM lifecycle:"
 	@echo "  preflight              Read-only host and configuration checks"
@@ -42,6 +45,19 @@ help:
 	@echo "  local-down             Remove the route and stop project instances"
 	@echo "  local-destroy          Delete only project Lima instances (CONFIRM=$(ENV))"
 	@echo "  status                 Show instance, network and local state"
+	@echo "  gcp-status             Show exact GCP host state and runtime limit"
+	@echo "  gcp-start              Start only the declared GCP hosts"
+	@echo "  gcp-stop               Stop only the declared GCP hosts"
+	@echo "  gcp-host-verify        Run the GCP host readiness gate"
+	@echo "  gcp-deployment-key-setup Install the project key for controller-to-compute SSH"
+	@echo "  gcp-sync-inputs        Sync deployment code without installing Kolla"
+	@echo
+	@echo "GCP infrastructure adoption:"
+	@echo "  gcp-iac-init           Initialize OpenTofu/Terraform providers"
+	@echo "  gcp-iac-validate       Validate the GCP declaration"
+	@echo "  gcp-iac-import         Import existing resources without changing GCP"
+	@echo "  gcp-iac-plan           Save and classify the adoption plan"
+	@echo "  gcp-iac-show-plan      Display the saved adoption plan"
 	@echo
 	@echo "OpenStack deployment:"
 	@echo "  inventory              Generate the current Ansible/Kolla inventory"
@@ -91,7 +107,40 @@ help:
 	@echo "  lint                    Static checks that do not mutate the host"
 
 preflight:
-	@scripts/host-preflight.sh
+	@scripts/preflight.sh
+
+gcp-iac-init:
+	@scripts/gcp-iac.sh init
+
+gcp-iac-validate:
+	@scripts/gcp-iac.sh validate
+
+gcp-iac-import:
+	@scripts/gcp-iac.sh import
+
+gcp-iac-plan:
+	@scripts/gcp-iac.sh plan
+
+gcp-iac-show-plan:
+	@scripts/gcp-iac.sh show-plan
+
+gcp-status:
+	@scripts/gcp-hosts.sh status
+
+gcp-start:
+	@scripts/gcp-hosts.sh start
+
+gcp-stop:
+	@scripts/gcp-hosts.sh stop
+
+gcp-host-verify:
+	@scripts/gcp-hosts.sh verify
+
+gcp-deployment-key-setup:
+	@scripts/setup-project-ssh.sh
+
+gcp-sync-inputs: inventory
+	@scripts/sync-to-controller.sh inputs-only
 
 host-setup:
 	@scripts/host-setup.sh

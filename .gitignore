@@ -20,3 +20,10 @@ kolla/environments/*/generated/
 *.tmp
 *.swp
 
+# Terraform/OpenTofu local working data and state
+**/.terraform/
+**/.terraform.tfstate.lock.info
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/*.tfplan
+crash.log

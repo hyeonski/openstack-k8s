@@ -7,6 +7,7 @@ source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
 ensure_state_dirs
 key="${SECRET_DIR}/deployment_ed25519"
+require_command ssh-keygen
 
 if [[ ! -f "${key}" ]]; then
   ssh-keygen -q -t ed25519 -N "" -C "openstack-k8s-${ENV}" -f "${key}"
@@ -15,15 +16,14 @@ if [[ ! -f "${key}" ]]; then
 fi
 
 pubkey="$(<"${key}.pub")"
-for node in "${CONTROLLER_NAME}" "${COMPUTE_NAME}"; do
+while IFS= read -r node; do
   run_on "${node}" bash -lc \
     "umask 077; mkdir -p ~/.ssh; touch ~/.ssh/authorized_keys; grep -qxF '${pubkey}' ~/.ssh/authorized_keys || printf '%s\n' '${pubkey}' >> ~/.ssh/authorized_keys; chmod 700 ~/.ssh; chmod 600 ~/.ssh/authorized_keys"
-done
+done < <(all_instance_names)
 
 tmpkey="/tmp/openstack-k8s-deployment-key"
-limactl copy "${key}" "${CONTROLLER_NAME}:${tmpkey}"
+copy_to "${key}" "${CONTROLLER_NAME}" "${tmpkey}"
 run_on "${CONTROLLER_NAME}" bash -lc \
   "umask 077; mkdir -p ~/.ssh; install -m 600 '${tmpkey}' ~/.ssh/openstack_k8s; rm -f '${tmpkey}'"
 
 log "Project-scoped deployment SSH key installed"
-

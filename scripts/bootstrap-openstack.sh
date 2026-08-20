@@ -143,7 +143,7 @@ run_on "${CONTROLLER_NAME}" env \
 temporary="/tmp/openstack-k8s-capi-clouds.yaml"
 run_on "${CONTROLLER_NAME}" sudo install -o "${TARGET_SSH_USER}" \
   -g "${TARGET_SSH_USER}" -m 0600 /etc/kolla/capi-clouds.yaml "${temporary}"
-limactl copy "${CONTROLLER_NAME}:${temporary}" "${SECRET_DIR}/capi-clouds.yaml"
+copy_from "${CONTROLLER_NAME}" "${temporary}" "${SECRET_DIR}/capi-clouds.yaml"
 run_on "${CONTROLLER_NAME}" rm -f "${temporary}"
 chmod 600 "${SECRET_DIR}/capi-clouds.yaml"
 

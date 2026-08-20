@@ -38,7 +38,7 @@ fi
 remote_state="${KOLLA_DEPLOY_DIR}/artifacts/verification.env"
 temporary="/tmp/openstack-k8s-verification.env"
 run_on "${CONTROLLER_NAME}" install -m 0600 "${remote_state}" "${temporary}"
-limactl copy "${CONTROLLER_NAME}:${temporary}" \
+copy_from "${CONTROLLER_NAME}" "${temporary}" \
   "${GENERATED_DIR}/verification.env"
 run_on "${CONTROLLER_NAME}" rm -f "${temporary}"
 chmod 600 "${GENERATED_DIR}/verification.env"

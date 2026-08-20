@@ -22,23 +22,46 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("sample", type=Path)
     parser.add_argument("destination", type=Path)
-    parser.add_argument("--compute-ip", required=True)
+    parser.add_argument(
+        "--compute",
+        action="append",
+        default=[],
+        metavar="NAME=IP",
+        help="repeat for each compute inventory member",
+    )
+    parser.add_argument("--compute-ip", help="legacy single compute01 address")
     parser.add_argument("--user", default="ubuntu")
     args = parser.parse_args()
 
     content = args.sample.read_text(encoding="utf-8")
+    compute_specs = list(args.compute)
+    if args.compute_ip:
+        compute_specs.append(f"compute01={args.compute_ip}")
+    if not compute_specs:
+        parser.error("at least one --compute NAME=IP is required")
+
+    compute_members = []
+    for spec in compute_specs:
+        try:
+            name, ip_address = spec.split("=", 1)
+        except ValueError:
+            parser.error(f"invalid --compute value: {spec!r}")
+        if not name or not ip_address:
+            parser.error(f"invalid --compute value: {spec!r}")
+        compute_members.append(
+            f"{name} ansible_host={ip_address} ansible_user={args.user} "
+            "ansible_become=true "
+            f"ansible_private_key_file=/home/{args.user}/.ssh/openstack_k8s "
+            "ansible_python_interpreter=/usr/bin/python3"
+        )
+
     managed_groups = {
         "control": [
             "controller ansible_connection=local "
             "ansible_python_interpreter=/usr/bin/python3"
         ],
         "network": ["controller"],
-        "compute": [
-            f"compute01 ansible_host={args.compute_ip} ansible_user={args.user} "
-            "ansible_become=true "
-            f"ansible_private_key_file=/home/{args.user}/.ssh/openstack_k8s "
-            "ansible_python_interpreter=/usr/bin/python3"
-        ],
+        "compute": compute_members,
         "monitoring": ["controller"],
         "storage": [],
         "deployment": ["controller ansible_connection=local"],

@@ -20,9 +20,10 @@ instance_running "${CONTROLLER_NAME}" || die "controller is not running"
 # shellcheck disable=SC1090
 source "${GENERATED_DIR}/addresses.env"
 
-nova_libvirt_image="${KOLLA_NOVA_LIBVIRT_IMAGE}"
-nova_libvirt_tag="${KOLLA_NOVA_LIBVIRT_TAG}"
-if [[ "${render_base_images}" == "true" ]]; then
+nova_libvirt_image="${KOLLA_NOVA_LIBVIRT_IMAGE:-}"
+nova_libvirt_tag="${KOLLA_NOVA_LIBVIRT_TAG:-}"
+if [[ "${render_base_images}" == "true" &&
+      "${KOLLA_BUILD_NOVA_LIBVIRT_OVERRIDE}" == "yes" ]]; then
   # Preserve Jinja expressions in globals.yml so Kolla resolves its normal
   # registry and release tag. This keeps `kolla-ansible pull` independent of
   # the locally built derivative image.
@@ -36,10 +37,12 @@ run_on "${CONTROLLER_NAME}" env \
   KOLLA_OPENSTACK_TAG_SUFFIX="${KOLLA_OPENSTACK_TAG_SUFFIX}" \
   KOLLA_NOVA_LIBVIRT_IMAGE="${nova_libvirt_image}" \
   KOLLA_NOVA_LIBVIRT_TAG="${nova_libvirt_tag}" \
-  LIMA_MANAGEMENT_INTERFACE="${LIMA_MANAGEMENT_INTERFACE}" \
+  KOLLA_GLOBALS_TEMPLATE="${KOLLA_GLOBALS_TEMPLATE}" \
+  MANAGEMENT_INTERFACE="${MANAGEMENT_INTERFACE}" \
   KOLLA_INTERNAL_VIP_ADDRESS="${KOLLA_INTERNAL_VIP_ADDRESS}" \
   EXTERNAL_INTERFACE="${EXTERNAL_INTERFACE}" \
   COMPUTE_MANAGEMENT_IP="${COMPUTE_MANAGEMENT_IP}" \
+  COMPUTE_INVENTORY_SPECS="${COMPUTE_INVENTORY_SPECS}" \
   TARGET_SSH_USER="${TARGET_SSH_USER}" \
   KOLLA_VENV="${KOLLA_VENV}" \
   KOLLA_CONFIG_DIR="${KOLLA_CONFIG_DIR}" \
@@ -54,14 +57,17 @@ run_on "${CONTROLLER_NAME}" env \
     }
 
     "${KOLLA_DEPLOY_DIR}/scripts/render-template.py" \
-      "${KOLLA_DEPLOY_DIR}/kolla/globals.yml.tpl" \
+      "${KOLLA_DEPLOY_DIR}/kolla/${KOLLA_GLOBALS_TEMPLATE}" \
       "${KOLLA_CONFIG_DIR}/globals.yml"
     chmod 600 "${KOLLA_CONFIG_DIR}/globals.yml"
 
+    compute_args=()
+    for compute_spec in ${COMPUTE_INVENTORY_SPECS}; do
+      compute_args+=(--compute "${compute_spec}")
+    done
     "${KOLLA_DEPLOY_DIR}/scripts/build-kolla-inventory.py" \
       "${sample}" "${KOLLA_DEPLOY_DIR}/kolla/generated/multinode" \
-      --compute-ip "${COMPUTE_MANAGEMENT_IP}" \
-      --user "${TARGET_SSH_USER}"
+      "${compute_args[@]}" --user "${TARGET_SSH_USER}"
 
     if [[ ! -s "${KOLLA_CONFIG_DIR}/passwords.yml" ]]; then
       sample_passwords="$(find "${KOLLA_VENV}/share/kolla-ansible" \

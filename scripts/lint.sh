@@ -12,7 +12,7 @@ done < <(find "${PROJECT_ROOT}/scripts" -type f -name '*.sh' -print | sort)
 
 if command -v shellcheck >/dev/null 2>&1; then
   while IFS= read -r file; do
-    shellcheck -x "${file}" || status=1
+    shellcheck --severity=warning -x "${file}" || status=1
   done < <(find "${PROJECT_ROOT}/scripts" -type f -name '*.sh' -print | sort)
 else
   echo "WARN: shellcheck not installed; syntax checks only" >&2

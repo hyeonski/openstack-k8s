@@ -7,7 +7,7 @@ EXTERNAL_INTERFACE="{{ lookup('env', 'EXTERNAL_INTERFACE') }}"
 GATEWAY_INTERFACE="{{ lookup('env', 'EXTERNAL_GATEWAY_INTERFACE') }}"
 EXTERNAL_CIDR="{{ lookup('env', 'EXTERNAL_CIDR') }}"
 EXTERNAL_GATEWAY="{{ lookup('env', 'EXTERNAL_GATEWAY') }}"
-MANAGEMENT_INTERFACE="{{ lookup('env', 'LIMA_MANAGEMENT_INTERFACE') }}"
+MANAGEMENT_INTERFACE="{{ lookup('env', 'MANAGEMENT_INTERFACE') }}"
 
 UPLINK_INTERFACE="$(
   ip -4 route show default |

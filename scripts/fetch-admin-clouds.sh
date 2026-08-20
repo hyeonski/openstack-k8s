@@ -15,7 +15,7 @@ for remote in \
   temporary="/tmp/openstack-k8s-${filename}"
   run_on "${CONTROLLER_NAME}" sudo install -o "${TARGET_SSH_USER}" \
     -g "${TARGET_SSH_USER}" -m 0600 "${remote}" "${temporary}"
-  limactl copy "${CONTROLLER_NAME}:${temporary}" "${SECRET_DIR}/${filename}"
+  copy_from "${CONTROLLER_NAME}" "${temporary}" "${SECRET_DIR}/${filename}"
   run_on "${CONTROLLER_NAME}" rm -f "${temporary}"
   chmod 600 "${SECRET_DIR}/${filename}"
 done

@@ -49,8 +49,10 @@ class BuildKollaInventoryTest(unittest.TestCase):
                     str(BUILDER),
                     str(sample),
                     str(destination),
-                    "--compute-ip",
-                    "192.0.2.22",
+                    "--compute",
+                    "compute01=192.0.2.22",
+                    "--compute",
+                    "compute02=192.0.2.23",
                     "--user",
                     "ubuntu",
                 ],
@@ -60,6 +62,7 @@ class BuildKollaInventoryTest(unittest.TestCase):
 
         self.assertIn("controller ansible_connection=local", content)
         self.assertIn("compute01 ansible_host=192.0.2.22", content)
+        self.assertIn("compute02 ansible_host=192.0.2.23", content)
         self.assertIn("ansible_private_key_file=/home/ubuntu/.ssh/openstack_k8s", content)
         self.assertIn("[nova:children]\ncontrol\ncompute", content)
         self.assertNotIn("control01", content)

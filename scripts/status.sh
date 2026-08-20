@@ -6,7 +6,9 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
 echo "Environment: ${ENV}"
-if command -v limactl >/dev/null 2>&1; then
+if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
+  "${PROJECT_ROOT}/scripts/gcp-hosts.sh" status
+elif command -v limactl >/dev/null 2>&1; then
   limactl list
   echo
   limactl network list || true
@@ -21,4 +23,3 @@ if [[ -d "${STATE_DIR}" ]]; then
 else
   echo "(not created)"
 fi
-

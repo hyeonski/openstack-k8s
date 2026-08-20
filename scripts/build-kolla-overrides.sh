@@ -5,6 +5,11 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
+if [[ "${KOLLA_BUILD_NOVA_LIBVIRT_OVERRIDE}" != "yes" ]]; then
+  log "No nova-libvirt override is required for ${ENV}; using official Kolla images"
+  exit 0
+fi
+
 instance_running "${COMPUTE_NAME}" || die "compute is not running"
 require_command limactl
 

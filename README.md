@@ -46,7 +46,8 @@ strict CAPI readiness와 orphan `calico-ipam` 부재를 확인했다.
 | 수동 worker 증설 | 통과 | 첫 clean-room CNI 이상을 복구한 뒤 동일 4 vCPU에서 2→1→2와 새 worker targeted CNI/DNS probe가 개입 없이 통과함 |
 | 정지 후 재기동 readiness | 통과 | 양방향 관리망, Keystone, nova-compute, hypervisor가 준비된 뒤에만 `local-up`이 성공함 |
 | clean-room 재구축 | 통과 | Lima VM 두 대를 삭제하고 OpenStack 재배포·게스트 검증·Docker 콜드 스타트·kind 재생성까지 통과함 |
-| 클라우드 VM 프로필 | 미구현 | GCP/AWS의 중첩 가상화 및 네트워크 차이를 코드화하고 검증해야 함 |
+| GCP AMD64 호스트/IaC 프로필 | 통과 | 기존 VPC·주소·VM·snapshot 정책 import 후 OpenTofu `No changes`, IAP host gate와 controller→compute 2대 SSH 통과 |
+| GCP OpenStack/CAPI 재배포 | 미검증 | AMD64 Kolla 배포, Floating IP route, Kubernetes image와 management cluster를 순서대로 검증해야 함 |
 | 물리 서버 프로필 | 미구현 | NIC/VLAN/bridge 및 스토리지 구성을 코드화하고 검증해야 함 |
 | 노드 오토스케일링 | 통과 | management cluster의 CA v1.35.0이 `Insufficient cpu` Pending Pod를 감지해 worker를 1→2로 늘리고 새 node targeted CNI/DNS와 전체 readiness를 통과함 |
 
@@ -80,6 +81,45 @@ worker에서 실행되고 두 번째 Pod가 `Unschedulable`/`Insufficient cpu`�
 MachineDeployment가 1→2로 바뀌었다. 새 worker `osk8s-workload-md-0-ppx4r-cv577`은
 Nova ACTIVE, Node/Calico Ready가 됐고 Pending Pod와 node 지정 CNI/DNS probe를
 실행했다. 자세한 결과는 [`docs/m3-autoscaling-report-2026-08-15.md`](docs/m3-autoscaling-report-2026-08-15.md)에 기록한다.
+
+GCP 이전의 첫 checkpoint에서는 `cloud-gcp-amd64` 프로필을 추가하고 기존
+`openstack-k8s` 프로젝트의 custom VPC, subnet, firewall, 내부 주소 네 개,
+controller/compute VM 세 대와 snapshot 정책을 OpenTofu state로 가져왔다. 실제
+refresh plan은 `No changes`였고, 10시간 뒤 `STOP`하는 비용 제어 설정도 선언에
+포함한다. IAP를 통한 세 호스트 readiness와 controller의 프로젝트 전용 키로 두
+compute 내부 IP에 접속하는 경로도 통과했다. 자세한 범위와 다음 gate는
+[`docs/gcp-migration-foundation-2026-08-20.md`](docs/gcp-migration-foundation-2026-08-20.md)에 기록한다.
+
+## GCP 이전 checkpoint
+
+기존 리소스를 새로 만들지 않고 먼저 import한다.
+
+```bash
+make preflight ENV=cloud-gcp-amd64
+make gcp-iac-init ENV=cloud-gcp-amd64
+make gcp-iac-import ENV=cloud-gcp-amd64
+make gcp-iac-plan ENV=cloud-gcp-amd64
+make gcp-iac-show-plan ENV=cloud-gcp-amd64
+```
+
+`gcp-iac-plan`은 기존 리소스와 선언이 일치할 때만 `No changes`여야 한다.
+instance나 disk 교체가 표시되면 apply하지 않는다. local state와 saved plan은
+`.state` 및 Terraform ignore 규칙으로 Git에서 제외한다.
+
+호스트 운영과 검증은 다음 checkpoint로 분리한다.
+
+```bash
+make gcp-status ENV=cloud-gcp-amd64
+make gcp-start ENV=cloud-gcp-amd64
+make gcp-host-verify ENV=cloud-gcp-amd64
+make inventory ENV=cloud-gcp-amd64
+make gcp-deployment-key-setup ENV=cloud-gcp-amd64
+make gcp-sync-inputs ENV=cloud-gcp-amd64
+```
+
+세 VM의 `max_run_duration` 36,000초와 `STOP` 동작은 비용 제어 계약이므로
+제거하지 않는다. OpenStack Floating IP route는 controller external veth/NAT가
+배포되고 검증되기 전까지 OpenTofu 기본값에서 비활성화한다.
 
 로컬 프로필은 기능 검증에만 적합하다.
 

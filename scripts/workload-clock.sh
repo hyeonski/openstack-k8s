@@ -83,7 +83,7 @@ while IFS=$'\t' read -r machine_name machine_address provider_id; do
       export OS_CLIENT_CONFIG_FILE=/etc/kolla/capi-clouds.yaml
       openstack --os-cloud capi server start "${SERVER_ID}"
     ' </dev/null
-    for attempt in {1..60}; do
+    for _ in {1..60}; do
       server_status="$(run_on "${CONTROLLER_NAME}" env SERVER_ID="${server_id}" bash -lc '
         set -Eeuo pipefail
         source /opt/kolla-venv/bin/activate
@@ -243,7 +243,7 @@ GUEST_WORKLOAD_CLOCK
 CONTROLLER_WORKLOAD_CLOCK
   )" || die "failed to ${action} ${machine_name} clock"
 
-  IFS=$'\t' read -r method guest_epoch rtc_epoch <<<"${result}"
+  IFS=$'\t' read -r method guest_epoch _rtc_epoch <<<"${result}"
   is_epoch "${guest_epoch}" ||
     die "${machine_name} returned an invalid epoch: ${guest_epoch}"
   host_after="$(date -u +%s)"

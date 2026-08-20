@@ -1,17 +1,8 @@
 ---
-# Generated for the local ARM64 evaluation environment.
+# GCP AMD64 functional evaluation environment.
 kolla_base_distro: "${KOLLA_BASE_DISTRO}"
 openstack_release: "${KOLLA_SERIES}"
 openstack_tag_suffix: "${KOLLA_OPENSTACK_TAG_SUFFIX}"
-nova_libvirt_image: "${KOLLA_NOVA_LIBVIRT_IMAGE}"
-nova_libvirt_tag: "${KOLLA_NOVA_LIBVIRT_TAG}"
-
-# The Debian Bookworm ARM64 AAVMF bundled in the 2025.2 nova-libvirt image
-# faults while booting current CirrOS and Ubuntu ARM64 EFI loaders under
-# Lima/VZ nested KVM. The Ubuntu 24.04 compute host firmware boots both
-# correctly, so keep this local-profile workaround explicit and replaceable.
-nova_libvirt_extra_volumes:
-  - "/usr/share/AAVMF:/usr/share/AAVMF:ro"
 
 network_interface: "${MANAGEMENT_INTERFACE}"
 api_interface: "${MANAGEMENT_INTERFACE}"
@@ -42,6 +33,7 @@ enable_glance: "yes"
 enable_neutron: "yes"
 enable_nova: "yes"
 
-# This is a two-node functional lab, not an HA deployment.
+# This is a three-host functional lab with one controller, not an HA control
+# plane. The VIP remains a GCP alias IP assigned to the controller NIC.
 enable_haproxy: "yes"
 enable_keepalived: "yes"

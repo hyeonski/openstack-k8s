@@ -11,9 +11,11 @@
         that:
           - ansible_distribution == "Ubuntu"
           - ansible_distribution_version is version("24.04", ">=")
-          - ansible_architecture in ["aarch64", "arm64"]
+          - ansible_architecture in lookup('env', 'EXPECTED_ANSIBLE_ARCHITECTURES').split(',')
         fail_msg: >-
-          local-arm64 requires Ubuntu 24.04 or newer on ARM64; got
+          {{ lookup('env', 'ENVIRONMENT_NAME') }} requires Ubuntu 24.04 or
+          newer on one of
+          {{ lookup('env', 'EXPECTED_ANSIBLE_ARCHITECTURES') }}; got
           {{ ansible_distribution }} {{ ansible_distribution_version }}
           {{ ansible_architecture }}
 
@@ -50,8 +52,9 @@
         path: /etc/hosts
         marker: "# {mark} OPENSTACK-K8S MANAGED HOSTS"
         block: |
-          {{ hostvars['controller']['ansible_host'] }} osk8s-controller controller
-          {{ hostvars['compute01']['ansible_host'] }} osk8s-compute compute01
+          {% for host in groups['all'] %}
+          {{ hostvars[host]['ansible_host'] }} {{ hostvars[host]['node_hostname'] }} {{ host }}
+          {% endfor %}
 
 - name: Prepare controller external networking
   hosts: controller
@@ -111,13 +114,14 @@
   become: true
   gather_facts: true
   tasks:
-    - name: Install ARM64 KVM verification packages
+    - name: Install architecture-specific KVM verification packages
       ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 3600
-        name:
-          - qemu-system-arm
-          - qemu-efi-aarch64
+        name: >-
+          {{ ['qemu-system-arm', 'qemu-efi-aarch64']
+             if ansible_architecture in ['aarch64', 'arm64']
+             else ['qemu-system-x86'] }}
         state: present
 
     - name: Stop host libvirt units before using containerized libvirt

@@ -5,9 +5,15 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
-require_command limactl
+if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
+  require_command gcloud
+else
+  require_command limactl
+fi
 instance_running "${CONTROLLER_NAME}" || die "controller is not running"
-instance_running "${COMPUTE_NAME}" || die "compute is not running"
+for compute_name in "${COMPUTE_NAMES[@]}"; do
+  instance_running "${compute_name}" || die "${compute_name} is not running"
+done
 [[ -f "${SECRET_DIR}/capi-clouds.yaml" ]] ||
   die "CAPO credentials are missing; run make openstack-bootstrap"
 
@@ -42,7 +48,7 @@ for name in kubernetes-image-verification.txt kubernetes-image-console.log \
   kubernetes-image-guest-checks.log; do
   remote="${KOLLA_DEPLOY_DIR}/artifacts/${name}"
   if run_on "${CONTROLLER_NAME}" test -f "${remote}"; then
-    limactl copy "${CONTROLLER_NAME}:${remote}" "${run_dir}/${name}"
+    copy_from "${CONTROLLER_NAME}" "${remote}" "${run_dir}/${name}"
   fi
 done
 
