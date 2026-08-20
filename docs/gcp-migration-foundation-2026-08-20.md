@@ -5,6 +5,7 @@
 기존 GCP 호스트를 재생성하지 않고 OpenTofu 관리 경계로 가져왔으며,
 `cloud-gcp-amd64` 프로필의 host discovery, 2-compute inventory, IAP 원격 실행과
 controller-to-compute SSH가 통과했다. OpenStack은 아직 배포하지 않았다.
+이후 controller의 Kolla 실행 환경 설치와 세 호스트의 host prepare도 완료했다.
 
 ## 채택한 기존 리소스
 
@@ -50,18 +51,27 @@ apply는 실행하지 않았다. network, subnetwork, internal address와 instan
 - project swap 2 GiB
 - reboot 불필요
 - compute01/02 `/dev/kvm`, nested KVM 사용 가능
+- compute01/02에서 현재 GCP 커널의 nested KVM 직접 부팅 성공
 - controller에서 `10.20.0.21`, `10.20.0.22`로 batch SSH 성공
+- controller `openstack-external-network.service`, 외부 veth와
+  `172.24.4.1/24` 게이트웨이 활성화
 
-배포 입력은 controller의 `/opt/openstack-k8s`에 동기화했다. Docker와 Kolla
-virtualenv는 아직 설치하지 않았으며 해당 작업은 OpenStack 배포 checkpoint에서
-수행한다.
+배포 입력은 controller의 `/opt/openstack-k8s`에 동기화했다. controller의
+`/opt/kolla-venv`에는 Kolla-Ansible 21.2.0과 고정된 Kolla collection 및
+OpenStack CLI/SDK가 설치됐다. Docker는 아직 설치하지 않았으며 다음 Kolla
+`bootstrap-servers` checkpoint에서 수행한다.
+
+GCP Ubuntu 이미지에는 UFW 실행 파일이 없으므로 UFW가 설치된 호스트에서만
+비활성화하도록 host prepare를 수정했다. 또한 GCP 커널은 대응하는
+`/boot/initrd.img-*`가 없을 수 있으므로, 이 경우 initrd 없이 커널을 직접
+부팅해 KVM 가속 경로를 검증한다.
 
 ## 다음 checkpoint
 
-1. GCP archive/IAP sync로 배포 입력을 controller에 배치한다.
-2. AMD64 host prepare와 nested KVM boot gate를 실행한다.
-3. Kolla bootstrap, precheck, pull, deploy, post-deploy를 독립적으로 기록한다.
-4. controller external veth/NAT를 검증한 후에만
+1. Kolla `bootstrap-servers`와 precheck를 실행한다.
+2. 공식 AMD64 컨테이너 이미지를 pull한다.
+3. Kolla deploy와 post-deploy를 독립적으로 기록한다.
+4. OpenStack API와 controller external veth/NAT를 함께 검증한 후에만
    `172.24.4.0/24 -> osk8s-controller` route를 활성화한다.
 5. CirrOS/Ubuntu AMD64 guest, DHCP, outbound와 Floating IP data path를 검증한다.
 6. 별도 builder와 management cluster checkpoint로 이동한다.

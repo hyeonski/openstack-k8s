@@ -3,6 +3,9 @@
 set -Eeuo pipefail
 
 role="${1:-}"
+external_interface="${2:-}"
+external_gateway_interface="${3:-}"
+external_gateway_cidr="${4:-}"
 case "${role}" in
   controller)
     expected_hostname="osk8s-controller"
@@ -40,6 +43,18 @@ if [[ "${role}" == compute* ]]; then
   [[ "$(cat /sys/module/kvm_intel/parameters/nested)" == "Y" ]]
 fi
 
+if [[ "${role}" == "controller" ]]; then
+  [[ -n "${external_interface}" ]]
+  [[ -n "${external_gateway_interface}" ]]
+  [[ -n "${external_gateway_cidr}" ]]
+  systemctl is-active --quiet openstack-external-network.service
+  ip link show "${external_interface}" >/dev/null
+  ip link show "${external_gateway_interface}" >/dev/null
+  ip -4 -o address show dev "${external_gateway_interface}" |
+    awk '{print $4}' |
+    grep -Fxq "${external_gateway_cidr}"
+fi
+
 if [[ -e /var/run/reboot-required ]]; then
   reboot_required="yes"
 else
@@ -62,4 +77,6 @@ echo "docker=${docker_state}"
 echo "reboot_required=${reboot_required}"
 if [[ "${role}" == compute* ]]; then
   echo "nested_kvm=available"
+else
+  echo "external_network=active"
 fi

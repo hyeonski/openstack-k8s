@@ -13,10 +13,15 @@ initrd="/boot/initrd.img-$(uname -r)"
   echo "kernel not found: ${kernel}" >&2
   exit 1
 }
-[[ -r "${initrd}" ]] || {
-  echo "initrd not found: ${initrd}" >&2
-  exit 1
-}
+
+initrd_args=()
+kernel_append="panic=-1"
+if [[ -r "${initrd}" ]]; then
+  initrd_args=( -initrd "${initrd}" )
+  kernel_append+=" rdinit=/bin/sh"
+else
+  echo "initrd not found; verifying direct kernel boot: ${initrd}" >&2
+fi
 
 output="$(mktemp)"
 cleanup() {
@@ -49,8 +54,8 @@ timeout 45 "${qemu_binary}" \
   -nographic \
   -no-reboot \
   -kernel "${kernel}" \
-  -initrd "${initrd}" \
-  -append "console=${console} rdinit=/bin/sh panic=-1" \
+  "${initrd_args[@]}" \
+  -append "console=${console} ${kernel_append}" \
   >"${output}" 2>&1
 result=$?
 set -e

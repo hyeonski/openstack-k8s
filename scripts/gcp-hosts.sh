@@ -54,7 +54,11 @@ case "${action}" in
       remote_script="/tmp/verify-gcp-host.sh"
       copy_to "${PROJECT_ROOT}/scripts/verify-gcp-host.sh" \
         "${nodes[index]}" "${remote_script}"
-      run_on "${nodes[index]}" sudo bash "${remote_script}" "${roles[index]}"
+      run_on "${nodes[index]}" sudo bash "${remote_script}" \
+        "${roles[index]}" \
+        "${EXTERNAL_INTERFACE}" \
+        "${EXTERNAL_GATEWAY_INTERFACE}" \
+        "${EXTERNAL_GATEWAY}/${EXTERNAL_CIDR#*/}"
       run_on "${nodes[index]}" rm -f "${remote_script}"
     done
     ;;

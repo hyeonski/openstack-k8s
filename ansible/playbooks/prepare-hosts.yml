@@ -40,9 +40,15 @@
         enabled: true
         state: started
 
+    - name: Check whether UFW is installed
+      ansible.builtin.stat:
+        path: /usr/sbin/ufw
+      register: ufw_binary
+
     - name: Disable UFW in the isolated evaluation guests
       community.general.ufw:
         state: disabled
+      when: ufw_binary.stat.exists
 
     - name: Configure project swap
       ansible.builtin.include_tasks: tasks/swap.yml
