@@ -84,6 +84,45 @@ cron, kolla-toolbox와 neutron-metadata-agent도 실행 중이다.
 서비스 설정이 실제 컨테이너에서 검증됐다. controller에서 내부 VIP
 `http://10.20.0.250:5000/v3`을 조회해 Keystone `v3.14` 응답도 확인했다.
 
+2026-08-21에는 세 인스턴스가 모두 `TERMINATED`인 상태에서 다시 기동해 복구
+경로를 확인했다. controller와 compute 2대 모두 기존 내부 IP와 36,000초 자동
+STOP 설정을 유지했고, chrony, Docker, 외부 veth 및 compute nested KVM 검증이
+통과했다. 재기동 후 `validate-config`도 세 호스트 모두 `failed=0`으로 완료됐다.
+
+Kolla post-deploy는 약 8초 만에 완료됐다. 생성된 `clouds.yaml`과
+`passwords.yml`은 로컬 `.state/cloud-gcp-amd64/secrets`에 수집했으며 디렉터리는
+`0700`, 파일은 `0600` 권한이다. 관리자 인증으로 다음 상태를 확인했다.
+
+- service catalog: Keystone, Glance, Placement, Nova, Neutron
+- `nova-compute`: compute01/02 모두 `enabled`, `up`
+- hypervisor: compute01/02 모두 `up`
+- Neutron agent: controller 4개와 compute별 OVS agent, 총 6개 모두 `Alive`, `UP`
+
+OpenStack bootstrap도 완료했다. 생성 후 재실행까지 성공했으며 기존 project,
+network, subnet, router, flavor와 security group을 중복 생성하지 않고 재사용했다.
+현재 영속 리소스는 다음과 같다.
+
+- project/user: `capi-test`, member role
+- external network/subnet: `public`, `172.24.4.0/24`
+- tenant network/subnet/router: `private`, `10.10.0.0/24`, `test-router`
+- flavor: `m1.gcp` 1 vCPU/1 GiB/10 GiB, control plane과 worker 각각
+  2 vCPU/2 GiB/20 GiB
+- security group: ICMP, TCP 22와 TCP 6443 허용
+- image: `cirros-0.6.3-x86_64`, `ubuntu-24.04-amd64` 모두 `active`
+
+이미지 준비와 업로드 경로는 환경 아키텍처를 따르도록 수정했다. 캐시 파일명에서
+ARM64 표기를 제거하고 `ARCHITECTURE`를 bootstrap playbook에 전달한다. GCP에
+업로드된 두 이미지 모두 `hw_architecture=x86_64`, `hw_firmware_type=bios`임을
+Glance에서 확인했다. 이 수정 전에는 AMD64 이미지 바이트에 ARM64/UEFI
+메타데이터가 붙어 Nova 스케줄링이나 부팅을 방해할 수 있었다.
+
+`capi-test` project에는 restricted application credential과 workload SSH
+keypair를 생성했다. application credential로 Keystone token 발급과 keypair
+조회가 성공했고, 로컬 `capi-clouds.yaml`은 Git ignore 및 `0600` 권한을
+확인했다. 최신 OpenStack CLI가 keypair의 `public_key` 출력 열을 제공하지 않는
+문제는 로컬 public key와 Nova keypair의 MD5 fingerprint를 비교하도록 수정해
+재실행도 통과했다.
+
 GCP가 `10.20.0.250` alias VIP를 controller NIC에 귀속하고 라우팅하므로 이
 환경에서는 HAProxy만 활성화하고 keepalived는 비활성화한다. keepalived가 이미
 사용 중인 alias VIP의 소유권을 다시 관리하지 않도록 하는 public-cloud 경계다.
@@ -95,13 +134,14 @@ GCP Ubuntu 이미지에는 UFW 실행 파일이 없으므로 UFW가 설치된 �
 
 ## 다음 checkpoint
 
-1. Kolla post-deploy를 실행하고 생성된 admin clouds 파일을 로컬로 수집한다.
-2. admin 인증으로 서비스 catalog, compute service와 network agent 상태를
-   확인한다.
-3. OpenStack API와 controller external veth/NAT를 함께 검증한 후에만
+1. OpenStack API와 controller external veth/NAT를 함께 검증한 후에만
    `172.24.4.0/24 -> osk8s-controller` route를 활성화한다.
-4. CirrOS/Ubuntu AMD64 guest, DHCP, outbound와 Floating IP data path를 검증한다.
-5. 별도 builder와 management cluster checkpoint로 이동한다.
+2. CirrOS/Ubuntu AMD64 guest, DHCP, outbound와 Floating IP data path를 검증한다.
+3. 검증용 server와 Floating IP를 정리하고 CAPO network preflight 결과를
+   보존한다.
+4. 별도 builder와 management cluster checkpoint로 이동한다.
 
-36,000초 자동 STOP은 변경하지 않는다. 각 checkpoint는 VM 재기동 후 readiness를
-다시 확인하고 완료된 단계부터 idempotent하게 재개할 수 있어야 한다.
+GCP custom route는 아직 생성하지 않았고
+`enable_openstack_floating_ip_route=false`를 유지한다. 36,000초 자동 STOP도
+변경하지 않는다. 각 checkpoint는 VM 재기동 후 readiness를 다시 확인하고 완료된
+단계부터 idempotent하게 재개할 수 있어야 한다.

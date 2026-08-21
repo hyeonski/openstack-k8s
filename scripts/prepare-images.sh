@@ -54,10 +54,10 @@ manifest="${cache}/SHA256.lock"
 {
   download_verified \
     "${CIRROS_IMAGE_URL}" "${CIRROS_SHA256_URL}" \
-    "${cache}/cirros-aarch64.img"
+    "${cache}/cirros.img"
   download_verified \
     "${UBUNTU_IMAGE_URL}" "${UBUNTU_SHA256_URL}" \
-    "${cache}/ubuntu-24.04-arm64.img"
+    "${cache}/ubuntu-24.04.img"
 } > "${manifest}.tmp"
 mv "${manifest}.tmp" "${manifest}"
 chmod 0644 "${cache}"/*.img "${manifest}"

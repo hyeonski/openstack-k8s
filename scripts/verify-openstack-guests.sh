@@ -87,7 +87,7 @@ delete_server_and_fips() {
   openstack server delete --wait "${server_name}" >/dev/null 2>&1 || true
 }
 
-cirros_name="verify-cirros-arm64"
+cirros_name="verify-cirros"
 cirros_fip="$(create_server_with_fip "${cirros_name}" "${CIRROS_IMAGE_NAME}")"
 if ! wait_for_ssh cirros "${cirros_fip}"; then
   openstack console log show "${cirros_name}" || true

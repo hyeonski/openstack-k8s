@@ -166,32 +166,34 @@
         - { protocol: tcp, minimum: 22, maximum: 22, cidr: "0.0.0.0/0" }
         - { protocol: tcp, minimum: 6443, maximum: 6443, cidr: "0.0.0.0/0" }
 
-    - name: Upload the CirrOS ARM64 image
+    - name: Upload the CirrOS image for the selected architecture
       openstack.cloud.image:
         cloud: "{{ cloud_name }}"
         name: "{{ lookup('env', 'CIRROS_IMAGE_NAME') }}"
-        filename: "{{ lookup('env', 'KOLLA_DEPLOY_DIR') }}/cache/images/cirros-aarch64.img"
+        filename: "{{ lookup('env', 'KOLLA_DEPLOY_DIR') }}/cache/images/cirros.img"
         disk_format: qcow2
         container_format: bare
         is_public: true
         properties:
-          hw_architecture: aarch64
-          hw_firmware_type: uefi
+          hw_architecture: "{{ lookup('env', 'ARCHITECTURE') }}"
+          hw_firmware_type: >-
+            {{ 'uefi' if lookup('env', 'ARCHITECTURE') in ['aarch64', 'arm64'] else 'bios' }}
           os_distro: cirros
           os_version: "{{ lookup('env', 'CIRROS_VERSION') }}"
         state: present
 
-    - name: Upload the Ubuntu ARM64 image
+    - name: Upload the Ubuntu image for the selected architecture
       openstack.cloud.image:
         cloud: "{{ cloud_name }}"
         name: "{{ lookup('env', 'UBUNTU_IMAGE_NAME') }}"
-        filename: "{{ lookup('env', 'KOLLA_DEPLOY_DIR') }}/cache/images/ubuntu-24.04-arm64.img"
+        filename: "{{ lookup('env', 'KOLLA_DEPLOY_DIR') }}/cache/images/ubuntu-24.04.img"
         disk_format: qcow2
         container_format: bare
         is_public: true
         properties:
-          hw_architecture: aarch64
-          hw_firmware_type: uefi
+          hw_architecture: "{{ lookup('env', 'ARCHITECTURE') }}"
+          hw_firmware_type: >-
+            {{ 'uefi' if lookup('env', 'ARCHITECTURE') in ['aarch64', 'arm64'] else 'bios' }}
           os_distro: ubuntu
           os_version: "24.04"
         state: present

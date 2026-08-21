@@ -30,6 +30,7 @@ run_on "${CONTROLLER_NAME}" bash -lc '
 '
 
 environment_names=(
+  ARCHITECTURE
   OPENSTACK_TEST_PROJECT OPENSTACK_TEST_USER
   EXTERNAL_NETWORK_NAME EXTERNAL_PHYSNET EXTERNAL_CIDR EXTERNAL_GATEWAY
   EXTERNAL_ALLOCATION_POOL_START EXTERNAL_ALLOCATION_POOL_END
@@ -124,13 +125,15 @@ run_on "${CONTROLLER_NAME}" env \
     trap '\''rm -f "${public_key_file}"'\'' EXIT
     ssh-keygen -y -f "${deployment_key}" >"${public_key_file}"
     chmod 0600 "${public_key_file}"
-    expected_key="$(awk '\''{print $1 " " $2}'\'' "${public_key_file}")"
+    expected_fingerprint="$(
+      ssh-keygen -E md5 -lf "${public_key_file}" |
+        awk '\''{sub(/^MD5:/, "", $2); print $2}'\''
+    )"
     if openstack --os-cloud capi keypair show "${WORKLOAD_SSH_KEY_NAME}" \
         >/dev/null 2>&1; then
-      actual_key="$(openstack --os-cloud capi keypair show \
-        -f value -c public_key "${WORKLOAD_SSH_KEY_NAME}" |
-        awk '\''{print $1 " " $2}'\'')"
-      [[ "${actual_key}" == "${expected_key}" ]] || {
+      actual_fingerprint="$(openstack --os-cloud capi keypair show \
+        -f value -c fingerprint "${WORKLOAD_SSH_KEY_NAME}")"
+      [[ "${actual_fingerprint}" == "${expected_fingerprint}" ]] || {
         echo "existing workload SSH keypair does not match the project key" >&2
         exit 1
       }
