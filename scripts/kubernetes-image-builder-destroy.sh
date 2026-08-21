@@ -9,6 +9,10 @@ confirmation="${1:-}"
 [[ "${confirmation}" == "${ENV}" ]] ||
   die "refusing deletion; run with CONFIRM=${ENV}"
 
+if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
+  exec "${PROJECT_ROOT}/scripts/gcp-image-builder.sh" delete
+fi
+
 require_command limactl
 
 if ! instance_exists "${IMAGE_BUILDER_NAME}"; then

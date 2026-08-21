@@ -262,3 +262,63 @@ resource "google_compute_route" "openstack_floating_ips" {
   next_hop_instance      = google_compute_instance.hosts["controller"].self_link
   next_hop_instance_zone = var.zone
 }
+
+resource "google_compute_instance" "image_builder" {
+  count = var.enable_image_builder ? 1 : 0
+
+  name                = var.image_builder_name
+  zone                = var.zone
+  machine_type        = var.image_builder_machine_type
+  can_ip_forward      = false
+  deletion_protection = false
+  enable_display      = false
+  tags                = ["osk8s-node"]
+  labels = {
+    env  = "cloud-gcp-amd64"
+    role = "image-builder"
+  }
+
+  boot_disk {
+    auto_delete = true
+    device_name = var.image_builder_name
+    mode        = "READ_WRITE"
+
+    initialize_params {
+      image = var.source_image
+      size  = var.image_builder_disk_size_gb
+      type  = "pd-balanced"
+    }
+  }
+
+  network_interface {
+    subnetwork = google_compute_subnetwork.seoul.id
+    stack_type = "IPV4_ONLY"
+
+    access_config {
+      network_tier = "PREMIUM"
+    }
+  }
+
+  advanced_machine_features {
+    enable_nested_virtualization = true
+  }
+
+  scheduling {
+    automatic_restart           = true
+    on_host_maintenance         = "MIGRATE"
+    preemptible                 = false
+    provisioning_model          = "STANDARD"
+    instance_termination_action = "STOP"
+
+    max_run_duration {
+      seconds = var.max_run_duration_seconds
+      nanos   = 0
+    }
+  }
+
+  shielded_instance_config {
+    enable_secure_boot          = false
+    enable_vtpm                 = true
+    enable_integrity_monitoring = true
+  }
+}

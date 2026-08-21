@@ -5,6 +5,10 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
+if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
+  exec "${PROJECT_ROOT}/scripts/gcp-image-builder.sh" create
+fi
+
 require_command limactl
 require_command python3
 ensure_state_dirs

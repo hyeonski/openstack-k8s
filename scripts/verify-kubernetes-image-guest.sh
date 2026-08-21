@@ -5,6 +5,7 @@ set -Eeuo pipefail
 KOLLA_DEPLOY_DIR="${KOLLA_DEPLOY_DIR:?}"
 KUBERNETES_IMAGE_NAME="${KUBERNETES_IMAGE_NAME:?}"
 KUBERNETES_VERSION="${KUBERNETES_VERSION:?}"
+ARCHITECTURE="${ARCHITECTURE:?}"
 KUBERNETES_CONTROL_PLANE_FLAVOR="${KUBERNETES_CONTROL_PLANE_FLAVOR:?}"
 TENANT_NETWORK_NAME="${TENANT_NETWORK_NAME:?}"
 EXTERNAL_NETWORK_NAME="${EXTERNAL_NETWORK_NAME:?}"
@@ -19,7 +20,7 @@ report="${state_dir}/kubernetes-image-verification.txt"
 console_log="${state_dir}/kubernetes-image-console.log"
 rm -f "${report}" "${console_log}"
 
-server_name="verify-kubernetes-image-arm64"
+server_name="verify-kubernetes-image"
 key_name="openstack-k8s-kubernetes-image"
 key_file="/home/${USER}/.ssh/openstack_k8s"
 public_key="${state_dir}/kubernetes-image-verification.pub"
@@ -71,15 +72,23 @@ if ! wait_for_ssh; then
   exit 1
 fi
 
+case "${ARCHITECTURE}" in
+  aarch64|arm64) expected_uname="aarch64" ;;
+  x86_64|amd64) expected_uname="x86_64" ;;
+  *) echo "unsupported guest architecture: ${ARCHITECTURE}" >&2; exit 1 ;;
+esac
+
 log_guest="${state_dir}/kubernetes-image-guest-checks.log"
-ssh "${ssh_options[@]}" "ubuntu@${fip}" bash -s -- "${KUBERNETES_VERSION}" \
+ssh "${ssh_options[@]}" "ubuntu@${fip}" bash -s -- \
+  "${KUBERNETES_VERSION}" "${expected_uname}" \
   > "${log_guest}" <<'GUEST_CHECKS'
 set -Eeuo pipefail
 expected_version="$1"
+expected_uname="$2"
 expected_plain="${expected_version#v}"
 
 cloud-init status --wait
-[[ "$(uname -m)" == "aarch64" ]]
+[[ "$(uname -m)" == "${expected_uname}" ]]
 sudo systemctl is-active containerd
 kubeadm version -o short | grep -Fx "${expected_version}"
 kubelet --version | grep -Fx "Kubernetes ${expected_version}"
@@ -110,7 +119,7 @@ openstack console log show "${server_name}" > "${console_log}"
   echo "nova_active=pass"
   echo "ssh=pass"
   echo "cloud_init=pass"
-  echo "architecture_aarch64=pass"
+  echo "architecture_${ARCHITECTURE}=pass"
   echo "kubernetes_version=pass"
   echo "containerd_cri=pass"
   echo "kernel_prerequisites=pass"

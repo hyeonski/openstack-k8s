@@ -26,6 +26,11 @@ checksum_path="${image_path}.sha256"
   shasum -a 256 -c "${artifact_name}.sha256"
 )
 expected_sha256="$(awk '{print $1}' "${checksum_path}")"
+if [[ "${ARCHITECTURE}" == "aarch64" || "${ARCHITECTURE}" == "arm64" ]]; then
+  firmware_type="uefi"
+else
+  firmware_type="bios"
+fi
 
 remote_image="/tmp/${artifact_name}"
 log "Copying the verified Kubernetes image to the controller"
@@ -38,6 +43,8 @@ run_on "${CONTROLLER_NAME}" env \
   KUBERNETES_IMAGE_OS_VERSION="${KUBERNETES_IMAGE_OS_VERSION}" \
   IMAGE_BUILDER_VERSION="${IMAGE_BUILDER_VERSION}" \
   KUBERNETES_IMAGE_SHA256="${expected_sha256}" \
+  ARCHITECTURE="${ARCHITECTURE}" \
+  FIRMWARE_TYPE="${firmware_type}" \
   REMOTE_IMAGE="${remote_image}" \
   bash -lc '
     set -Eeuo pipefail
@@ -48,8 +55,15 @@ run_on "${CONTROLLER_NAME}" env \
     if openstack image show "${KUBERNETES_IMAGE_NAME}" >/dev/null 2>&1; then
       actual="$(openstack image show "${KUBERNETES_IMAGE_NAME}" -f json |
         jq -r ".properties.kubernetes_image_sha256 // empty")"
+      actual_architecture="$(openstack image show "${KUBERNETES_IMAGE_NAME}" -f json |
+        jq -r ".properties.hw_architecture // empty")"
+      actual_firmware="$(openstack image show "${KUBERNETES_IMAGE_NAME}" -f json |
+        jq -r ".properties.hw_firmware_type // empty")"
       status="$(openstack image show "${KUBERNETES_IMAGE_NAME}" -f value -c status)"
-      [[ "${actual}" == "${KUBERNETES_IMAGE_SHA256}" && "${status}" == "active" ]] || {
+      [[ "${actual}" == "${KUBERNETES_IMAGE_SHA256}" &&
+          "${actual_architecture}" == "${ARCHITECTURE}" &&
+          "${actual_firmware}" == "${FIRMWARE_TYPE}" &&
+          "${status}" == "active" ]] || {
         echo "existing versioned Glance image does not match the local checksum" >&2
         exit 1
       }
@@ -61,8 +75,8 @@ run_on "${CONTROLLER_NAME}" env \
       --private \
       --disk-format qcow2 \
       --container-format bare \
-      --property hw_architecture=aarch64 \
-      --property hw_firmware_type=uefi \
+      --property hw_architecture="${ARCHITECTURE}" \
+      --property hw_firmware_type="${FIRMWARE_TYPE}" \
       --property os_distro=ubuntu \
       --property os_version="${KUBERNETES_IMAGE_OS_VERSION}" \
       --property kubernetes_version="${KUBERNETES_VERSION}" \
@@ -78,4 +92,4 @@ set -e
 run_on "${CONTROLLER_NAME}" rm -f "${remote_image}"
 [[ "${result}" -eq 0 ]] || die "Glance image upload failed"
 
-log "Glance image ${KUBERNETES_IMAGE_NAME} is active and checksum-labelled"
+log "Glance ${ARCHITECTURE} image ${KUBERNETES_IMAGE_NAME} is active and checksum-labelled"

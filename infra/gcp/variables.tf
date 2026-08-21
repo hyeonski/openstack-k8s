@@ -39,3 +39,27 @@ variable "openstack_external_cidr" {
   type        = string
   default     = "172.24.4.0/24"
 }
+
+variable "enable_image_builder" {
+  description = "Create the disposable nested-KVM Kubernetes image builder."
+  type        = bool
+  default     = false
+}
+
+variable "image_builder_name" {
+  description = "Name of the disposable Kubernetes image builder."
+  type        = string
+  default     = "osk8s-image-builder"
+}
+
+variable "image_builder_machine_type" {
+  description = "Nested-KVM capable machine type for the disposable image builder."
+  type        = string
+  default     = "n2-standard-4"
+}
+
+variable "image_builder_disk_size_gb" {
+  description = "Boot and workspace disk size for the disposable image builder."
+  type        = number
+  default     = 80
+}

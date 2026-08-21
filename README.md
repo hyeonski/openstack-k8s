@@ -47,7 +47,7 @@ strict CAPI readiness와 orphan `calico-ipam` 부재를 확인했다.
 | 정지 후 재기동 readiness | 통과 | 양방향 관리망, Keystone, nova-compute, hypervisor가 준비된 뒤에만 `local-up`이 성공함 |
 | clean-room 재구축 | 통과 | Lima VM 두 대를 삭제하고 OpenStack 재배포·게스트 검증·Docker 콜드 스타트·kind 재생성까지 통과함 |
 | GCP AMD64 호스트/IaC 프로필 | 통과 | 기존 VPC·주소·VM·snapshot 정책 import 후 OpenTofu `No changes`, IAP host gate와 controller→compute 2대 SSH 통과 |
-| GCP OpenStack/CAPI 이전 | 진행 중 | AMD64 Kolla 배포, bootstrap, 실제 게스트와 GCP VPC Floating IP 경로까지 통과했으며 Kubernetes image와 management cluster가 남음 |
+| GCP OpenStack/CAPI 이전 | 진행 중 | AMD64 Kolla, bootstrap, 게스트 네트워크와 Kubernetes 이미지의 Glance/Nova 재부팅 검증까지 통과했으며 management cluster가 남음 |
 | 물리 서버 프로필 | 미구현 | NIC/VLAN/bridge 및 스토리지 구성을 코드화하고 검증해야 함 |
 | 노드 오토스케일링 | 통과 | management cluster의 CA v1.35.0이 `Insufficient cpu` Pending Pod를 감지해 worker를 1→2로 늘리고 새 node targeted CNI/DNS와 전체 readiness를 통과함 |
 
@@ -362,6 +362,24 @@ flavor로 Nova VM을 만들고 SSH, cloud-init, containerd CRI,
 `kubeadm`/`kubelet`/`kubectl`, 커널 모듈과 sysctl, swap 비활성화, pause image
 pull을 확인한다. 그 뒤 VM을 재부팅해 같은 readiness를 다시 확인하고 성공한
 테스트 리소스만 정리한다.
+
+GCP AMD64 프로필은 OpenStack 호스트를 정지하지 않고 전용 일회성 빌더를
+추가한다. 생성·삭제 plan은 각각 해당 빌더 한 대만 대상으로 하는지 검사하며,
+빌더에도 기존 호스트와 같은 36,000초 자동 STOP을 적용한다.
+
+```bash
+make kubernetes-image-builder-create ENV=cloud-gcp-amd64
+make kubernetes-image-build ENV=cloud-gcp-amd64
+make kubernetes-image-upload ENV=cloud-gcp-amd64
+make kubernetes-image-verify ENV=cloud-gcp-amd64
+make kubernetes-image-builder-destroy \
+  ENV=cloud-gcp-amd64 CONFIRM=cloud-gcp-amd64
+make gcp-iac-plan ENV=cloud-gcp-amd64
+```
+
+GCP 산출물은 Ubuntu 22.04 AMD64/BIOS QCOW2이며 Kubernetes v1.35.7,
+containerd 2.3.2와 같은 고정 입력을 사용한다. 빌더를 삭제해도 QCOW2,
+SHA-256과 빌드 메타데이터는 `.state/cloud-gcp-amd64/images`에 남는다.
 
 ### 6. 로컬 management cluster
 

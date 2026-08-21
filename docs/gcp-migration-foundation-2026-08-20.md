@@ -154,14 +154,54 @@ GCP Ubuntu 이미지에는 UFW 실행 파일이 없으므로 UFW가 설치된 �
 `/boot/initrd.img-*`가 없을 수 있으므로, 이 경우 initrd 없이 커널을 직접
 부팅해 KVM 가속 경로를 검증한다.
 
+## AMD64 Kubernetes 이미지 빌드
+
+GCP 전용 일회성 `osk8s-image-builder`를 OpenTofu 선언에 추가했다. 빌더는
+`n2-standard-4`, 80 GiB balanced persistent disk, nested KVM 구성이고 기존
+호스트와 같은 36,000초 뒤 `STOP` 비용 제어를 사용한다. 생성 plan은 이 VM 한
+대 추가, 변경 0개, 삭제 0개임을 전용 validator로 확인한 뒤 적용했다.
+
+Kubernetes Image Builder v0.1.55의 commit
+`7ffb9b7f1f26cd66891874463cc9411e3633325f`과 Ubuntu 22.04.5 ISO checksum을
+고정해 Kubernetes v1.35.7, containerd 2.3.2, pause 3.10.2 AMD64/BIOS QCOW2를
+빌드했다. Packer 빌드는 31분 52초가 걸렸고 Image Builder Goss 검사는
+65개 모두 성공했다. 압축 후 `qemu-img check`와 로컬 회수 후 SHA-256 대조도
+통과했다.
+
+```text
+artifact: ubuntu-2204-kube-v1.35.7-amd64.qcow2
+virtual size: 20 GiB
+actual size: 2,251,358,208 bytes
+sha256: 298cacee5a803be9f496745e390dfa96b2be3fa7d33555d4dee97c7552a95946
+dirty: false
+corrupt: false
+```
+
+Glance에는 private 이미지 `ubuntu-2204-kube-v1.35.7-amd64`로 등록했다.
+이미지 ID는 `8094033c-c7e4-48c7-8cbd-e751caae6cbb`이고 상태 `active`,
+`hw_architecture=x86_64`, `hw_firmware_type=bios`와 로컬 SHA-256 속성이
+일치한다.
+
+이 이미지로 실제 Nova VM을 만들고 Floating IP `172.24.4.135`를 통해 다음
+검증을 통과했다.
+
+- Nova ACTIVE와 SSH, cloud-init 완료
+- x86_64 guest와 Kubernetes v1.35.7 패키지 버전
+- containerd CRI, overlay/br_netfilter, IPv4 forwarding, swap 비활성화
+- `registry.k8s.io/pause:3.10.2` pull
+- 재부팅 후 SSH, cloud-init과 containerd readiness
+
+성공 후 검증 server, Floating IP와 전용 keypair를 삭제했다. 일회성 GCP
+builder 삭제 plan은 추가 0개, 변경 0개, 해당 VM 삭제 1개였고 전용 validator
+통과 후 적용했다. 삭제 뒤 전체 OpenTofu refresh plan은 다시 `No changes`다.
+GCP 인스턴스는 controller와 compute 2대만 남았으며 세 인스턴스 모두
+36,000초 자동 STOP을 유지한다. 따라서 GCP AMD64 Kubernetes 이미지
+checkpoint는 완료됐다.
+
 ## 다음 checkpoint
 
-1. GCP AMD64 Kubernetes image builder의 위치와 lifecycle을 확정하고 고정된
-   Kubernetes QCOW2를 빌드한다.
-2. 이미지를 Glance에 업로드하고 Nova 부팅, cloud-init, containerd와 Kubernetes
-   구성요소를 검증한다.
-3. cloud management cluster의 실행 위치와 lifecycle을 확정한다.
-4. management cluster 내부에서 OpenStack API와 workload Floating IP 경로를
+1. cloud management cluster의 실행 위치와 lifecycle을 확정한다.
+2. management cluster 내부에서 OpenStack API와 workload Floating IP 경로를
    검증한 뒤 CAPI/CAPO provider checkpoint로 이동한다.
 
 GCP custom route와 36,000초 자동 STOP을 모두 유지한다. 각 checkpoint는 VM

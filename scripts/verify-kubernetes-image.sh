@@ -36,6 +36,7 @@ run_on "${CONTROLLER_NAME}" env \
   KOLLA_DEPLOY_DIR="${KOLLA_DEPLOY_DIR}" \
   KUBERNETES_IMAGE_NAME="${KUBERNETES_IMAGE_NAME}" \
   KUBERNETES_VERSION="${KUBERNETES_VERSION}" \
+  ARCHITECTURE="${ARCHITECTURE}" \
   KUBERNETES_CONTROL_PLANE_FLAVOR="${KUBERNETES_CONTROL_PLANE_FLAVOR}" \
   TENANT_NETWORK_NAME="${TENANT_NETWORK_NAME}" \
   EXTERNAL_NETWORK_NAME="${EXTERNAL_NETWORK_NAME}" \
@@ -57,4 +58,4 @@ if [[ "${result}" -ne 0 ]]; then
   exit "${result}"
 fi
 
-log "Kubernetes ARM64 Glance image and Nova reboot gate passed"
+log "Kubernetes ${ARCHITECTURE} Glance image and Nova reboot gate passed"

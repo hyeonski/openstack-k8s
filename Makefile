@@ -73,7 +73,7 @@ help:
 	@echo "  openstack-verify       Run CirrOS, Ubuntu and CAPO-network preflight"
 	@echo
 	@echo "Kubernetes node image:"
-	@echo "  kubernetes-image-builder-create  Create the isolated ARM64 image builder"
+	@echo "  kubernetes-image-builder-create  Create the isolated architecture-specific image builder"
 	@echo "  kubernetes-image-build           Build and checksum the Kubernetes QCOW2"
 	@echo "  kubernetes-image-builder-destroy Delete only the image builder (CONFIRM=$(ENV))"
 	@echo "  kubernetes-image-upload          Upload the pinned image to Glance"
