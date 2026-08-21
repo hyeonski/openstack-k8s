@@ -5,17 +5,43 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
-require_command curl
-require_command docker
 [[ -f "${SECRET_DIR}/capi-clouds.yaml" ]] ||
   die "CAPO credentials are missing; run make openstack-bootstrap"
-export DOCKER_CONFIG="${PROJECT_ROOT}/config/docker-anonymous"
-docker info >/dev/null 2>&1 ||
-  die "Docker is required and must be running for the strict CAPO network probe"
+
+case "${HOST_PROVIDER}" in
+  lima)
+    require_command curl
+    require_command docker
+    export DOCKER_CONFIG="${PROJECT_ROOT}/config/docker-anonymous"
+    docker info >/dev/null 2>&1 ||
+      die "Docker is required and must be running for the strict CAPO network probe"
+    scripts/manage-route.sh add
+    ;;
+  gcp)
+    require_command gcloud
+    route_name="${GCP_OPENSTACK_FLOATING_IP_ROUTE_NAME:?}"
+    route_destination="$(
+      gcloud compute routes describe "${route_name}" \
+        --project="${GCP_PROJECT_ID}" \
+        --format='value(destRange)' 2>/dev/null || true
+    )"
+    route_next_hop="$(
+      gcloud compute routes describe "${route_name}" \
+        --project="${GCP_PROJECT_ID}" \
+        --format='value(nextHopInstance)' 2>/dev/null || true
+    )"
+    [[ "${route_destination}" == "${EXTERNAL_CIDR}" ]] ||
+      die "GCP Floating IP route is missing or has the wrong destination"
+    [[ "${route_next_hop##*/}" == "${CONTROLLER_NAME}" ]] ||
+      die "GCP Floating IP route does not use the controller as next hop"
+    ;;
+  *)
+    die "unsupported host provider for OpenStack verification: ${HOST_PROVIDER}"
+    ;;
+esac
 
 run_dir="$(current_or_new_run)"
 log_file="${run_dir}/logs/openstack-verification.log"
-scripts/manage-route.sh add
 
 log "Running OpenStack control-plane and guest verification"
 set +e
@@ -45,26 +71,46 @@ chmod 600 "${GENERATED_DIR}/verification.env"
 # shellcheck disable=SC1090
 source "${GENERATED_DIR}/verification.env"
 
-log "Checking the OpenStack API and workload API path from macOS"
-curl --fail --silent --show-error --connect-timeout 10 \
-  "http://${KOLLA_INTERNAL_VIP_ADDRESS}:5000/v3" >/dev/null
-curl --fail --silent --show-error --connect-timeout 10 \
-  "http://${UBUNTU_TEST_FLOATING_IP}:${PROBE_API_PORT}/" >/dev/null
+probe_results=()
+if [[ "${HOST_PROVIDER}" == "lima" ]]; then
+  log "Checking the OpenStack API and workload API path from macOS"
+  curl --fail --silent --show-error --connect-timeout 10 \
+    "http://${KOLLA_INTERNAL_VIP_ADDRESS}:5000/v3" >/dev/null
+  curl --fail --silent --show-error --connect-timeout 10 \
+    "http://${UBUNTU_TEST_FLOATING_IP}:${PROBE_API_PORT}/" >/dev/null
 
-log "Checking both paths from an isolated Docker bridge container"
-docker run --rm --network bridge curlimages/curl:8.12.1 \
-  --fail --silent --show-error --connect-timeout 10 \
-  "http://${KOLLA_INTERNAL_VIP_ADDRESS}:5000/v3" >/dev/null
-docker run --rm --network bridge curlimages/curl:8.12.1 \
-  --fail --silent --show-error --connect-timeout 10 \
-  "http://${UBUNTU_TEST_FLOATING_IP}:${PROBE_API_PORT}/" >/dev/null
-
-{
-  echo "openstack_api_from_host=pass"
-  echo "openstack_api_from_docker_bridge=pass"
-  echo "floating_ip_6443_from_host=pass"
-  echo "floating_ip_6443_from_docker_bridge=pass"
-} > "${run_dir}/capo-network-preflight.txt"
+  log "Checking both paths from an isolated Docker bridge container"
+  docker run --rm --network bridge curlimages/curl:8.12.1 \
+    --fail --silent --show-error --connect-timeout 10 \
+    "http://${KOLLA_INTERNAL_VIP_ADDRESS}:5000/v3" >/dev/null
+  docker run --rm --network bridge curlimages/curl:8.12.1 \
+    --fail --silent --show-error --connect-timeout 10 \
+    "http://${UBUNTU_TEST_FLOATING_IP}:${PROBE_API_PORT}/" >/dev/null
+  probe_results+=(
+    "openstack_api_from_host=pass"
+    "openstack_api_from_docker_bridge=pass"
+    "floating_ip_6443_from_host=pass"
+    "floating_ip_6443_from_docker_bridge=pass"
+  )
+else
+  for compute_name in "${COMPUTE_NAMES[@]}"; do
+    # Kolla deliberately configures compute Docker with bridge=none and
+    # iptables=false. Each compute host is an independent GCP VPC consumer;
+    # the eventual management cluster must run its own container-path gate.
+    log "Checking both API paths from GCP VPC host ${compute_name}"
+    run_on "${compute_name}" curl \
+      --fail --silent --show-error --connect-timeout 10 \
+      "http://${KOLLA_INTERNAL_VIP_ADDRESS}:5000/v3" >/dev/null
+    run_on "${compute_name}" curl \
+      --fail --silent --show-error --connect-timeout 10 \
+      "http://${UBUNTU_TEST_FLOATING_IP}:${PROBE_API_PORT}/" >/dev/null
+    probe_results+=(
+      "openstack_api_from_${compute_name}=pass"
+      "floating_ip_6443_from_${compute_name}=pass"
+    )
+  done
+fi
+printf '%s\n' "${probe_results[@]}" > "${run_dir}/capo-network-preflight.txt"
 
 if [[ "${KEEP_TEST_RESOURCES:-NO}" == "YES" ]]; then
   log "KEEP_TEST_RESOURCES=YES; Ubuntu verification server was preserved"
@@ -75,4 +121,8 @@ else
   rm -f "${GENERATED_DIR}/verification.env"
 fi
 
-log "OpenStack and strict CAPO network preflight passed"
+if [[ "${HOST_PROVIDER}" == "lima" ]]; then
+  log "OpenStack and strict CAPO network preflight passed"
+else
+  log "OpenStack guest and GCP VPC network preflight passed"
+fi

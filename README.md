@@ -47,7 +47,7 @@ strict CAPI readiness와 orphan `calico-ipam` 부재를 확인했다.
 | 정지 후 재기동 readiness | 통과 | 양방향 관리망, Keystone, nova-compute, hypervisor가 준비된 뒤에만 `local-up`이 성공함 |
 | clean-room 재구축 | 통과 | Lima VM 두 대를 삭제하고 OpenStack 재배포·게스트 검증·Docker 콜드 스타트·kind 재생성까지 통과함 |
 | GCP AMD64 호스트/IaC 프로필 | 통과 | 기존 VPC·주소·VM·snapshot 정책 import 후 OpenTofu `No changes`, IAP host gate와 controller→compute 2대 SSH 통과 |
-| GCP OpenStack/CAPI 재배포 | 미검증 | AMD64 Kolla 배포, Floating IP route, Kubernetes image와 management cluster를 순서대로 검증해야 함 |
+| GCP OpenStack/CAPI 이전 | 진행 중 | AMD64 Kolla 배포, bootstrap, 실제 게스트와 GCP VPC Floating IP 경로까지 통과했으며 Kubernetes image와 management cluster가 남음 |
 | 물리 서버 프로필 | 미구현 | NIC/VLAN/bridge 및 스토리지 구성을 코드화하고 검증해야 함 |
 | 노드 오토스케일링 | 통과 | management cluster의 CA v1.35.0이 `Insufficient cpu` Pending Pod를 감지해 worker를 1→2로 늘리고 새 node targeted CNI/DNS와 전체 readiness를 통과함 |
 

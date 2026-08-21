@@ -19,13 +19,13 @@ make gcp-iac-import ENV=cloud-gcp-amd64
 make gcp-iac-plan ENV=cloud-gcp-amd64
 ```
 
-The OpenStack Floating IP route is deliberately disabled during adoption. It
-is enabled only after the controller's veth/NAT external-network service has
-passed its host gate:
+The OpenStack Floating IP route was deliberately disabled during adoption. The
+controller veth/NAT host gate, OpenStack bootstrap and image metadata checks
+passed on 2026-08-21, so `openstack.auto.tfvars` now keeps the route enabled.
+Confirm that the full plan is empty after any route change:
 
 ```bash
-tofu -chdir=infra/gcp plan \
-  -var='enable_openstack_floating_ip_route=true'
+make gcp-iac-plan ENV=cloud-gcp-amd64
 ```
 
 Never apply a plan containing instance replacement or disk destruction. The

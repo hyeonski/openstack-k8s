@@ -5,6 +5,9 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
+[[ "${HOST_PROVIDER}" == "lima" ]] ||
+  die "manage-route is only valid for the Lima host route"
+
 action="${1:-}"
 [[ "${action}" == "add" || "${action}" == "delete" ]] ||
   die "usage: $0 add|delete"

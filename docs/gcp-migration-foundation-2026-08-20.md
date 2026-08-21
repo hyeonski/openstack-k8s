@@ -123,6 +123,28 @@ keypair를 생성했다. application credential로 Keystone token 발급과 keyp
 문제는 로컬 public key와 Nova keypair의 MD5 fingerprint를 비교하도록 수정해
 재실행도 통과했다.
 
+controller external veth/NAT와 bootstrap gate가 통과한 뒤 OpenTofu로 GCP custom
+route를 활성화했다. 적용 계획은
+`google_compute_route.openstack_floating_ips[0]` 1개 생성, 변경 0개, 삭제 0개였고
+적용 후 전체 plan은 다시 `No changes`다. `openstack.auto.tfvars`가
+`172.24.4.0/24 -> osk8s-controller` 상태를 유지한다. 세 GCP 인스턴스의
+36,000초 자동 STOP 설정은 바뀌지 않았다.
+
+실제 AMD64 게스트와 네트워크 검증도 통과했다.
+
+- CirrOS: Nova 부팅, tenant DHCP, Floating IP SSH와 `1.1.1.1` outbound ping
+- Ubuntu 24.04: cloud-init 완료, `capo-api-probe.service` 활성화와 TCP 6443 응답
+- compute01/02: 각 호스트에서 Keystone VIP `10.20.0.250:5000`과 Ubuntu
+  Floating IP `:6443` 접근
+- cleanup: 검증용 CirrOS/Ubuntu server와 Floating IP 삭제
+
+Kolla compute의 Docker daemon은 서비스 네트워크 충돌을 피하기 위해
+`bridge=none`, `iptables=false`로 구성돼 있다. 따라서 Lima에서 사용한 Docker
+bridge probe를 compute 호스트에 그대로 적용하지 않고, 두 compute를 독립적인
+GCP VPC 소비자로 검증했다. management cluster의 실제 container-to-OpenStack 및
+container-to-workload API 경로는 cloud management cluster 배치가 정해지는 다음
+checkpoint에서 검증한다.
+
 GCP가 `10.20.0.250` alias VIP를 controller NIC에 귀속하고 라우팅하므로 이
 환경에서는 HAProxy만 활성화하고 keepalived는 비활성화한다. keepalived가 이미
 사용 중인 alias VIP의 소유권을 다시 관리하지 않도록 하는 public-cloud 경계다.
@@ -134,14 +156,14 @@ GCP Ubuntu 이미지에는 UFW 실행 파일이 없으므로 UFW가 설치된 �
 
 ## 다음 checkpoint
 
-1. OpenStack API와 controller external veth/NAT를 함께 검증한 후에만
-   `172.24.4.0/24 -> osk8s-controller` route를 활성화한다.
-2. CirrOS/Ubuntu AMD64 guest, DHCP, outbound와 Floating IP data path를 검증한다.
-3. 검증용 server와 Floating IP를 정리하고 CAPO network preflight 결과를
-   보존한다.
-4. 별도 builder와 management cluster checkpoint로 이동한다.
+1. GCP AMD64 Kubernetes image builder의 위치와 lifecycle을 확정하고 고정된
+   Kubernetes QCOW2를 빌드한다.
+2. 이미지를 Glance에 업로드하고 Nova 부팅, cloud-init, containerd와 Kubernetes
+   구성요소를 검증한다.
+3. cloud management cluster의 실행 위치와 lifecycle을 확정한다.
+4. management cluster 내부에서 OpenStack API와 workload Floating IP 경로를
+   검증한 뒤 CAPI/CAPO provider checkpoint로 이동한다.
 
-GCP custom route는 아직 생성하지 않았고
-`enable_openstack_floating_ip_route=false`를 유지한다. 36,000초 자동 STOP도
-변경하지 않는다. 각 checkpoint는 VM 재기동 후 readiness를 다시 확인하고 완료된
-단계부터 idempotent하게 재개할 수 있어야 한다.
+GCP custom route와 36,000초 자동 STOP을 모두 유지한다. 각 checkpoint는 VM
+재기동 후 readiness를 다시 확인하고 완료된 단계부터 idempotent하게 재개할 수
+있어야 한다.
