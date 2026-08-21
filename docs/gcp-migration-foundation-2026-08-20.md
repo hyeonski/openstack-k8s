@@ -4,8 +4,10 @@
 
 기존 GCP 호스트를 재생성하지 않고 OpenTofu 관리 경계로 가져왔으며,
 `cloud-gcp-amd64` 프로필의 host discovery, 2-compute inventory, IAP 원격 실행과
-controller-to-compute SSH가 통과했다. OpenStack은 아직 배포하지 않았다.
-이후 controller의 Kolla 실행 환경 설치와 세 호스트의 host prepare도 완료했다.
+controller-to-compute SSH가 통과했다. 이후 controller의 Kolla 실행 환경 설치와
+세 호스트의 host prepare를 마쳤고, OpenStack 2025.2 핵심 서비스를 실제로
+배포했다. 배포 후 Kolla 설정 검증, 컨테이너 health와 내부 VIP Keystone API까지
+통과했다.
 
 ## 채택한 기존 리소스
 
@@ -71,6 +73,17 @@ Kolla `validate-config`는 실행 중인 HAProxy 등 서비스 컨테이너 내�
 검사하므로 pull 직후가 아니라 deploy 이후에 실행한다. 배포 전 설정 gate는
 이미 통과한 `prechecks`다.
 
+Kolla deploy는 약 15분 24초 만에 완료됐다. Ansible recap은 controller
+`failed=0`, compute01/02 `failed=0`이었고 Nova가 두 compute 서비스를 셀에
+등록했다. 배포된 컨테이너는 controller 27개, 각 compute 8개이며 모두 `Up`
+상태다. healthcheck가 정의된 컨테이너는 모두 `healthy`이고, healthcheck가 없는
+cron, kolla-toolbox와 neutron-metadata-agent도 실행 중이다.
+
+배포 후 `validate-config`는 약 3분 1초 만에 완료됐으며 세 호스트 모두
+`failed=0`이었다. HAProxy, Keystone, Glance, Placement, Nova, Neutron의 활성
+서비스 설정이 실제 컨테이너에서 검증됐다. controller에서 내부 VIP
+`http://10.20.0.250:5000/v3`을 조회해 Keystone `v3.14` 응답도 확인했다.
+
 GCP가 `10.20.0.250` alias VIP를 controller NIC에 귀속하고 라우팅하므로 이
 환경에서는 HAProxy만 활성화하고 keepalived는 비활성화한다. keepalived가 이미
 사용 중인 alias VIP의 소유권을 다시 관리하지 않도록 하는 public-cloud 경계다.
@@ -82,9 +95,9 @@ GCP Ubuntu 이미지에는 UFW 실행 파일이 없으므로 UFW가 설치된 �
 
 ## 다음 checkpoint
 
-1. Kolla deploy를 실행한다.
-2. 실행 중인 서비스의 `validate-config`, post-deploy와 admin clouds 수집을
-   독립적으로 기록한다.
+1. Kolla post-deploy를 실행하고 생성된 admin clouds 파일을 로컬로 수집한다.
+2. admin 인증으로 서비스 catalog, compute service와 network agent 상태를
+   확인한다.
 3. OpenStack API와 controller external veth/NAT를 함께 검증한 후에만
    `172.24.4.0/24 -> osk8s-controller` route를 활성화한다.
 4. CirrOS/Ubuntu AMD64 guest, DHCP, outbound와 Floating IP data path를 검증한다.
