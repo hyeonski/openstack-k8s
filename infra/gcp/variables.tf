@@ -63,3 +63,33 @@ variable "image_builder_disk_size_gb" {
   type        = number
   default     = 80
 }
+
+variable "enable_management_host" {
+  description = "Create the persistent host for the cloud management cluster."
+  type        = bool
+  default     = false
+}
+
+variable "management_host_name" {
+  description = "Name of the dedicated management-cluster host."
+  type        = string
+  default     = "osk8s-management"
+}
+
+variable "management_host_address" {
+  description = "Reserved internal IPv4 address of the management host."
+  type        = string
+  default     = "10.20.0.30"
+}
+
+variable "management_host_machine_type" {
+  description = "Machine type for the management-cluster host."
+  type        = string
+  default     = "e2-standard-2"
+}
+
+variable "management_host_disk_size_gb" {
+  description = "Boot and container storage disk size for the management host."
+  type        = number
+  default     = 60
+}

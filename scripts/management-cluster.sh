@@ -6,6 +6,11 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
 action="${1:-}"
+if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
+  exec "${PROJECT_ROOT}/scripts/gcp-management-cluster.sh" \
+    "${action}" "${2:-}"
+fi
+
 kind_dir="${STATE_DIR}/bin"
 kind_bin="${kind_dir}/kind"
 kubeconfig_dir="${STATE_DIR}/kubeconfigs"

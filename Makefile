@@ -16,9 +16,9 @@ export CONFIG
 	local-destroy inventory host-prepare kolla-sync openstack-precheck \
 	gcp-iac-init gcp-iac-validate gcp-iac-import gcp-iac-plan gcp-iac-show-plan \
 	gcp-status gcp-start gcp-stop gcp-host-verify gcp-deployment-key-setup \
-	gcp-sync-inputs \
+	gcp-sync-inputs gcp-management-host-create \
 	openstack-pull openstack-build-overrides openstack-deploy openstack-validate \
-	openstack-post-deploy openstack-bootstrap openstack-verify \
+	openstack-post-deploy openstack-bootstrap openstack-verify openstack-verification-cleanup \
 	kubernetes-image-builder-create kubernetes-image-builder-destroy \
 	kubernetes-image-build kubernetes-image-upload kubernetes-image-verify \
 	kubernetes-image management-cluster-create management-cluster-verify \
@@ -51,6 +51,7 @@ help:
 	@echo "  gcp-host-verify        Run the GCP host readiness gate"
 	@echo "  gcp-deployment-key-setup Install the project key for controller-to-compute SSH"
 	@echo "  gcp-sync-inputs        Sync deployment code without installing Kolla"
+	@echo "  gcp-management-host-create Create and prepare the dedicated management host"
 	@echo
 	@echo "GCP infrastructure adoption:"
 	@echo "  gcp-iac-init           Initialize OpenTofu/Terraform providers"
@@ -71,6 +72,7 @@ help:
 	@echo "  openstack-post-deploy  Generate admin credentials"
 	@echo "  openstack-bootstrap    Create networks, images and CAPO project credentials"
 	@echo "  openstack-verify       Run CirrOS, Ubuntu and CAPO-network preflight"
+	@echo "  openstack-verification-cleanup  Remove a preserved verification VM and Floating IP"
 	@echo
 	@echo "Kubernetes node image:"
 	@echo "  kubernetes-image-builder-create  Create the isolated architecture-specific image builder"
@@ -80,10 +82,10 @@ help:
 	@echo "  kubernetes-image-verify          Boot and verify the image with Nova"
 	@echo "  kubernetes-image                 Upload and verify an existing built image"
 	@echo
-	@echo "Local management cluster:"
+	@echo "Management cluster:"
 	@echo "  management-cluster-create  Create and verify the pinned single-node kind cluster"
 	@echo "  management-cluster-verify  Verify Ready state and the in-cluster OpenStack API path"
-	@echo "  management-cluster-destroy Delete only the local kind cluster (CONFIRM=$(ENV))"
+	@echo "  management-cluster-destroy Delete only the kind cluster (CONFIRM=$(ENV))"
 	@echo
 	@echo "CAPI/CAPO workload cluster:"
 	@echo "  capi-providers-install    Install pinned CAPI, kubeadm, CAPO and ORC providers"
@@ -141,6 +143,9 @@ gcp-deployment-key-setup:
 
 gcp-sync-inputs: inventory
 	@scripts/sync-to-controller.sh inputs-only
+
+gcp-management-host-create:
+	@scripts/gcp-management-host.sh create
 
 host-setup:
 	@scripts/host-setup.sh
@@ -202,6 +207,9 @@ openstack-bootstrap:
 
 openstack-verify:
 	@scripts/openstack-verify.sh
+
+openstack-verification-cleanup:
+	@scripts/openstack-verification-cleanup.sh
 
 kubernetes-image-builder-create:
 	@scripts/kubernetes-image-builder-create.sh

@@ -194,15 +194,55 @@ Glance에는 private 이미지 `ubuntu-2204-kube-v1.35.7-amd64`로 등록했다.
 성공 후 검증 server, Floating IP와 전용 keypair를 삭제했다. 일회성 GCP
 builder 삭제 plan은 추가 0개, 변경 0개, 해당 VM 삭제 1개였고 전용 validator
 통과 후 적용했다. 삭제 뒤 전체 OpenTofu refresh plan은 다시 `No changes`다.
-GCP 인스턴스는 controller와 compute 2대만 남았으며 세 인스턴스 모두
-36,000초 자동 STOP을 유지한다. 따라서 GCP AMD64 Kubernetes 이미지
+GCP 인스턴스는 이 시점에 controller와 compute 2대만 남았으며 세 인스턴스
+모두 36,000초 자동 STOP을 유지했다. 따라서 GCP AMD64 Kubernetes 이미지
 checkpoint는 완료됐다.
+
+## GCP management Kubernetes
+
+Kolla controller의 `/etc/docker/daemon.json`은 서비스 네트워크 충돌을 막기
+위해 `bridge=none`, `ip-forward=false`, `iptables=false`를 사용한다. 이 daemon에
+kind를 함께 두지 않고 `osk8s-management` 영속 VM을 별도로 선언했다.
+
+- machine/disk: `e2-standard-2`, 60 GiB balanced persistent disk
+- network: `osk8s-mgmt`, 예약 내부 IP `10.20.0.30`
+- lifecycle: `prevent_destroy`, 36,000초 뒤 `STOP`
+- runtime: Docker, kind v0.31.0, Kubernetes v1.35.0 AMD64
+- API: VM 내부 IP `10.20.0.30:6443`에 bind
+- local access: IAP tunnel `127.0.0.1:16443`
+
+최초 생성 plan은 management 내부 주소와 VM만 추가하는 `2 add / 0 change /
+0 destroy`였고 전용 validator를 통과했다. IAP API 경로를 추가할 때도 management
+VM network tag의 in-place 변경과 전용 firewall 한 개 생성만 허용했다. firewall은
+IAP TCP forwarding 대역 `35.235.240.0/20`에서 `osk8s-management` tag의 TCP
+6443만 허용하며 public API 방화벽은 만들지 않았다. 이후 전체 refresh plan은
+다시 `No changes`다.
+
+kind 바이너리 SHA-256과 node image digest를 고정했다. API 인증서에는 내부 IP와
+로컬 IAP 종단 `127.0.0.1`을 SAN으로 포함하며, 자동화는 기존 cluster의 port
+binding과 SAN이 선언과 다르면 kind만 재생성한다. repository 전용 kubeconfig는
+`.state/cloud-gcp-amd64/kubeconfigs/management.yaml`에 저장한다.
+
+실제 검증 결과는 다음과 같다.
+
+- management node와 kube-system Pod 모두 Ready
+- node architecture `amd64`, Kubernetes `v1.35.0`
+- kind Pod에서 Keystone VIP `10.20.0.250:5000` 접근 성공
+- 보존한 Ubuntu 검증 VM의 Floating IP `172.24.4.138:6443` 접근 성공
+- 검증 후 Ubuntu server와 Floating IP를 전용 cleanup target으로 삭제
+- controller, compute01/02, management 네 VM 모두 `RUNNING`, 36,000초 자동
+  STOP 유지
+
+management VM이 존재하면 `gcp-start`와 `gcp-stop`이 네 VM을 함께 다룬다.
+`management-cluster-destroy CONFIRM=cloud-gcp-amd64`는 kind와 로컬 kubeconfig만
+삭제하고 management VM과 OpenStack 리소스를 보존한다.
 
 ## 다음 checkpoint
 
-1. cloud management cluster의 실행 위치와 lifecycle을 확정한다.
-2. management cluster 내부에서 OpenStack API와 workload Floating IP 경로를
-   검증한 뒤 CAPI/CAPO provider checkpoint로 이동한다.
+1. GCP management cluster에 고정된 CAPI/CABPK/KCP와 CAPO/ORC provider를
+   설치하고 credential token 발급을 검증한다.
+2. CAPO로 GCP OpenStack의 workload control plane과 worker 기준선을 생성한다.
+3. 수동 worker 증설과 Cluster Autoscaler scale-up을 GCP 프로필에서 재검증한다.
 
 GCP custom route와 36,000초 자동 STOP을 모두 유지한다. 각 checkpoint는 VM
 재기동 후 readiness를 다시 확인하고 완료된 단계부터 idempotent하게 재개할 수

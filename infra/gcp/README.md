@@ -47,6 +47,38 @@ The QCOW2 image, checksum and build metadata remain under
 `.state/cloud-gcp-amd64/images` after the builder is deleted. A normal full
 plan must return to `No changes` after deletion.
 
+The persistent management host is separate from the Kolla controller because
+Kolla intentionally configures that host's Docker daemon without a default
+bridge, IP forwarding or Docker-managed iptables. It uses an `e2-standard-2`
+instance, a 60 GiB balanced disk and reserved internal address `10.20.0.30`.
+
+```bash
+make gcp-management-host-create ENV=cloud-gcp-amd64
+make management-cluster-create ENV=cloud-gcp-amd64
+make management-cluster-verify ENV=cloud-gcp-amd64
+```
+
+The kind API binds to the host's internal address. Firewall access to TCP 6443
+is limited to the IAP TCP-forwarding range and the `osk8s-management` target
+tag. Local kubectl traffic uses an IAP tunnel on `127.0.0.1:16443`; there is no
+public Kubernetes API firewall rule. The host retains the same 36,000-second
+automatic STOP contract and is included in `gcp-start` and `gcp-stop` after it
+exists.
+
+To prove the complete container path, preserve the OpenStack verification
+server, probe both Keystone and its Floating IP service from a kind Pod, then
+remove only the temporary verification resources:
+
+```bash
+KEEP_TEST_RESOURCES=YES make openstack-verify ENV=cloud-gcp-amd64
+make management-cluster-verify ENV=cloud-gcp-amd64
+make openstack-verification-cleanup ENV=cloud-gcp-amd64
+```
+
+`management-cluster-destroy CONFIRM=cloud-gcp-amd64` deletes only the kind
+cluster and its repository-local kubeconfig. The management VM and OpenStack
+resources remain protected.
+
 Never apply a plan containing instance replacement or disk destruction. The
 configuration also uses `prevent_destroy` for the imported network, addresses
 and hosts as a final safety boundary.

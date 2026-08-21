@@ -47,7 +47,7 @@ strict CAPI readiness와 orphan `calico-ipam` 부재를 확인했다.
 | 정지 후 재기동 readiness | 통과 | 양방향 관리망, Keystone, nova-compute, hypervisor가 준비된 뒤에만 `local-up`이 성공함 |
 | clean-room 재구축 | 통과 | Lima VM 두 대를 삭제하고 OpenStack 재배포·게스트 검증·Docker 콜드 스타트·kind 재생성까지 통과함 |
 | GCP AMD64 호스트/IaC 프로필 | 통과 | 기존 VPC·주소·VM·snapshot 정책 import 후 OpenTofu `No changes`, IAP host gate와 controller→compute 2대 SSH 통과 |
-| GCP OpenStack/CAPI 이전 | 진행 중 | AMD64 Kolla, bootstrap, 게스트 네트워크와 Kubernetes 이미지의 Glance/Nova 재부팅 검증까지 통과했으며 management cluster가 남음 |
+| GCP OpenStack/CAPI 이전 | 진행 중 | AMD64 OpenStack, Kubernetes 노드 이미지와 전용 kind management cluster가 통과했으며 CAPI/CAPO provider 설치가 남음 |
 | 물리 서버 프로필 | 미구현 | NIC/VLAN/bridge 및 스토리지 구성을 코드화하고 검증해야 함 |
 | 노드 오토스케일링 | 통과 | management cluster의 CA v1.35.0이 `Insufficient cpu` Pending Pod를 감지해 worker를 1→2로 늘리고 새 node targeted CNI/DNS와 전체 readiness를 통과함 |
 
@@ -120,6 +120,33 @@ make gcp-sync-inputs ENV=cloud-gcp-amd64
 세 VM의 `max_run_duration` 36,000초와 `STOP` 동작은 비용 제어 계약이므로
 제거하지 않는다. OpenStack Floating IP route는 controller external veth/NAT가
 배포되고 검증되기 전까지 OpenTofu 기본값에서 비활성화한다.
+
+GCP management Kubernetes는 Kolla 호스트와 분리한 영속 VM에서 실행한다.
+
+```bash
+make gcp-management-host-create ENV=cloud-gcp-amd64
+make management-cluster-create ENV=cloud-gcp-amd64
+make management-cluster-verify ENV=cloud-gcp-amd64
+```
+
+`osk8s-management`는 `e2-standard-2`, 60 GiB balanced disk, 내부 IP
+`10.20.0.30`을 사용한다. kind API는 내부 IP에만 bind하고 GCP IAP 대역에서
+management 전용 network tag의 TCP 6443만 허용한다. 로컬 kubeconfig는 IAP
+tunnel의 `127.0.0.1:16443`을 사용하므로 public 6443 방화벽이 필요하지 않다.
+이 VM도 36,000초 자동 STOP 계약을 유지하며, 생성된 뒤에는 `gcp-start`와
+`gcp-stop` 대상에 포함된다.
+
+검증용 OpenStack VM을 보존해 kind Pod에서 workload Floating IP까지 확인할
+때는 다음 순서를 사용한다.
+
+```bash
+KEEP_TEST_RESOURCES=YES make openstack-verify ENV=cloud-gcp-amd64
+make management-cluster-verify ENV=cloud-gcp-amd64
+make openstack-verification-cleanup ENV=cloud-gcp-amd64
+```
+
+`management-cluster-destroy CONFIRM=cloud-gcp-amd64`는 kind cluster와 로컬
+kubeconfig만 삭제하고 management VM 및 OpenStack 리소스는 보존한다.
 
 로컬 프로필은 기능 검증에만 적합하다.
 

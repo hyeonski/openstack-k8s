@@ -9,7 +9,11 @@ source "${PROJECT_ROOT}/scripts/lib/common.sh"
 require_command gcloud
 
 action="${1:-}"
-nodes=("${CONTROLLER_NAME}" "${COMPUTE_NAMES[@]}")
+openstack_nodes=("${CONTROLLER_NAME}" "${COMPUTE_NAMES[@]}")
+lifecycle_nodes=("${openstack_nodes[@]}")
+if [[ -n "${MANAGEMENT_HOST_NAME:-}" ]] && instance_exists "${MANAGEMENT_HOST_NAME}"; then
+  lifecycle_nodes+=("${MANAGEMENT_HOST_NAME}")
+fi
 
 case "${action}" in
   status)
@@ -19,7 +23,7 @@ case "${action}" in
     ;;
   start)
     targets=()
-    for node in "${nodes[@]}"; do
+    for node in "${lifecycle_nodes[@]}"; do
       if ! instance_running "${node}"; then
         targets+=("${node}")
       fi
@@ -33,7 +37,7 @@ case "${action}" in
     ;;
   stop)
     targets=()
-    for node in "${nodes[@]}"; do
+    for node in "${lifecycle_nodes[@]}"; do
       if instance_running "${node}"; then
         targets+=("${node}")
       fi
@@ -47,19 +51,20 @@ case "${action}" in
     ;;
   verify)
     roles=(controller "${COMPUTE_INVENTORY_NAMES[@]}")
-    [[ "${#roles[@]}" -eq "${#nodes[@]}" ]] ||
+    [[ "${#roles[@]}" -eq "${#openstack_nodes[@]}" ]] ||
       die "verify role list and node list differ"
-    for ((index = 0; index < ${#nodes[@]}; index++)); do
-      instance_running "${nodes[index]}" || die "${nodes[index]} is not running"
+    for ((index = 0; index < ${#openstack_nodes[@]}; index++)); do
+      instance_running "${openstack_nodes[index]}" ||
+        die "${openstack_nodes[index]} is not running"
       remote_script="/tmp/verify-gcp-host.sh"
       copy_to "${PROJECT_ROOT}/scripts/verify-gcp-host.sh" \
-        "${nodes[index]}" "${remote_script}"
-      run_on "${nodes[index]}" sudo bash "${remote_script}" \
+        "${openstack_nodes[index]}" "${remote_script}"
+      run_on "${openstack_nodes[index]}" sudo bash "${remote_script}" \
         "${roles[index]}" \
         "${EXTERNAL_INTERFACE}" \
         "${EXTERNAL_GATEWAY_INTERFACE}" \
         "${EXTERNAL_GATEWAY}/${EXTERNAL_CIDR#*/}"
-      run_on "${nodes[index]}" rm -f "${remote_script}"
+      run_on "${openstack_nodes[index]}" rm -f "${remote_script}"
     done
     ;;
   *)
