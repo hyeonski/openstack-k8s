@@ -55,8 +55,7 @@ locals {
 
   internal_addresses = merge(
     { for key, host in local.hosts : key => host.address },
-    { kolla_vip = "10.20.0.250" },
-    var.enable_management_host ? { management = var.management_host_address } : {}
+    { kolla_vip = "10.20.0.250" }
   )
 }
 
@@ -103,7 +102,7 @@ resource "google_compute_firewall" "iap_ssh" {
 }
 
 resource "google_compute_firewall" "iap_management_api" {
-  count = var.enable_management_host ? 1 : 0
+  count = 1
 
   name      = "osk8s-allow-iap-management-api"
   network   = google_compute_network.management.name
@@ -111,11 +110,11 @@ resource "google_compute_firewall" "iap_management_api" {
   priority  = 1000
 
   source_ranges = ["35.235.240.0/20"]
-  target_tags   = ["osk8s-management"]
+  target_tags   = ["osk8s-controller-management"]
 
   allow {
     protocol = "tcp"
-    ports    = ["6443"]
+    ports    = ["16443"]
   }
 }
 
@@ -158,9 +157,12 @@ resource "google_compute_instance" "hosts" {
   enable_display             = false
   key_revocation_action_type = each.value.key_revocation_action_type
   resource_policies          = []
-  tags                       = ["osk8s-node"]
-  labels                     = each.value.labels
-  metadata                   = each.value.metadata
+  tags = each.key == "controller" ? [
+    "osk8s-controller-management",
+    "osk8s-node",
+  ] : ["osk8s-node"]
+  labels   = each.value.labels
+  metadata = each.value.metadata
 
   boot_disk {
     auto_delete = true
@@ -338,66 +340,5 @@ resource "google_compute_instance" "image_builder" {
     enable_secure_boot          = false
     enable_vtpm                 = true
     enable_integrity_monitoring = true
-  }
-}
-
-resource "google_compute_instance" "management" {
-  count = var.enable_management_host ? 1 : 0
-
-  name                = var.management_host_name
-  zone                = var.zone
-  machine_type        = var.management_host_machine_type
-  can_ip_forward      = false
-  deletion_protection = false
-  enable_display      = false
-  tags                = ["osk8s-management", "osk8s-node"]
-  labels = {
-    env  = "cloud-gcp-amd64"
-    role = "management"
-  }
-
-  boot_disk {
-    auto_delete = true
-    device_name = var.management_host_name
-    mode        = "READ_WRITE"
-
-    initialize_params {
-      image = var.source_image
-      size  = var.management_host_disk_size_gb
-      type  = "pd-balanced"
-    }
-  }
-
-  network_interface {
-    subnetwork = google_compute_subnetwork.seoul.id
-    network_ip = google_compute_address.internal["management"].address
-    stack_type = "IPV4_ONLY"
-
-    access_config {
-      network_tier = "PREMIUM"
-    }
-  }
-
-  scheduling {
-    automatic_restart           = true
-    on_host_maintenance         = "MIGRATE"
-    preemptible                 = false
-    provisioning_model          = "STANDARD"
-    instance_termination_action = "STOP"
-
-    max_run_duration {
-      seconds = var.max_run_duration_seconds
-      nanos   = 0
-    }
-  }
-
-  shielded_instance_config {
-    enable_secure_boot          = false
-    enable_vtpm                 = true
-    enable_integrity_monitoring = true
-  }
-
-  lifecycle {
-    prevent_destroy = true
   }
 }

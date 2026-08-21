@@ -11,9 +11,6 @@ require_command gcloud
 action="${1:-}"
 openstack_nodes=("${CONTROLLER_NAME}" "${COMPUTE_NAMES[@]}")
 lifecycle_nodes=("${openstack_nodes[@]}")
-if [[ -n "${MANAGEMENT_HOST_NAME:-}" ]] && instance_exists "${MANAGEMENT_HOST_NAME}"; then
-  lifecycle_nodes+=("${MANAGEMENT_HOST_NAME}")
-fi
 
 case "${action}" in
   status)

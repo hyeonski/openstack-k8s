@@ -21,11 +21,3 @@ output "image_builder" {
     automatic_stop_after = var.max_run_duration_seconds
   } : null
 }
-
-output "management_host" {
-  value = var.enable_management_host ? {
-    name                 = google_compute_instance.management[0].name
-    internal_ip          = google_compute_instance.management[0].network_interface[0].network_ip
-    automatic_stop_after = var.max_run_duration_seconds
-  } : null
-}

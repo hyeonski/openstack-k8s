@@ -121,20 +121,21 @@ make gcp-sync-inputs ENV=cloud-gcp-amd64
 제거하지 않는다. OpenStack Floating IP route는 controller external veth/NAT가
 배포되고 검증되기 전까지 OpenTofu 기본값에서 비활성화한다.
 
-GCP management Kubernetes는 Kolla 호스트와 분리한 영속 VM에서 실행한다.
+GCP management Kubernetes는 Kolla controller의 Docker daemon에서 실행한다.
+Kolla의 `bridge=none`, `ip-forward=false`, `iptables=false` 설정은 변경하지 않고
+kind 전용 bridge와 NAT 규칙을 별도 systemd unit으로 관리한다.
 
 ```bash
-make gcp-management-host-create ENV=cloud-gcp-amd64
+make gcp-controller-management-prepare ENV=cloud-gcp-amd64
 make management-cluster-create ENV=cloud-gcp-amd64
 make management-cluster-verify ENV=cloud-gcp-amd64
 ```
 
-`osk8s-management`는 `e2-standard-2`, 60 GiB balanced disk, 내부 IP
-`10.20.0.30`을 사용한다. kind API는 내부 IP에만 bind하고 GCP IAP 대역에서
-management 전용 network tag의 TCP 6443만 허용한다. 로컬 kubeconfig는 IAP
-tunnel의 `127.0.0.1:16443`을 사용하므로 public 6443 방화벽이 필요하지 않다.
-이 VM도 36,000초 자동 STOP 계약을 유지하며, 생성된 뒤에는 `gcp-start`와
-`gcp-stop` 대상에 포함된다.
+Docker의 표준 `kind` network를 미리 `172.30.0.0/24`와 `br-kind-mgmt`로 만들고
+명시적인 forwarding/MASQUERADE 규칙만 추가한다. kind API는 controller 내부 IP
+`10.20.0.10:16443`에 bind하며, IAP 대역에서 controller 전용 network tag로만
+접근할 수 있다. 로컬 kubeconfig는 IAP tunnel의 `127.0.0.1:16443`을 사용한다.
+public Kubernetes API 방화벽은 만들지 않는다.
 
 검증용 OpenStack VM을 보존해 kind Pod에서 workload Floating IP까지 확인할
 때는 다음 순서를 사용한다.
@@ -146,7 +147,8 @@ make openstack-verification-cleanup ENV=cloud-gcp-amd64
 ```
 
 `management-cluster-destroy CONFIRM=cloud-gcp-amd64`는 kind cluster와 로컬
-kubeconfig만 삭제하고 management VM 및 OpenStack 리소스는 보존한다.
+kubeconfig 및 전용 bridge/NAT만 삭제하고 controller와 OpenStack 리소스는
+보존한다.
 
 로컬 프로필은 기능 검증에만 적합하다.
 

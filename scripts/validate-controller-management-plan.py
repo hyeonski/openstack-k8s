@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Refuse a management-host plan that changes unrelated GCP resources."""
+"""Allow only the controller tag and IAP API firewall migration."""
 
 from __future__ import annotations
 
@@ -8,22 +8,23 @@ import json
 import sys
 
 
+MIGRATION = {
+    ("google_compute_firewall.iap_management_api[0]", ("update",)),
+    ('google_compute_instance.hosts["controller"]', ("update",)),
+}
+
 FRESH_CREATE = {
-    ("google_compute_address.internal[\"management\"]", ("create",)),
     ("google_compute_firewall.iap_management_api[0]", ("create",)),
-    ("google_compute_instance.management[0]", ("create",)),
+    ('google_compute_instance.hosts["controller"]', ("update",)),
 }
 
-UPGRADE_CREATE = {
-    ("google_compute_firewall.iap_management_api[0]", ("create",)),
-    ("google_compute_instance.management[0]", ("update",)),
-}
+RECOVERY_PLANS = (
+    {("google_compute_firewall.iap_management_api[0]", ("create",))},
+    {("google_compute_firewall.iap_management_api[0]", ("update",))},
+    {('google_compute_instance.hosts["controller"]', ("update",))},
+)
 
-RECOVERY_CREATE = {
-    ("google_compute_firewall.iap_management_api[0]", ("create",)),
-}
-
-EXPECTED_PLANS = (FRESH_CREATE, UPGRADE_CREATE, RECOVERY_CREATE)
+EXPECTED_PLANS = (MIGRATION, FRESH_CREATE, *RECOVERY_PLANS)
 
 
 def main() -> None:
@@ -37,11 +38,11 @@ def main() -> None:
 
     if changes not in EXPECTED_PLANS:
         raise SystemExit(
-            f"unsafe management-host plan: expected one of "
+            f"unsafe controller-management plan: expected one of "
             f"{[sorted(plan) for plan in EXPECTED_PLANS]!r}, "
             f"found {sorted(changes)!r}"
         )
-    print("Validated isolated management-host create plan")
+    print("Validated isolated controller-management network plan")
 
 
 if __name__ == "__main__":

@@ -201,41 +201,49 @@ checkpoint는 완료됐다.
 ## GCP management Kubernetes
 
 Kolla controller의 `/etc/docker/daemon.json`은 서비스 네트워크 충돌을 막기
-위해 `bridge=none`, `ip-forward=false`, `iptables=false`를 사용한다. 이 daemon에
-kind를 함께 두지 않고 `osk8s-management` 영속 VM을 별도로 선언했다.
+위해 `bridge=none`, `ip-forward=false`, `iptables=false`를 사용한다. 최초에는
+별도 `e2-standard-2` management VM에서 kind를 검증했지만 실제 사용량을 측정한
+뒤 controller 통합으로 변경했다. 통합 전 controller는 15.6 GiB 중 7.7 GiB
+available, 루트 디스크 61 GiB 여유였고 별도 kind는 약 628 MiB를 사용했다.
 
-- machine/disk: `e2-standard-2`, 60 GiB balanced persistent disk
-- network: `osk8s-mgmt`, 예약 내부 IP `10.20.0.30`
-- lifecycle: `prevent_destroy`, 36,000초 뒤 `STOP`
-- runtime: Docker, kind v0.31.0, Kubernetes v1.35.0 AMD64
-- API: VM 내부 IP `10.20.0.30:6443`에 bind
+통합은 Kolla Docker daemon 설정이나 서비스를 변경하지 않는다.
+
+- runtime host: `osk8s-controller`, 4 vCPU/16 GiB
+- runtime: kind v0.31.0, Kubernetes v1.35.0 AMD64
+- Docker network: 표준 `kind`, `172.30.0.0/24`, `br-kind-mgmt`
+- network lifecycle: 전용 systemd oneshot과 명시적 FORWARD/MASQUERADE 규칙
+- API: controller 내부 IP `10.20.0.10:16443`
 - local access: IAP tunnel `127.0.0.1:16443`
 
-최초 생성 plan은 management 내부 주소와 VM만 추가하는 `2 add / 0 change /
-0 destroy`였고 전용 validator를 통과했다. IAP API 경로를 추가할 때도 management
-VM network tag의 in-place 변경과 전용 firewall 한 개 생성만 허용했다. firewall은
-IAP TCP forwarding 대역 `35.235.240.0/20`에서 `osk8s-management` tag의 TCP
-6443만 허용하며 public API 방화벽은 만들지 않았다. 이후 전체 refresh plan은
-다시 `No changes`다.
+OpenTofu는 기존 IAP firewall의 target을 `osk8s-controller-management` tag로,
+포트를 TCP 16443으로 바꾸고 controller tag만 in-place 갱신했다. 전용 validator가
+`0 add / 2 change / 0 destroy` 외의 계획을 거부하며 public API 방화벽은 없다.
 
 kind 바이너리 SHA-256과 node image digest를 고정했다. API 인증서에는 내부 IP와
 로컬 IAP 종단 `127.0.0.1`을 SAN으로 포함하며, 자동화는 기존 cluster의 port
 binding과 SAN이 선언과 다르면 kind만 재생성한다. repository 전용 kubeconfig는
 `.state/cloud-gcp-amd64/kubeconfigs/management.yaml`에 저장한다.
 
-실제 검증 결과는 다음과 같다.
+최종 표준 `kind` network 구성의 실제 검증 결과는 다음과 같다.
 
 - management node와 kube-system Pod 모두 Ready
 - node architecture `amd64`, Kubernetes `v1.35.0`
 - kind Pod에서 Keystone VIP `10.20.0.250:5000` 접근 성공
-- 보존한 Ubuntu 검증 VM의 Floating IP `172.24.4.138:6443` 접근 성공
+- 보존한 Ubuntu 검증 VM의 Floating IP `172.24.4.159:6443` 접근 성공
 - 검증 후 Ubuntu server와 Floating IP를 전용 cleanup target으로 삭제
-- controller, compute01/02, management 네 VM 모두 `RUNNING`, 36,000초 자동
-  STOP 유지
+- Kolla `validate-config`: controller `failed=0`, compute01/02 `failed=0`
+- 통합 후 controller: kind 523 MiB, memory 7.1 GiB available, disk 58 GiB 여유,
+  swap 사실상 미사용
+- controller 정상 stop/start 후 동일 kind cluster와 전용 bridge/NAT가 자동 복구됐고
+  Pod→Keystone, Nova compute/hypervisor `up`을 재확인했다. 재기동 후 controller는
+  memory 8.4 GiB available, swap 0이었다.
+- controller와 compute01/02 세 VM 모두 36,000초 자동 STOP 유지
 
-management VM이 존재하면 `gcp-start`와 `gcp-stop`이 네 VM을 함께 다룬다.
-`management-cluster-destroy CONFIRM=cloud-gcp-amd64`는 kind와 로컬 kubeconfig만
-삭제하고 management VM과 OpenStack 리소스를 보존한다.
+구 `osk8s-management` kind를 먼저 삭제한 뒤 OpenTofu 전용 validator로 VM과
+예약 내부 주소만 삭제했다. 삭제 계획은 `0 add / 0 change / 2 destroy`였으며
+controller, compute, OpenStack과 IAP firewall은 대상이 아니었다.
+`management-cluster-destroy CONFIRM=cloud-gcp-amd64`는 controller의 kind,
+로컬 kubeconfig와 전용 bridge/NAT만 삭제하고 controller와 OpenStack은 보존한다.
 
 ## 다음 checkpoint
 

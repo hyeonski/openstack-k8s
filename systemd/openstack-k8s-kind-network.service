@@ -1,0 +1,14 @@
+[Unit]
+Description=Isolated bridge and NAT for the controller kind management cluster
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=/etc/default/openstack-k8s-kind-network
+ExecStart=/usr/local/sbin/openstack-k8s-kind-network start
+ExecReload=/usr/local/sbin/openstack-k8s-kind-network start
+
+[Install]
+WantedBy=multi-user.target

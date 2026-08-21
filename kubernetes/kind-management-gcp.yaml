@@ -1,8 +1,8 @@
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 networking:
-  apiServerAddress: "__MANAGEMENT_HOST_IP__"
-  apiServerPort: 6443
+  apiServerAddress: "__MANAGEMENT_API_ADDRESS__"
+  apiServerPort: __MANAGEMENT_REMOTE_API_PORT__
 nodes:
   - role: control-plane
     kubeadmConfigPatches:
@@ -11,3 +11,4 @@ nodes:
         apiServer:
           certSANs:
             - "127.0.0.1"
+            - "__MANAGEMENT_API_ADDRESS__"

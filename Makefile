@@ -16,7 +16,7 @@ export CONFIG
 	local-destroy inventory host-prepare kolla-sync openstack-precheck \
 	gcp-iac-init gcp-iac-validate gcp-iac-import gcp-iac-plan gcp-iac-show-plan \
 	gcp-status gcp-start gcp-stop gcp-host-verify gcp-deployment-key-setup \
-	gcp-sync-inputs gcp-management-host-create \
+	gcp-sync-inputs gcp-controller-management-prepare \
 	openstack-pull openstack-build-overrides openstack-deploy openstack-validate \
 	openstack-post-deploy openstack-bootstrap openstack-verify openstack-verification-cleanup \
 	kubernetes-image-builder-create kubernetes-image-builder-destroy \
@@ -51,7 +51,7 @@ help:
 	@echo "  gcp-host-verify        Run the GCP host readiness gate"
 	@echo "  gcp-deployment-key-setup Install the project key for controller-to-compute SSH"
 	@echo "  gcp-sync-inputs        Sync deployment code without installing Kolla"
-	@echo "  gcp-management-host-create Create and prepare the dedicated management host"
+	@echo "  gcp-controller-management-prepare Move the private kind API gate to the controller"
 	@echo
 	@echo "GCP infrastructure adoption:"
 	@echo "  gcp-iac-init           Initialize OpenTofu/Terraform providers"
@@ -144,8 +144,8 @@ gcp-deployment-key-setup:
 gcp-sync-inputs: inventory
 	@scripts/sync-to-controller.sh inputs-only
 
-gcp-management-host-create:
-	@scripts/gcp-management-host.sh create
+gcp-controller-management-prepare:
+	@scripts/gcp-controller-management-iac.sh
 
 host-setup:
 	@scripts/host-setup.sh
@@ -196,6 +196,7 @@ openstack-deploy: openstack-build-overrides
 	@scripts/run-kolla.sh deploy
 
 openstack-validate:
+	@scripts/configure-kolla.sh
 	@scripts/run-kolla.sh validate-config
 
 openstack-post-deploy:

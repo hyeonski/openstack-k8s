@@ -47,23 +47,23 @@ The QCOW2 image, checksum and build metadata remain under
 `.state/cloud-gcp-amd64/images` after the builder is deleted. A normal full
 plan must return to `No changes` after deletion.
 
-The persistent management host is separate from the Kolla controller because
-Kolla intentionally configures that host's Docker daemon without a default
-bridge, IP forwarding or Docker-managed iptables. It uses an `e2-standard-2`
-instance, a 60 GiB balanced disk and reserved internal address `10.20.0.30`.
+The management cluster runs on the Kolla controller. Kolla's Docker daemon
+keeps `bridge=none`, `ip-forward=false` and `iptables=false`; the integration
+does not modify or restart that daemon. A dedicated systemd unit creates the
+standard Docker `kind` network with CIDR `172.30.0.0/24`, bridge
+`br-kind-mgmt`, and explicit forwarding and masquerade rules.
 
 ```bash
-make gcp-management-host-create ENV=cloud-gcp-amd64
+make gcp-controller-management-prepare ENV=cloud-gcp-amd64
 make management-cluster-create ENV=cloud-gcp-amd64
 make management-cluster-verify ENV=cloud-gcp-amd64
 ```
 
-The kind API binds to the host's internal address. Firewall access to TCP 6443
-is limited to the IAP TCP-forwarding range and the `osk8s-management` target
-tag. Local kubectl traffic uses an IAP tunnel on `127.0.0.1:16443`; there is no
-public Kubernetes API firewall rule. The host retains the same 36,000-second
-automatic STOP contract and is included in `gcp-start` and `gcp-stop` after it
-exists.
+The kind API binds to `10.20.0.10:16443`. Firewall access is limited to the IAP
+TCP-forwarding range and the `osk8s-controller-management` target tag. Local
+kubectl traffic uses an IAP tunnel on `127.0.0.1:16443`; there is no public
+Kubernetes API firewall rule. The existing controller retains its
+36,000-second automatic STOP contract.
 
 To prove the complete container path, preserve the OpenStack verification
 server, probe both Keystone and its Floating IP service from a kind Pod, then
@@ -76,8 +76,8 @@ make openstack-verification-cleanup ENV=cloud-gcp-amd64
 ```
 
 `management-cluster-destroy CONFIRM=cloud-gcp-amd64` deletes only the kind
-cluster and its repository-local kubeconfig. The management VM and OpenStack
-resources remain protected.
+cluster, repository-local kubeconfig and dedicated bridge/NAT. The controller
+and OpenStack resources remain protected.
 
 Never apply a plan containing instance replacement or disk destruction. The
 configuration also uses `prevent_destroy` for the imported network, addresses
