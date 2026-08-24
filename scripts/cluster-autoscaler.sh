@@ -73,7 +73,7 @@ render_base_manifests() {
 }
 
 create_workload_kubeconfig_secret() {
-  local server token ca_file kubeconfig_file attempts attempt
+  local server endpoint port token ca_file kubeconfig_file attempts attempt
   kubectl --kubeconfig "${workload_kubeconfig}" apply -f "${workload_rbac_manifest}" >/dev/null
   attempts=60
   for ((attempt = 1; attempt <= attempts; attempt++)); do
@@ -88,8 +88,20 @@ create_workload_kubeconfig_secret() {
   done
   [[ -n "${token}" ]] || die "workload ServiceAccount token was not populated"
 
-  server="$(kubectl --kubeconfig "${workload_kubeconfig}" config view --minify \
-    -o jsonpath='{.clusters[0].cluster.server}')"
+  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
+    endpoint="$(kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${WORKLOAD_NAMESPACE}" get cluster "${WORKLOAD_CLUSTER_NAME}" \
+      -o jsonpath='{.spec.controlPlaneEndpoint.host}')"
+    port="$(kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${WORKLOAD_NAMESPACE}" get cluster "${WORKLOAD_CLUSTER_NAME}" \
+      -o jsonpath='{.spec.controlPlaneEndpoint.port}')"
+    [[ -n "${endpoint}" && -n "${port}" ]] ||
+      die "workload control plane endpoint is not available"
+    server="https://${endpoint}:${port}"
+  else
+    server="$(kubectl --kubeconfig "${workload_kubeconfig}" config view --minify \
+      -o jsonpath='{.clusters[0].cluster.server}')"
+  fi
   [[ "${server}" == https://* ]] || die "workload API server is not HTTPS"
   credential_temp_dir="$(mktemp -d "${SECRET_DIR}/cluster-autoscaler.XXXXXX")"
   chmod 700 "${credential_temp_dir}"
@@ -391,6 +403,9 @@ CONTROLLER_CHECK
 }
 
 test_scale_up() {
+  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
+    "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
+  fi
   verify_autoscaler
   local desired available run_dir status_dir worker cpu_request pending_pod
   local new_identity new_machine new_node started finished

@@ -22,8 +22,8 @@
 - **대체됨:** 더 새로운 ADR이 이 결정을 대신한다.
 - **폐기됨:** 더 이상 적용하지 않는다.
 
-ADR의 상태와 구현 상태는 다르다. 현재 M2의 CAPI/CAPO 기준선은 구현과
-수동 증설 검증까지 완료됐지만 M3의 자동 scaling은 아직 구현되지 않았다.
+ADR의 상태와 구현 상태는 다르다. 현재 M2의 CAPI/CAPO 기준선과 M3 자동
+scale-up은 로컬 ARM64와 GCP AMD64 프로필에서 모두 검증됐다.
 
 ## 결정 목록
 
@@ -31,7 +31,7 @@ ADR의 상태와 구현 상태는 다르다. 현재 M2의 CAPI/CAPO 기준선은
 |---|---|---|---|
 | [0001](0001-stage-project-around-a-scale-up-baseline.md) | scale-up 기준선을 중심으로 프로젝트를 단계화한다 | 채택됨 | M0~M3 완료 |
 | [0002](0002-use-standalone-capi-capo.md) | Kubernetes lifecycle은 standalone CAPI/CAPO로 관리한다 | 채택됨 | provider와 workload 검증 완료 |
-| [0003](0003-port-by-rebuilding-environment-profiles.md) | 환경 이전은 상태 이동이 아닌 프로필 기반 재구축으로 수행한다 | 채택됨 | 로컬 프로필만 구현 |
+| [0003](0003-port-by-rebuilding-environment-profiles.md) | 환경 이전은 상태 이동이 아닌 프로필 기반 재구축으로 수행한다 | 채택됨 | 로컬 ARM64와 GCP AMD64 구현·검증 완료 |
 | [0004](0004-use-lima-arm64-for-the-local-feasibility-gate.md) | 로컬 기능 게이트는 Lima 기반 ARM64 2노드 환경으로 구성한다 | 채택됨 | 구현 및 검증 완료 |
 | [0005](0005-deploy-openstack-with-kolla-ansible.md) | OpenStack 2025.2를 Kolla-Ansible로 배포한다 | 채택됨 | 구현 및 검증 완료 |
 | [0006](0006-use-single-nic-with-logical-external-networking.md) | 로컬에서는 단일 NIC와 논리 external network를 사용한다 | 채택됨 | 구현 및 검증 완료 |
@@ -50,7 +50,8 @@ M1  Kubernetes용 ARM64 이미지와 management cluster   완료
 M2  CAPI/CAPO workload cluster와 수동 증설            완료
 M3  Pending Pod 기반 Cluster Autoscaler scale-up      완료
 M4  scale-down 또는 장애·지연 개선 연구               다음 단계
-M5  클라우드 AMD64 및 물리 AMD64 프로필               예정
+M5  GCP AMD64 프로필                                  완료
+M6  물리 AMD64 프로필                                 다음 단계
 ```
 
 M1부터 M3까지의 순서는 다음과 같다.
@@ -72,9 +73,8 @@ M1부터 M3까지의 순서는 다음과 같다.
 
 다음 항목은 대화에서 후보나 추천안은 나왔지만 최종 결정으로 확정하지 않았다.
 
-- cloud/bare-metal 환경의 management cluster 실행 위치와 lifecycle
+- bare-metal 환경의 management cluster 실행 위치와 lifecycle
 - OCCM, Octavia와 Cinder CSI를 M3 또는 이후 어느 단계에서 도입할지
-- 첫 클라우드 프로필을 GCP와 AWS 중 어디로 구현할지
 - 물리 서버의 실제 NIC, VLAN, switch 및 storage 구성
 - scale-down을 필수 범위에 포함할지
 - 후속 연구를 failure-aware recovery, warm pool, flavor-aware policy 중 무엇으로 정할지

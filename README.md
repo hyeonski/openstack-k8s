@@ -47,7 +47,7 @@ strict CAPI readiness와 orphan `calico-ipam` 부재를 확인했다.
 | 정지 후 재기동 readiness | 통과 | 양방향 관리망, Keystone, nova-compute, hypervisor가 준비된 뒤에만 `local-up`이 성공함 |
 | clean-room 재구축 | 통과 | Lima VM 두 대를 삭제하고 OpenStack 재배포·게스트 검증·Docker 콜드 스타트·kind 재생성까지 통과함 |
 | GCP AMD64 호스트/IaC 프로필 | 통과 | 기존 VPC·주소·VM·snapshot 정책 import 후 OpenTofu `No changes`, IAP host gate와 controller→compute 2대 SSH 통과 |
-| GCP OpenStack/CAPI 이전 | 진행 중 | provider와 credential에 이어 CAPO의 AMD64 control plane 1대·worker 1대 및 API/CNI/DNS 기준선이 통과했으며 수동 증설과 Autoscaler 재검증이 남음 |
+| GCP OpenStack/CAPI/Autoscaler 이전 | 통과 | AMD64 control plane 1대·worker 1대 기준선, 수동 1→2 증설과 CPU Pending Pod 기반 자동 1→2 증설이 모두 통과함 |
 | 물리 서버 프로필 | 미구현 | NIC/VLAN/bridge 및 스토리지 구성을 코드화하고 검증해야 함 |
 | 노드 오토스케일링 | 통과 | management cluster의 CA v1.35.0이 `Insufficient cpu` Pending Pod를 감지해 worker를 1→2로 늘리고 새 node targeted CNI/DNS와 전체 readiness를 통과함 |
 
@@ -153,7 +153,16 @@ hypervisor를 검증한다. 데이터베이스보다 먼저 시작해 WSGI appli
 make gcp-openstack-recover ENV=cloud-gcp-amd64
 make workload-cluster-create ENV=cloud-gcp-amd64
 make workload-cluster-verify ENV=cloud-gcp-amd64 WORKERS=1
+make workload-cluster-scale ENV=cloud-gcp-amd64 WORKERS=2
+make workload-cluster-scale ENV=cloud-gcp-amd64 WORKERS=1
+make cluster-autoscaler-install ENV=cloud-gcp-amd64
+make cluster-autoscaler-verify ENV=cloud-gcp-amd64
+make cluster-autoscaler-test ENV=cloud-gcp-amd64
 ```
+
+Autoscaler Pod가 사용하는 workload kubeconfig에는 로컬 IAP 종단이 아니라 실제
+control plane Floating IP를 기록한다. management cluster 안에서는 이 주소로
+직접 접근하고, macOS의 운영·검증 명령만 IAP SSH tunnel을 사용한다.
 
 검증용 OpenStack VM을 보존해 kind Pod에서 workload Floating IP까지 확인할
 때는 다음 순서를 사용한다.
@@ -635,4 +644,6 @@ certificate key, application credential 및 알려진 basic-auth 형태를 저�
 3. CAPI/CABPK/KCP와 CAPO/ORC 설치 — **완료**
 4. CAPO를 통해 workload control plane과 worker 한 대 생성 — **완료**
 5. `MachineDeployment`를 한 대에서 두 대로 수동 증설 — **완료**
-6. Cluster Autoscaler를 설치하고 Pending Pod 기반 scale-up 검증 — **다음 단계**
+6. Cluster Autoscaler를 설치하고 Pending Pod 기반 scale-up 검증 — **완료**
+7. GCP AMD64 프로필에서 같은 OpenStack/CAPI/Autoscaler 경로 검증 — **완료**
+8. 물리 AMD64 프로필의 NIC/VLAN/storage 입력 구현 — **다음 단계**

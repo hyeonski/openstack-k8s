@@ -2,8 +2,8 @@
 
 - 상태: 채택됨
 - 결정일: 2026-08-06 (소급 기록)
-- 구현 상태: `local-arm64` 완료, `cloud-gcp-amd64` 호스트/IaC checkpoint 완료,
-  GCP OpenStack/CAPI 및 bare-metal 프로필 미구현
+- 구현 상태: `local-arm64`와 `cloud-gcp-amd64` OpenStack/CAPI/Autoscaler 완료,
+  bare-metal 프로필 미구현
 
 ## 맥락
 

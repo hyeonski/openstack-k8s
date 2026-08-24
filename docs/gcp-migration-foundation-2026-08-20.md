@@ -295,12 +295,31 @@ runtime recovery gate를 사용한다. 이 gate는 Keystone과 Placement API, �
 - controller 6.6 GiB available, compute01/02 각각 약 12 GiB available, swap 0
 - 새 프로세스의 독립 `workload-cluster-verify WORKERS=1` 재검증 성공
 
-## 다음 checkpoint
+## GCP 수동 및 자동 증설 checkpoint
 
-1. MachineDeployment를 worker 1대에서 2대로 수동 증설하고 새 node의 CNI/DNS를
-   검증한다.
-2. worker를 다시 1대로 맞춘 뒤 Cluster Autoscaler scale-up을 GCP 프로필에서
-   재검증한다.
+2026-08-24에 다음 경로를 순서대로 통과했다.
+
+1. MachineDeployment를 worker 1대에서 2대로 수동 증설하고 새 node의 CNI/DNS와
+   전체 workload readiness를 검증했다.
+2. worker를 다시 1대로 축소하고 Cluster Autoscaler v1.35.0을 controller의
+   management kind cluster에 설치했다.
+3. Autoscaler 이미지 digest, CAPI 인자, 양쪽 cluster RBAC와 node group min/max
+   `1:2`를 검증했다.
+4. worker allocatable 2,000m와 기존 request 250m에서 Pod당 1,050m를 선택했다.
+   두 Pod 중 하나가 `Insufficient cpu`로 Pending 된 뒤 MachineDeployment가
+   자동으로 1대에서 2대로 변경됐다.
+5. 새 worker `osk8s-workload-md-0-jm9vc-g8kvf`가 `10.6.0.15`로 합류했고 Nova
+   ACTIVE, Node/Calico Ready, targeted CNI/DNS와 전체 API/CNI/DNS 검증을 통과했다.
+   Pending Pod가 새 worker에서 Running이 됐고 고아 `calico-ipam` 프로세스도
+   없었다. 테스트 workload 생성부터 최종 증거 보존까지 155초가 걸렸다.
+
+macOS의 workload kubeconfig는 IAP SSH tunnel `127.0.0.1:16444`를 사용하지만,
+management cluster의 Autoscaler Secret에는 Pod 내부에서도 접근 가능한 실제
+Floating IP endpoint `172.24.4.117:6443`을 넣는다. public Kubernetes API
+방화벽은 추가하지 않았다.
+
+이 checkpoint로 `cloud-gcp-amd64`의 OpenStack, CAPI/CAPO와 자동 증설 기능 이전은
+완료됐다. 다음 환경 이전 대상은 물리 AMD64 호스트 프로필이다.
 
 GCP custom route와 36,000초 자동 STOP을 모두 유지한다. 각 checkpoint는 VM
 재기동 후 readiness를 다시 확인하고 완료된 단계부터 idempotent하게 재개할 수
