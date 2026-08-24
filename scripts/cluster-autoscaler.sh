@@ -37,11 +37,7 @@ capture_failure() {
 
 require_context() {
   require_command kubectl
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    require_command gcloud
-  else
-    require_command limactl
-  fi
+  require_command gcloud
   ensure_management_api_access
   require_command python3
   require_command base64
@@ -88,20 +84,15 @@ create_workload_kubeconfig_secret() {
   done
   [[ -n "${token}" ]] || die "workload ServiceAccount token was not populated"
 
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    endpoint="$(kubectl --kubeconfig "${management_kubeconfig}" \
-      -n "${WORKLOAD_NAMESPACE}" get cluster "${WORKLOAD_CLUSTER_NAME}" \
-      -o jsonpath='{.spec.controlPlaneEndpoint.host}')"
-    port="$(kubectl --kubeconfig "${management_kubeconfig}" \
-      -n "${WORKLOAD_NAMESPACE}" get cluster "${WORKLOAD_CLUSTER_NAME}" \
-      -o jsonpath='{.spec.controlPlaneEndpoint.port}')"
-    [[ -n "${endpoint}" && -n "${port}" ]] ||
-      die "workload control plane endpoint is not available"
-    server="https://${endpoint}:${port}"
-  else
-    server="$(kubectl --kubeconfig "${workload_kubeconfig}" config view --minify \
-      -o jsonpath='{.clusters[0].cluster.server}')"
-  fi
+  endpoint="$(kubectl --kubeconfig "${management_kubeconfig}" \
+    -n "${WORKLOAD_NAMESPACE}" get cluster "${WORKLOAD_CLUSTER_NAME}" \
+    -o jsonpath='{.spec.controlPlaneEndpoint.host}')"
+  port="$(kubectl --kubeconfig "${management_kubeconfig}" \
+    -n "${WORKLOAD_NAMESPACE}" get cluster "${WORKLOAD_CLUSTER_NAME}" \
+    -o jsonpath='{.spec.controlPlaneEndpoint.port}')"
+  [[ -n "${endpoint}" && -n "${port}" ]] ||
+    die "workload control plane endpoint is not available"
+  server="https://${endpoint}:${port}"
   [[ "${server}" == https://* ]] || die "workload API server is not HTTPS"
   credential_temp_dir="$(mktemp -d "${SECRET_DIR}/cluster-autoscaler.XXXXXX")"
   chmod 700 "${credential_temp_dir}"
@@ -403,9 +394,7 @@ CONTROLLER_CHECK
 }
 
 test_scale_up() {
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
-  fi
+  "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
   verify_autoscaler
   local desired available run_dir status_dir worker cpu_request pending_pod
   local new_identity new_machine new_node started finished

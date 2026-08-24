@@ -5,11 +5,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
-if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-  require_command gcloud
-else
-  require_command limactl
-fi
+require_command gcloud
 require_command shasum
 instance_running "${CONTROLLER_NAME}" || die "controller is not running"
 [[ -f "${SECRET_DIR}/capi-clouds.yaml" ]] ||
@@ -26,11 +22,7 @@ checksum_path="${image_path}.sha256"
   shasum -a 256 -c "${artifact_name}.sha256"
 )
 expected_sha256="$(awk '{print $1}' "${checksum_path}")"
-if [[ "${ARCHITECTURE}" == "aarch64" || "${ARCHITECTURE}" == "arm64" ]]; then
-  firmware_type="uefi"
-else
-  firmware_type="bios"
-fi
+firmware_type="bios"
 
 remote_image="/tmp/${artifact_name}"
 log "Copying the verified Kubernetes image to the controller"

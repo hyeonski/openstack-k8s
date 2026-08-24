@@ -72,11 +72,11 @@ if ! wait_for_ssh; then
   exit 1
 fi
 
-case "${ARCHITECTURE}" in
-  aarch64|arm64) expected_uname="aarch64" ;;
-  x86_64|amd64) expected_uname="x86_64" ;;
-  *) echo "unsupported guest architecture: ${ARCHITECTURE}" >&2; exit 1 ;;
-esac
+[[ "${ARCHITECTURE}" == "x86_64" ]] || {
+  echo "unsupported GCP guest architecture: ${ARCHITECTURE}" >&2
+  exit 1
+}
+expected_uname="x86_64"
 
 log_guest="${state_dir}/kubernetes-image-guest-checks.log"
 ssh "${ssh_options[@]}" "ubuntu@${fip}" bash -s -- \

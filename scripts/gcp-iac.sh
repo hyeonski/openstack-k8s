@@ -5,8 +5,6 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
-[[ "${HOST_PROVIDER}" == "gcp" ]] || die "gcp-iac requires a GCP environment profile"
-
 action="${1:-}"
 iac_dir="${PROJECT_ROOT}/infra/gcp"
 

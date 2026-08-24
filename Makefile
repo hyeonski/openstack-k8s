@@ -1,30 +1,23 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-ENV ?= local-arm64
-CONFIG := config/environments/$(ENV).env
-
-ifeq ($(wildcard $(CONFIG)),)
-$(error Unknown ENV "$(ENV)": missing $(CONFIG))
-endif
+override ENV := cloud-gcp-amd64
 
 export PROJECT_ROOT := $(CURDIR)
 export ENV
-export CONFIG
 
-.PHONY: help preflight host-setup secrets-check local-create local-up local-health local-down \
-	local-destroy inventory host-prepare kolla-sync openstack-precheck \
+.PHONY: help preflight secrets-check inventory host-prepare kolla-sync openstack-precheck \
 	gcp-iac-init gcp-iac-validate gcp-iac-import gcp-iac-plan gcp-iac-show-plan \
 	gcp-status gcp-start gcp-stop gcp-host-verify gcp-deployment-key-setup \
 	gcp-sync-inputs gcp-controller-management-prepare \
-	openstack-pull openstack-build-overrides openstack-deploy openstack-validate \
+	openstack-pull openstack-deploy openstack-validate \
 	openstack-post-deploy openstack-bootstrap openstack-verify openstack-verification-cleanup \
 	kubernetes-image-builder-create kubernetes-image-builder-destroy \
 	kubernetes-image-build kubernetes-image-upload kubernetes-image-verify \
 	kubernetes-image management-cluster-create management-cluster-verify \
 	management-cluster-destroy capi-providers-install capi-providers-verify \
 	capi-credentials-verify workload-cluster-create workload-cluster-verify \
-	workload-clock-check resume-recover workload-cluster-scale \
+	workload-cluster-scale \
 	workload-cluster-diagnostics workload-cluster-destroy \
 	cluster-autoscaler-install cluster-autoscaler-verify \
 	cluster-autoscaler-test cluster-autoscaler-diagnostics \
@@ -33,18 +26,12 @@ export CONFIG
 help:
 	@echo "OpenStack/Kubernetes testbed automation"
 	@echo
-	@echo "Usage: make <target> ENV=local-arm64|cloud-gcp-amd64"
+	@echo "Usage: make <target>"
 	@echo
-	@echo "Host and VM lifecycle:"
+	@echo "GCP host lifecycle:"
 	@echo "  preflight              Read-only host and configuration checks"
-	@echo "  host-setup             Install Lima/socket_vmnet prerequisites (privileged)"
 	@echo "  secrets-check          Validate local secret permissions and Git ignores"
-	@echo "  local-create           Create the Lima controller and compute instances"
-	@echo "  local-up               Start project instances"
-	@echo "  local-health           Verify host networking and deployed OpenStack readiness"
-	@echo "  local-down             Remove the route and stop project instances"
-	@echo "  local-destroy          Delete only project Lima instances (CONFIRM=$(ENV))"
-	@echo "  status                 Show instance, network and local state"
+	@echo "  status                 Show GCP instance and project state"
 	@echo "  gcp-status             Show exact GCP host state and runtime limit"
 	@echo "  gcp-start              Start only the declared GCP hosts"
 	@echo "  gcp-stop               Stop only the declared GCP hosts"
@@ -66,7 +53,6 @@ help:
 	@echo "  kolla-sync             Sync deployment inputs to the controller"
 	@echo "  openstack-precheck     Run Kolla bootstrap and prechecks"
 	@echo "  openstack-pull         Cache required OpenStack images on both hosts"
-	@echo "  openstack-build-overrides Build the local nova-libvirt corrective image"
 	@echo "  openstack-deploy       Deploy OpenStack with Kolla-Ansible"
 	@echo "  openstack-validate     Validate rendered service configurations"
 	@echo "  openstack-post-deploy  Generate admin credentials"
@@ -75,7 +61,7 @@ help:
 	@echo "  openstack-verification-cleanup  Remove a preserved verification VM and Floating IP"
 	@echo
 	@echo "Kubernetes node image:"
-	@echo "  kubernetes-image-builder-create  Create the isolated architecture-specific image builder"
+	@echo "  kubernetes-image-builder-create  Create the isolated GCP AMD64 image builder"
 	@echo "  kubernetes-image-build           Build and checksum the Kubernetes QCOW2"
 	@echo "  kubernetes-image-builder-destroy Delete only the image builder (CONFIRM=$(ENV))"
 	@echo "  kubernetes-image-upload          Upload the pinned image to Glance"
@@ -93,8 +79,6 @@ help:
 	@echo "  capi-credentials-verify   Verify the application credential from a kind Pod"
 	@echo "  workload-cluster-create   Create and verify one control plane and one worker"
 	@echo "  workload-cluster-verify   Verify the current workload cluster (WORKERS=1)"
-	@echo "  workload-clock-check      Fail if a nested workload VM clock is stale"
-	@echo "  resume-recover            Repair clocks after macOS sleep and wait for CAPI"
 	@echo "  workload-cluster-scale    Manually scale the MachineDeployment from 1 to 2"
 	@echo "  workload-cluster-diagnostics Collect CAPI/Nova/bootstrap/compute diagnostics"
 	@echo "  workload-cluster-destroy  Delete exact workload Cluster (two confirmations)"
@@ -151,26 +135,8 @@ gcp-sync-inputs: inventory
 gcp-controller-management-prepare:
 	@scripts/gcp-controller-management-iac.sh
 
-host-setup:
-	@scripts/host-setup.sh
-
 secrets-check:
 	@scripts/secrets-check.sh
-
-local-create:
-	@scripts/local-create.sh
-
-local-up:
-	@scripts/local-up.sh
-
-local-health:
-	@scripts/local-health.sh
-
-local-down:
-	@scripts/local-down.sh
-
-local-destroy:
-	@scripts/local-destroy.sh "$(CONFIRM)"
 
 inventory:
 	@scripts/generate-inventory.sh
@@ -189,13 +155,10 @@ openstack-precheck: kolla-sync
 	@scripts/run-kolla.sh prechecks
 
 openstack-pull: kolla-sync
-	@scripts/configure-kolla.sh --base-images
+	@scripts/configure-kolla.sh
 	@scripts/run-kolla.sh pull
 
-openstack-build-overrides: kolla-sync
-	@scripts/build-kolla-overrides.sh
-
-openstack-deploy: openstack-build-overrides
+openstack-deploy: kolla-sync
 	@scripts/configure-kolla.sh
 	@scripts/run-kolla.sh deploy
 
@@ -256,12 +219,6 @@ workload-cluster-create:
 
 workload-cluster-verify:
 	@scripts/workload-cluster.sh verify "$(or $(WORKERS),1)"
-
-workload-clock-check:
-	@scripts/workload-clock.sh check
-
-resume-recover:
-	@scripts/resume-recover.sh
 
 workload-cluster-scale:
 	@scripts/workload-cluster.sh scale "$(or $(WORKERS),2)"

@@ -5,8 +5,6 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
-[[ "${HOST_PROVIDER}" == "gcp" ]] ||
-  die "GCP OpenStack recovery requires a GCP profile"
 instance_running "${CONTROLLER_NAME}" || die "controller is not running"
 
 if ! run_on "${CONTROLLER_NAME}" test -s /etc/kolla/clouds.yaml; then

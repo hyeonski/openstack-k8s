@@ -176,8 +176,7 @@
         is_public: true
         properties:
           hw_architecture: "{{ lookup('env', 'ARCHITECTURE') }}"
-          hw_firmware_type: >-
-            {{ 'uefi' if lookup('env', 'ARCHITECTURE') in ['aarch64', 'arm64'] else 'bios' }}
+          hw_firmware_type: bios
           os_distro: cirros
           os_version: "{{ lookup('env', 'CIRROS_VERSION') }}"
         state: present
@@ -192,8 +191,7 @@
         is_public: true
         properties:
           hw_architecture: "{{ lookup('env', 'ARCHITECTURE') }}"
-          hw_firmware_type: >-
-            {{ 'uefi' if lookup('env', 'ARCHITECTURE') in ['aarch64', 'arm64'] else 'bios' }}
+          hw_firmware_type: bios
           os_distro: ubuntu
           os_version: "24.04"
         state: present

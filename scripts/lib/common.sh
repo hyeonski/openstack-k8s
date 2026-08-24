@@ -6,8 +6,7 @@ if [[ -z "${PROJECT_ROOT:-}" ]]; then
   PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fi
 
-ENV="${ENV:-local-arm64}"
-CONFIG="${CONFIG:-${PROJECT_ROOT}/config/environments/${ENV}.env}"
+CONFIG="${PROJECT_ROOT}/config/environments/cloud-gcp-amd64.env"
 
 if [[ ! -f "${CONFIG}" ]]; then
   echo "ERROR: environment config not found: ${CONFIG}" >&2
@@ -17,8 +16,7 @@ fi
 # shellcheck disable=SC1090
 source "${CONFIG}"
 
-HOST_PROVIDER="${HOST_PROVIDER:-lima}"
-MANAGEMENT_INTERFACE="${MANAGEMENT_INTERFACE:-${LIMA_MANAGEMENT_INTERFACE:-}}"
+ENV="${ENVIRONMENT_NAME}"
 
 STATE_DIR="${PROJECT_ROOT}/.state/${ENV}"
 SECRET_DIR="${STATE_DIR}/secrets"
@@ -90,108 +88,33 @@ require_command() {
 }
 
 ensure_management_api_access() {
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    "${PROJECT_ROOT}/scripts/gcp-management-cluster.sh" tunnel
-  fi
+  "${PROJECT_ROOT}/scripts/gcp-management-cluster.sh" tunnel
 }
 
 ensure_workload_api_access() {
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    "${PROJECT_ROOT}/scripts/gcp-workload-api-tunnel.sh" ensure
-  fi
-}
-
-run_host_as_root() {
-  if sudo -n true >/dev/null 2>&1; then
-    sudo "$@"
-    return
-  fi
-  if [[ -t 0 ]]; then
-    sudo "$@"
-    return
-  fi
-
-  local command_text=""
-  local argument
-  local quoted
-  for argument in "$@"; do
-    printf -v quoted '%q' "${argument}"
-    command_text+="${command_text:+ }${quoted}"
-  done
-  osascript "${PROJECT_ROOT}/scripts/run-as-administrator.applescript" \
-    "${command_text}"
+  "${PROJECT_ROOT}/scripts/gcp-workload-api-tunnel.sh" ensure
 }
 
 instance_exists() {
   local name="$1"
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    gcloud compute instances describe "${name}" \
-      --project="${GCP_PROJECT_ID}" \
-      --zone="${GCP_ZONE}" \
-      --format='value(name)' >/dev/null 2>&1
-    return
-  fi
-
-  limactl list --json 2>/dev/null | python3 -c '
-import json, sys
-target = sys.argv[1]
-found = False
-for line in sys.stdin:
-    line = line.strip()
-    if not line:
-        continue
-    item = json.loads(line)
-    if item.get("name") == target:
-        found = True
-raise SystemExit(0 if found else 1)
-' "${name}"
-}
-
-lima_network_exists() {
-  local name="$1"
-  limactl network list --json 2>/dev/null | python3 -c '
-import json, sys
-target = sys.argv[1]
-found = False
-for line in sys.stdin:
-    line = line.strip()
-    if line and json.loads(line).get("name") == target:
-        found = True
-raise SystemExit(0 if found else 1)
-' "${name}"
+  gcloud compute instances describe "${name}" \
+    --project="${GCP_PROJECT_ID}" \
+    --zone="${GCP_ZONE}" \
+    --format='value(name)' >/dev/null 2>&1
 }
 
 instance_status() {
   local name="$1"
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    local status
-    status="$(gcloud compute instances describe "${name}" \
-      --project="${GCP_PROJECT_ID}" \
-      --zone="${GCP_ZONE}" \
-      --format='value(status)' 2>/dev/null)" || return 1
-    case "${status}" in
-      RUNNING) printf '%s\n' "Running" ;;
-      TERMINATED) printf '%s\n' "Stopped" ;;
-      *) printf '%s\n' "${status}" ;;
-    esac
-    return
-  fi
-
-  limactl list --json 2>/dev/null | python3 -c '
-import json, sys
-target = sys.argv[1]
-status = None
-for line in sys.stdin:
-    line = line.strip()
-    if not line:
-        continue
-    item = json.loads(line)
-    if item.get("name") == target:
-        status = item.get("status", "Unknown")
-if status is None:
-    raise SystemExit(1)
-print(status)
-' "${name}"
+  local status
+  status="$(gcloud compute instances describe "${name}" \
+    --project="${GCP_PROJECT_ID}" \
+    --zone="${GCP_ZONE}" \
+    --format='value(status)' 2>/dev/null)" || return 1
+  case "${status}" in
+    RUNNING) printf '%s\n' "Running" ;;
+    TERMINATED) printf '%s\n' "Stopped" ;;
+    *) printf '%s\n' "${status}" ;;
+  esac
 }
 
 instance_running() {
@@ -200,16 +123,10 @@ instance_running() {
 
 guest_ipv4() {
   local name="$1"
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    gcloud compute instances describe "${name}" \
-      --project="${GCP_PROJECT_ID}" \
-      --zone="${GCP_ZONE}" \
-      --format='value(networkInterfaces[0].networkIP)'
-    return
-  fi
-
-  limactl shell "${name}" -- bash -lc \
-    "ip -4 -o addr show dev '${LIMA_MANAGEMENT_INTERFACE}' | awk '{print \$4}' | cut -d/ -f1 | head -n1"
+  gcloud compute instances describe "${name}" \
+    --project="${GCP_PROJECT_ID}" \
+    --zone="${GCP_ZONE}" \
+    --format='value(networkInterfaces[0].networkIP)'
 }
 
 controller_ipv4() {
@@ -218,14 +135,6 @@ controller_ipv4() {
     return
   fi
   guest_ipv4 "${CONTROLLER_NAME}"
-}
-
-compute_ipv4() {
-  if [[ "${#COMPUTE_MANAGEMENT_IPS[@]}" -gt 0 ]]; then
-    printf '%s\n' "${COMPUTE_MANAGEMENT_IPS[0]}"
-    return
-  fi
-  guest_ipv4 "${COMPUTE_NAMES[0]}"
 }
 
 compute_instance_names() {
@@ -258,57 +167,45 @@ gcp_ssh_options() {
 run_on() {
   local name="$1"
   shift
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    local command_text=""
-    local argument
-    local quoted
-    local options=()
-    while IFS= read -r argument; do
-      options+=("${argument}")
-    done < <(gcp_ssh_options)
-    for argument in "$@"; do
-      printf -v quoted '%q' "${argument}"
-      command_text+="${command_text:+ }${quoted}"
-    done
-    gcloud compute ssh "${TARGET_SSH_USER}@${name}" \
-      "${options[@]}" --command="${command_text}"
-    return
-  fi
-  limactl shell "${name}" -- "$@"
+  local command_text=""
+  local argument
+  local quoted
+  local options=()
+  while IFS= read -r argument; do
+    options+=("${argument}")
+  done < <(gcp_ssh_options)
+  for argument in "$@"; do
+    printf -v quoted '%q' "${argument}"
+    command_text+="${command_text:+ }${quoted}"
+  done
+  gcloud compute ssh "${TARGET_SSH_USER}@${name}" \
+    "${options[@]}" --command="${command_text}"
 }
 
 copy_to() {
   local source="$1"
   local name="$2"
   local destination="$3"
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    local options=()
-    local option
-    while IFS= read -r option; do
-      options+=("${option}")
-    done < <(gcp_ssh_options)
-    gcloud compute scp "${options[@]}" "${source}" \
-      "${TARGET_SSH_USER}@${name}:${destination}"
-    return
-  fi
-  limactl copy "${source}" "${name}:${destination}"
+  local options=()
+  local option
+  while IFS= read -r option; do
+    options+=("${option}")
+  done < <(gcp_ssh_options)
+  gcloud compute scp "${options[@]}" "${source}" \
+    "${TARGET_SSH_USER}@${name}:${destination}"
 }
 
 copy_from() {
   local name="$1"
   local source="$2"
   local destination="$3"
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    local options=()
-    local option
-    while IFS= read -r option; do
-      options+=("${option}")
-    done < <(gcp_ssh_options)
-    gcloud compute scp "${options[@]}" \
-      "${TARGET_SSH_USER}@${name}:${source}" "${destination}"
-    return
-  fi
-  limactl copy "${name}:${source}" "${destination}"
+  local options=()
+  local option
+  while IFS= read -r option; do
+    options+=("${option}")
+  done < <(gcp_ssh_options)
+  gcloud compute scp "${options[@]}" \
+    "${TARGET_SSH_USER}@${name}:${source}" "${destination}"
 }
 
 safe_realpath_within_project() {

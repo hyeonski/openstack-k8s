@@ -52,11 +52,7 @@ ensure_pinned_download() {
 
 require_management() {
   require_command kubectl
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    require_command gcloud
-  else
-    require_command limactl
-  fi
+  require_command gcloud
   ensure_management_api_access
   [[ -f "${management_kubeconfig}" ]] || die "management kubeconfig is missing"
   [[ -x "${clusterctl_bin}" ]] || die "clusterctl is missing; install providers first"
@@ -68,38 +64,21 @@ require_management() {
 }
 
 require_existing_floating_ip_route() {
-  local expected_gateway route_info route_gateway route_destination route_next_hop route_name
-  case "${HOST_PROVIDER}" in
-    gcp)
-      require_command gcloud
-      route_name="${GCP_OPENSTACK_FLOATING_IP_ROUTE_NAME:?}"
-      route_destination="$(
-        gcloud compute routes describe "${route_name}" \
-          --project="${GCP_PROJECT_ID}" --format='value(destRange)' 2>/dev/null || true
-      )"
-      route_next_hop="$(
-        gcloud compute routes describe "${route_name}" \
-          --project="${GCP_PROJECT_ID}" --format='value(nextHopInstance)' 2>/dev/null || true
-      )"
-      [[ "${route_destination}" == "${EXTERNAL_CIDR}" ]] ||
-        die "GCP Floating IP route is missing or has the wrong destination"
-      [[ "${route_next_hop##*/}" == "${CONTROLLER_NAME}" ]] ||
-        die "GCP Floating IP route does not use the controller as next hop"
-      ;;
-    lima)
-      require_command route
-      expected_gateway="$(controller_ipv4)"
-      route_info="$(route -n get "${EXTERNAL_ALLOCATION_POOL_START}" 2>/dev/null || true)"
-      route_gateway="$(awk '/gateway:/{print $2; exit}' <<<"${route_info}")"
-      route_destination="$(awk '/destination:/{print $2; exit}' <<<"${route_info}")"
-      if [[ "${route_destination}" == "default" || "${route_gateway}" != "${expected_gateway}" ]]; then
-        die "project Floating IP route is not installed; approval is required before changing the host route"
-      fi
-      ;;
-    *)
-      die "unsupported host provider for Floating IP route verification: ${HOST_PROVIDER}"
-      ;;
-  esac
+  local route_destination route_next_hop route_name
+  require_command gcloud
+  route_name="${GCP_OPENSTACK_FLOATING_IP_ROUTE_NAME:?}"
+  route_destination="$(
+    gcloud compute routes describe "${route_name}" \
+      --project="${GCP_PROJECT_ID}" --format='value(destRange)' 2>/dev/null || true
+  )"
+  route_next_hop="$(
+    gcloud compute routes describe "${route_name}" \
+      --project="${GCP_PROJECT_ID}" --format='value(nextHopInstance)' 2>/dev/null || true
+  )"
+  [[ "${route_destination}" == "${EXTERNAL_CIDR}" ]] ||
+    die "GCP Floating IP route is missing or has the wrong destination"
+  [[ "${route_next_hop##*/}" == "${CONTROLLER_NAME}" ]] ||
+    die "GCP Floating IP route does not use the controller as next hop"
 }
 
 wait_for_secret() {
@@ -321,12 +300,12 @@ run_cni_probe() {
     "${probe_name}" --wait=false >/dev/null
 }
 
-tune_calico_probes_for_local_capacity() {
+tune_calico_probes_for_gcp_capacity() {
   local probe_patch
-  # Three nested Nova guests fully consume the local compute profile's four
+  # Three nested Nova guests fully consume a GCP compute host's four
   # vCPUs during first boot. A startup probe prevents liveness from restarting
   # Calico while images, BIRD and Felix are still converging. The regular
-  # probes also need enough wall time to be scheduled on a saturated local
+  # probes also need enough wall time to be scheduled on a saturated GCP
   # worker; otherwise a healthy command can exceed the upstream 1s default.
   require_positive_integer WORKLOAD_CALICO_PROBE_TIMEOUT_SECONDS \
     "${WORKLOAD_CALICO_PROBE_TIMEOUT_SECONDS}"
@@ -379,10 +358,7 @@ verify_cluster() {
   [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
   ensure_workload_api_access
   wait_for_machine_identity "${expected_machines}"
-  if [[ "${HOST_PROVIDER}" == "lima" ]]; then
-    "${PROJECT_ROOT}/scripts/workload-clock.sh" check
-  fi
-  tune_calico_probes_for_local_capacity
+  tune_calico_probes_for_gcp_capacity
   wait_for_available_workers "${expected_workers}"
   wait_for_node_count "${expected_nodes}"
   wait_for_control_plane_available
@@ -421,9 +397,7 @@ verify_cluster() {
 
 create_cluster() {
   require_management
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
-  fi
+  "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
   require_existing_floating_ip_route
   ensure_state_dirs
   local cluster_exists="no"
@@ -467,12 +441,42 @@ create_cluster() {
   verify_cluster 1
 }
 
+quiesce_autoscaler_for_manual_scaling() {
+  local autoscaler_pods
+
+  ensure_workload_api_access
+  if kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${CLUSTER_AUTOSCALER_NAMESPACE}" get deployment \
+      cluster-autoscaler >/dev/null 2>&1; then
+    log "Suspending Cluster Autoscaler during manual worker scaling"
+    kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${CLUSTER_AUTOSCALER_NAMESPACE}" scale deployment \
+      cluster-autoscaler --replicas=0 >/dev/null
+    autoscaler_pods="$(kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${CLUSTER_AUTOSCALER_NAMESPACE}" get pods \
+      -l app.kubernetes.io/name=cluster-autoscaler -o name)"
+    if [[ -n "${autoscaler_pods}" ]]; then
+      kubectl --kubeconfig "${management_kubeconfig}" \
+        -n "${CLUSTER_AUTOSCALER_NAMESPACE}" wait --for=delete pod \
+        -l app.kubernetes.io/name=cluster-autoscaler --timeout=2m
+    fi
+  fi
+
+  log "Removing previous Autoscaler scale-up probes before manual worker scaling"
+  kubectl --kubeconfig "${workload_kubeconfig}" \
+    -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" delete deployment \
+    "${CLUSTER_AUTOSCALER_TEST_NAME}" --ignore-not-found --wait=true >/dev/null
+  kubectl --kubeconfig "${workload_kubeconfig}" \
+    -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" delete pod \
+    "${CLUSTER_AUTOSCALER_TARGETED_PROBE_NAME}" --ignore-not-found \
+    --wait=false >/dev/null
+}
+
 scale_workers_up() {
   require_management
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
-  fi
+  "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
   [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
+  quiesce_autoscaler_for_manual_scaling
 
   local available desired started finished run_dir timing_file timing_status
   run_dir="$(current_or_new_run)"
@@ -536,10 +540,9 @@ scale_workers_up() {
 
 scale_workers_down() {
   require_management
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
-  fi
+  "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
   [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
+  quiesce_autoscaler_for_manual_scaling
 
   local desired available started finished run_dir timing_file
   run_dir="$(current_or_new_run)"
@@ -590,9 +593,7 @@ destroy_cluster() {
   require_management
   kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
     delete cluster "${WORKLOAD_CLUSTER_NAME}" --wait=true --timeout=30m
-  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-    "${PROJECT_ROOT}/scripts/gcp-workload-api-tunnel.sh" stop
-  fi
+  "${PROJECT_ROOT}/scripts/gcp-workload-api-tunnel.sh" stop
   log "deleted only Cluster ${WORKLOAD_NAMESPACE}/${WORKLOAD_CLUSTER_NAME}; namespace and secrets preserved"
 }
 
