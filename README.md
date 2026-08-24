@@ -47,7 +47,7 @@ strict CAPI readiness와 orphan `calico-ipam` 부재를 확인했다.
 | 정지 후 재기동 readiness | 통과 | 양방향 관리망, Keystone, nova-compute, hypervisor가 준비된 뒤에만 `local-up`이 성공함 |
 | clean-room 재구축 | 통과 | Lima VM 두 대를 삭제하고 OpenStack 재배포·게스트 검증·Docker 콜드 스타트·kind 재생성까지 통과함 |
 | GCP AMD64 호스트/IaC 프로필 | 통과 | 기존 VPC·주소·VM·snapshot 정책 import 후 OpenTofu `No changes`, IAP host gate와 controller→compute 2대 SSH 통과 |
-| GCP OpenStack/CAPI 이전 | 진행 중 | AMD64 OpenStack, Kubernetes 노드 이미지, controller 통합 kind, CAPI/CAPO provider와 credential 인증이 통과했으며 workload 기준선이 남음 |
+| GCP OpenStack/CAPI 이전 | 진행 중 | provider와 credential에 이어 CAPO의 AMD64 control plane 1대·worker 1대 및 API/CNI/DNS 기준선이 통과했으며 수동 증설과 Autoscaler 재검증이 남음 |
 | 물리 서버 프로필 | 미구현 | NIC/VLAN/bridge 및 스토리지 구성을 코드화하고 검증해야 함 |
 | 노드 오토스케일링 | 통과 | management cluster의 CA v1.35.0이 `Insufficient cpu` Pending Pod를 감지해 worker를 1→2로 늘리고 새 node targeted CNI/DNS와 전체 readiness를 통과함 |
 
@@ -141,6 +141,19 @@ Docker의 표준 `kind` network를 미리 `172.30.0.0/24`와 `br-kind-mgmt`로 �
 public Kubernetes API 방화벽은 만들지 않는다.
 각 provider/workload/autoscaler 명령은 자체 실행 수명 안에서 IAP tunnel을
 재확립하므로 이전 `make` 프로세스의 background tunnel에 의존하지 않는다.
+workload kubeconfig는 TLS 검증 대상을 OpenStack Floating IP로 유지하면서
+controller IAP SSH forwarding의 `127.0.0.1:16444`를 사용한다. public workload
+API 방화벽이나 로컬 macOS route는 추가하지 않는다.
+
+GCP VM 재기동 뒤에는 다음 runtime gate가 Keystone, Placement, Nova compute와
+hypervisor를 검증한다. 데이터베이스보다 먼저 시작해 WSGI application load에
+실패한 Placement만 데이터베이스 준비 후 재시작하고 Nova scheduler를 갱신한다.
+
+```bash
+make gcp-openstack-recover ENV=cloud-gcp-amd64
+make workload-cluster-create ENV=cloud-gcp-amd64
+make workload-cluster-verify ENV=cloud-gcp-amd64 WORKERS=1
+```
 
 검증용 OpenStack VM을 보존해 kind Pod에서 workload Floating IP까지 확인할
 때는 다음 순서를 사용한다.

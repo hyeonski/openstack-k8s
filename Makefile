@@ -137,6 +137,10 @@ gcp-stop:
 
 gcp-host-verify:
 	@scripts/gcp-hosts.sh verify
+	@scripts/gcp-openstack-recover.sh
+
+gcp-openstack-recover:
+	@scripts/gcp-openstack-recover.sh
 
 gcp-deployment-key-setup:
 	@scripts/setup-project-ssh.sh

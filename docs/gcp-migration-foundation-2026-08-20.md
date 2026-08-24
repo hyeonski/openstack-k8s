@@ -263,10 +263,44 @@ architecture 검사는 host provider 및 환경별 runtime architecture 계약�
 분리했다. GCP custom route는 destination과 controller next hop을 조회해
 검증하며 workload/Autoscaler 단계도 같은 management API 접근 게이트를 쓴다.
 
+## GCP CAPO workload 기준선
+
+2026-08-24에 CAPO로 control plane 1대와 worker 1대를 생성했다. workload API는
+public 방화벽이나 macOS route를 추가하지 않고 controller를 경유하는 IAP SSH
+forwarding `127.0.0.1:16444`로 접근한다. repository kubeconfig는 server를 로컬
+종단으로 바꾸되 TLS server-name은 실제 Floating IP `172.24.4.117`로 유지한다.
+각 workload/Autoscaler 명령은 management tunnel과 workload tunnel을 자기 실행
+수명 안에서 다시 만든다.
+
+첫 생성에서는 장시간 정지 후 controller가 부팅될 때 Placement WSGI가 database
+준비보다 먼저 초기화돼 `placement_api`가 unhealthy 상태로 남았다. Nova fault는
+`The placement service ... does not have any supported versions`였으며 CAPO 자체
+오류가 아니었다. database와 Keystone 준비 뒤 Placement를 재시작하고 실패한
+하위 OpenStackServer/port만 정리해 동일 Cluster reconcile을 재개했다.
+
+이 재기동 순서 문제를 반복하지 않도록 `gcp-host-verify`와 workload 생성/증설은
+runtime recovery gate를 사용한다. 이 gate는 Keystone과 Placement API, 정확히
+두 개의 `nova-compute` 및 hypervisor를 확인하고, Placement가 unhealthy일 때만
+재시작한 뒤 Nova scheduler를 갱신한다.
+
+최종 검증 결과는 다음과 같다.
+
+- Cluster와 KubeadmControlPlane `Available`
+- control plane `10.6.0.30`, worker `10.6.0.152`, 모두 Ready
+- Kubernetes v1.35.7, Ubuntu 22.04.5, containerd 2.3.2, architecture amd64
+- control plane은 compute02, worker는 compute01에 ACTIVE 상태로 분산
+- Calico node/controller Ready
+- management Pod에서 workload TCP 6443 접근 성공
+- workload Pod의 `kubernetes.default.svc.cluster.local` DNS 조회 성공
+- controller 6.6 GiB available, compute01/02 각각 약 12 GiB available, swap 0
+- 새 프로세스의 독립 `workload-cluster-verify WORKERS=1` 재검증 성공
+
 ## 다음 checkpoint
 
-1. CAPO로 GCP OpenStack의 workload control plane과 worker 기준선을 생성한다.
-2. 수동 worker 증설과 Cluster Autoscaler scale-up을 GCP 프로필에서 재검증한다.
+1. MachineDeployment를 worker 1대에서 2대로 수동 증설하고 새 node의 CNI/DNS를
+   검증한다.
+2. worker를 다시 1대로 맞춘 뒤 Cluster Autoscaler scale-up을 GCP 프로필에서
+   재검증한다.
 
 GCP custom route와 36,000초 자동 STOP을 모두 유지한다. 각 checkpoint는 VM
 재기동 후 readiness를 다시 확인하고 완료된 단계부터 idempotent하게 재개할 수

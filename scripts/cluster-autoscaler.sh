@@ -47,6 +47,7 @@ require_context() {
   require_command base64
   [[ -f "${management_kubeconfig}" ]] || die "management kubeconfig is missing"
   [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
+  ensure_workload_api_access
   kubectl --kubeconfig "${management_kubeconfig}" get --raw=/readyz >/dev/null
   kubectl --kubeconfig "${workload_kubeconfig}" get --raw=/readyz >/dev/null
   kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \

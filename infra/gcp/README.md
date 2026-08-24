@@ -74,6 +74,23 @@ an earlier Make invocation. The verified provider set is CAPI/CABPK/KCP
 v1.13.4, CAPO v0.14.6 and ORC v2.4.0; an in-cluster probe also verified the
 OpenStack application credential against Keystone.
 
+The workload kubeconfig connects to `127.0.0.1:16444` through an IAP SSH local
+forward on the controller while retaining the real OpenStack Floating IP as
+the TLS server name. No public workload API firewall or macOS route is needed.
+
+```bash
+make gcp-openstack-recover ENV=cloud-gcp-amd64
+make workload-cluster-create ENV=cloud-gcp-amd64
+make workload-cluster-verify ENV=cloud-gcp-amd64 WORKERS=1
+```
+
+The runtime recovery gate waits for Keystone, Placement, both nova-compute
+services and both hypervisors. If Placement started before its database and
+remained unhealthy, only `placement_api` is restarted after database readiness
+and `nova_scheduler` is refreshed. The verified baseline has one v1.35.7 AMD64
+control plane on compute02 and one worker on compute01, both Ready with Calico,
+API and DNS probes passing.
+
 To prove the complete container path, preserve the OpenStack verification
 server, probe both Keystone and its Floating IP service from a kind Pod, then
 remove only the temporary verification resources:

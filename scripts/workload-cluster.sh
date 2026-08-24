@@ -125,6 +125,7 @@ write_workload_kubeconfig() {
     --kubeconfig "${management_kubeconfig}" >"${temporary}"
   chmod 600 "${temporary}"
   mv "${temporary}" "${workload_kubeconfig}"
+  ensure_workload_api_access
 }
 
 wait_for_workload_api() {
@@ -376,6 +377,7 @@ verify_cluster() {
 
   require_management
   [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
+  ensure_workload_api_access
   wait_for_machine_identity "${expected_machines}"
   if [[ "${HOST_PROVIDER}" == "lima" ]]; then
     "${PROJECT_ROOT}/scripts/workload-clock.sh" check
@@ -419,11 +421,15 @@ verify_cluster() {
 
 create_cluster() {
   require_management
+  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
+    "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
+  fi
   require_existing_floating_ip_route
   ensure_state_dirs
+  local cluster_exists="no"
   if kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
       get cluster "${WORKLOAD_CLUSTER_NAME}" >/dev/null 2>&1; then
-    die "workload Cluster already exists: ${WORKLOAD_NAMESPACE}/${WORKLOAD_CLUSTER_NAME}"
+    cluster_exists="yes"
   fi
 
   local external_network_id
@@ -445,7 +451,11 @@ create_cluster() {
   KUBERNETES_WORKER_FLAVOR="${KUBERNETES_WORKER_FLAVOR}" \
     "${PROJECT_ROOT}/scripts/render-template.py" "${cluster_template}" "${cluster_manifest}"
 
-  log "Creating ${WORKLOAD_CLUSTER_NAME} with one control plane and one worker"
+  if [[ "${cluster_exists}" == "yes" ]]; then
+    log "Reconciling and resuming existing ${WORKLOAD_CLUSTER_NAME} baseline"
+  else
+    log "Creating ${WORKLOAD_CLUSTER_NAME} with one control plane and one worker"
+  fi
   kubectl --kubeconfig "${management_kubeconfig}" apply -f "${cluster_manifest}"
   wait_for_secret "${WORKLOAD_CLUSTER_NAME}-kubeconfig"
   write_workload_kubeconfig
@@ -459,6 +469,9 @@ create_cluster() {
 
 scale_workers_up() {
   require_management
+  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
+    "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
+  fi
   [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
 
   local available desired started finished run_dir timing_file timing_status
@@ -523,6 +536,9 @@ scale_workers_up() {
 
 scale_workers_down() {
   require_management
+  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
+    "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
+  fi
   [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
 
   local desired available started finished run_dir timing_file
@@ -574,6 +590,9 @@ destroy_cluster() {
   require_management
   kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
     delete cluster "${WORKLOAD_CLUSTER_NAME}" --wait=true --timeout=30m
+  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
+    "${PROJECT_ROOT}/scripts/gcp-workload-api-tunnel.sh" stop
+  fi
   log "deleted only Cluster ${WORKLOAD_NAMESPACE}/${WORKLOAD_CLUSTER_NAME}; namespace and secrets preserved"
 }
 
@@ -585,7 +604,13 @@ case "${action}" in
     wait_for_control_plane_available
     ;;
   scale) scale_workers "${2:-2}" ;;
-  diagnostics) capture_failure_diagnostics "manual" ;;
+  diagnostics)
+    require_management
+    if [[ -f "${workload_kubeconfig}" ]]; then
+      ensure_workload_api_access
+    fi
+    capture_failure_diagnostics "manual"
+    ;;
   destroy) destroy_cluster "$@" ;;
   *) die "usage: $0 {create|verify [workers]|capi-ready|scale|diagnostics|destroy CONFIRM CONFIRM_CLUSTER}" ;;
 esac
