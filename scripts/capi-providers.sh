@@ -53,6 +53,7 @@ ensure_clusterctl() {
 
 require_management_cluster() {
   require_command kubectl
+  ensure_management_api_access
   [[ -f "${management_kubeconfig}" ]] ||
     die "management kubeconfig not found: ${management_kubeconfig}"
   kubectl --kubeconfig "${management_kubeconfig}" get nodes >/dev/null

@@ -245,12 +245,28 @@ controller, compute, OpenStack과 IAP firewall은 대상이 아니었다.
 `management-cluster-destroy CONFIRM=cloud-gcp-amd64`는 controller의 kind,
 로컬 kubeconfig와 전용 bridge/NAT만 삭제하고 controller와 OpenStack은 보존한다.
 
+2026-08-24에는 management API IAP tunnel을 각 명령의 수명 안에서 재확립하도록
+접근 게이트를 보완하고 고정된 provider 조합을 설치했다.
+
+- CAPI/CABPK/KCP 및 `clusterctl`: v1.13.4
+- CAPO: v0.14.6
+- ORC: v2.4.0
+- cert-manager: v1.20.3 (`clusterctl`이 provider 계약에 따라 설치)
+- 모든 provider deployment `Available`
+- 기존 application credential를 `osk8s-workload` namespace Secret으로 연결
+- kind 인증 Pod에서 Keystone token 발급 성공 후 probe Pod 삭제
+- provider 설치 후 controller: kind 1.608 GiB, memory 7.5 GiB available,
+  disk 58 GiB 여유, swap 0
+
+로컬 ARM64 검증에 직접 고정돼 있던 `limactl`, macOS route와 Kubernetes
+architecture 검사는 host provider 및 환경별 runtime architecture 계약으로
+분리했다. GCP custom route는 destination과 controller next hop을 조회해
+검증하며 workload/Autoscaler 단계도 같은 management API 접근 게이트를 쓴다.
+
 ## 다음 checkpoint
 
-1. GCP management cluster에 고정된 CAPI/CABPK/KCP와 CAPO/ORC provider를
-   설치하고 credential token 발급을 검증한다.
-2. CAPO로 GCP OpenStack의 workload control plane과 worker 기준선을 생성한다.
-3. 수동 worker 증설과 Cluster Autoscaler scale-up을 GCP 프로필에서 재검증한다.
+1. CAPO로 GCP OpenStack의 workload control plane과 worker 기준선을 생성한다.
+2. 수동 worker 증설과 Cluster Autoscaler scale-up을 GCP 프로필에서 재검증한다.
 
 GCP custom route와 36,000초 자동 STOP을 모두 유지한다. 각 checkpoint는 VM
 재기동 후 readiness를 다시 확인하고 완료된 단계부터 idempotent하게 재개할 수

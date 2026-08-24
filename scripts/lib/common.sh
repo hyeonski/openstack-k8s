@@ -89,6 +89,12 @@ require_command() {
   command -v "${cmd}" >/dev/null 2>&1 || die "required command not found: ${cmd}"
 }
 
+ensure_management_api_access() {
+  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
+    "${PROJECT_ROOT}/scripts/gcp-management-cluster.sh" tunnel
+  fi
+}
+
 run_host_as_root() {
   if sudo -n true >/dev/null 2>&1; then
     sudo "$@"

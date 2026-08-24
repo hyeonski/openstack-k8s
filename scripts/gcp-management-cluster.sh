@@ -264,8 +264,8 @@ verify_cluster() {
   local architecture server_version
   architecture="$(kubectl --kubeconfig "${kubeconfig}" get nodes \
     -o jsonpath='{.items[0].status.nodeInfo.architecture}')"
-  [[ "${architecture}" == "amd64" ]] ||
-    die "unexpected management node architecture: ${architecture}"
+  [[ "${architecture}" == "${MANAGEMENT_KUBERNETES_ARCHITECTURE}" ]] ||
+    die "unexpected management node architecture: ${architecture}; expected ${MANAGEMENT_KUBERNETES_ARCHITECTURE}"
   server_version="$(kubectl --kubeconfig "${kubeconfig}" version -o json |
     python3 -c 'import json,sys; print(json.load(sys.stdin)["serverVersion"]["gitVersion"])')"
   [[ "${server_version}" == "${KIND_KUBERNETES_VERSION}" ]] ||
@@ -289,7 +289,7 @@ verify_cluster() {
   {
     echo "management_runtime_host=${runtime_host}"
     echo "management_node_ready=pass"
-    echo "architecture_amd64=pass"
+    echo "architecture_${MANAGEMENT_KUBERNETES_ARCHITECTURE}=pass"
     echo "kubernetes_${KIND_KUBERNETES_VERSION}=pass"
     echo "isolated_bridge=${MANAGEMENT_DOCKER_BRIDGE}"
     echo "isolated_cidr=${MANAGEMENT_DOCKER_CIDR}"
@@ -307,6 +307,15 @@ verify_cluster() {
 }
 
 case "${action}" in
+  tunnel)
+    instance_running "${runtime_host}" ||
+      die "management runtime host is stopped; run make gcp-start ENV=${ENV}"
+    cluster_exists ||
+      die "kind cluster not found on ${runtime_host}: ${MANAGEMENT_CLUSTER_NAME}"
+    [[ -f "${kubeconfig}" ]] || fetch_kubeconfig
+    start_tunnel
+    kubectl --kubeconfig "${kubeconfig}" get --raw=/readyz >/dev/null
+    ;;
   create)
     "${PROJECT_ROOT}/scripts/gcp-controller-management-iac.sh"
     ensure_kind_binary
@@ -361,6 +370,6 @@ case "${action}" in
     log "Controller and all OpenStack resources were preserved"
     ;;
   *)
-    die "usage: gcp-management-cluster.sh {create|verify|destroy [${ENV}]}"
+    die "usage: gcp-management-cluster.sh {tunnel|create|verify|destroy [${ENV}]}"
     ;;
 esac

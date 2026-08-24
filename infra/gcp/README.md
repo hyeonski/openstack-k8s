@@ -57,6 +57,9 @@ standard Docker `kind` network with CIDR `172.30.0.0/24`, bridge
 make gcp-controller-management-prepare ENV=cloud-gcp-amd64
 make management-cluster-create ENV=cloud-gcp-amd64
 make management-cluster-verify ENV=cloud-gcp-amd64
+make capi-providers-install ENV=cloud-gcp-amd64
+make capi-providers-verify ENV=cloud-gcp-amd64
+make capi-credentials-verify ENV=cloud-gcp-amd64
 ```
 
 The kind API binds to `10.20.0.10:16443`. Firewall access is limited to the IAP
@@ -64,6 +67,12 @@ TCP-forwarding range and the `osk8s-controller-management` target tag. Local
 kubectl traffic uses an IAP tunnel on `127.0.0.1:16443`; there is no public
 Kubernetes API firewall rule. The existing controller retains its
 36,000-second automatic STOP contract.
+
+Provider, workload and autoscaler commands re-establish the IAP tunnel inside
+their own process lifetime. They do not depend on a background tunnel left by
+an earlier Make invocation. The verified provider set is CAPI/CABPK/KCP
+v1.13.4, CAPO v0.14.6 and ORC v2.4.0; an in-cluster probe also verified the
+OpenStack application credential against Keystone.
 
 To prove the complete container path, preserve the OpenStack verification
 server, probe both Keystone and its Floating IP service from a kind Pod, then

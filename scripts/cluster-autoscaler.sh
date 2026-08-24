@@ -37,7 +37,12 @@ capture_failure() {
 
 require_context() {
   require_command kubectl
-  require_command limactl
+  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
+    require_command gcloud
+  else
+    require_command limactl
+  fi
+  ensure_management_api_access
   require_command python3
   require_command base64
   [[ -f "${management_kubeconfig}" ]] || die "management kubeconfig is missing"
@@ -223,8 +228,8 @@ if missing or any(arg.startswith("--cloud-config") for arg in args):
     -o jsonpath='{.items[0].spec.nodeName}')"
   node_architecture="$(kubectl --kubeconfig "${management_kubeconfig}" get node \
     "${autoscaler_node}" -o jsonpath='{.status.nodeInfo.architecture}')"
-  [[ "${node_architecture}" == "arm64" ]] ||
-    die "Autoscaler is not running on the expected arm64 management node"
+  [[ "${node_architecture}" == "${MANAGEMENT_KUBERNETES_ARCHITECTURE}" ]] ||
+    die "Autoscaler is running on ${node_architecture}; expected ${MANAGEMENT_KUBERNETES_ARCHITECTURE}"
   log "Cluster Autoscaler image, arguments, RBAC and node-group range passed"
 }
 

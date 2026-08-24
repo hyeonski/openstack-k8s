@@ -52,7 +52,12 @@ ensure_pinned_download() {
 
 require_management() {
   require_command kubectl
-  require_command limactl
+  if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
+    require_command gcloud
+  else
+    require_command limactl
+  fi
+  ensure_management_api_access
   [[ -f "${management_kubeconfig}" ]] || die "management kubeconfig is missing"
   [[ -x "${clusterctl_bin}" ]] || die "clusterctl is missing; install providers first"
   kubectl --kubeconfig "${management_kubeconfig}" get nodes >/dev/null
@@ -63,15 +68,38 @@ require_management() {
 }
 
 require_existing_floating_ip_route() {
-  local expected_gateway route_info route_gateway route_destination
-  require_command route
-  expected_gateway="$(controller_ipv4)"
-  route_info="$(route -n get "${EXTERNAL_ALLOCATION_POOL_START}" 2>/dev/null || true)"
-  route_gateway="$(awk '/gateway:/{print $2; exit}' <<<"${route_info}")"
-  route_destination="$(awk '/destination:/{print $2; exit}' <<<"${route_info}")"
-  if [[ "${route_destination}" == "default" || "${route_gateway}" != "${expected_gateway}" ]]; then
-    die "project Floating IP route is not installed; approval is required before changing the host route"
-  fi
+  local expected_gateway route_info route_gateway route_destination route_next_hop route_name
+  case "${HOST_PROVIDER}" in
+    gcp)
+      require_command gcloud
+      route_name="${GCP_OPENSTACK_FLOATING_IP_ROUTE_NAME:?}"
+      route_destination="$(
+        gcloud compute routes describe "${route_name}" \
+          --project="${GCP_PROJECT_ID}" --format='value(destRange)' 2>/dev/null || true
+      )"
+      route_next_hop="$(
+        gcloud compute routes describe "${route_name}" \
+          --project="${GCP_PROJECT_ID}" --format='value(nextHopInstance)' 2>/dev/null || true
+      )"
+      [[ "${route_destination}" == "${EXTERNAL_CIDR}" ]] ||
+        die "GCP Floating IP route is missing or has the wrong destination"
+      [[ "${route_next_hop##*/}" == "${CONTROLLER_NAME}" ]] ||
+        die "GCP Floating IP route does not use the controller as next hop"
+      ;;
+    lima)
+      require_command route
+      expected_gateway="$(controller_ipv4)"
+      route_info="$(route -n get "${EXTERNAL_ALLOCATION_POOL_START}" 2>/dev/null || true)"
+      route_gateway="$(awk '/gateway:/{print $2; exit}' <<<"${route_info}")"
+      route_destination="$(awk '/destination:/{print $2; exit}' <<<"${route_info}")"
+      if [[ "${route_destination}" == "default" || "${route_gateway}" != "${expected_gateway}" ]]; then
+        die "project Floating IP route is not installed; approval is required before changing the host route"
+      fi
+      ;;
+    *)
+      die "unsupported host provider for Floating IP route verification: ${HOST_PROVIDER}"
+      ;;
+  esac
 }
 
 wait_for_secret() {
@@ -349,7 +377,9 @@ verify_cluster() {
   require_management
   [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
   wait_for_machine_identity "${expected_machines}"
-  "${PROJECT_ROOT}/scripts/workload-clock.sh" check
+  if [[ "${HOST_PROVIDER}" == "lima" ]]; then
+    "${PROJECT_ROOT}/scripts/workload-clock.sh" check
+  fi
   tune_calico_probes_for_local_capacity
   wait_for_available_workers "${expected_workers}"
   wait_for_node_count "${expected_nodes}"
@@ -366,7 +396,8 @@ verify_cluster() {
   while IFS=$'\t' read -r node version architecture provider_id; do
     [[ "${version}" == "${KUBERNETES_VERSION}" ]] ||
       die "unexpected Kubernetes version on ${node}: ${version}"
-    [[ "${architecture}" == "arm64" ]] || die "unexpected architecture on ${node}: ${architecture}"
+    [[ "${architecture}" == "${WORKLOAD_KUBERNETES_ARCHITECTURE}" ]] ||
+      die "unexpected architecture on ${node}: ${architecture}; expected ${WORKLOAD_KUBERNETES_ARCHITECTURE}"
     [[ "${provider_id}" == openstack:///* ]] || die "missing OpenStack providerID on ${node}"
   done < <(kubectl --kubeconfig "${workload_kubeconfig}" get nodes \
     -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.nodeInfo.kubeletVersion}{"\t"}{.status.nodeInfo.architecture}{"\t"}{.spec.providerID}{"\n"}{end}')
