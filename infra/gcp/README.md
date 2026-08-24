@@ -1,110 +1,71 @@
-# GCP host infrastructure
+# GCP infrastructure
 
-This configuration adopts the existing `openstack-k8s` project resources. It
-must be imported before any plan is considered authoritative. The import path
-does not create, update, stop or restart a GCP resource.
+이 디렉터리는 기존 `openstack-k8s` GCP 리소스를 OpenTofu/Terraform으로 선언하고
+안전하게 채택·검증한다. 기본 경로는 기존 인프라와 선언이 일치하는지 확인하는
+것이며, plan을 검토하지 않은 apply는 허용하지 않는다.
 
-The 10-hour cost-control limit is part of the declared contract:
+## 고정 리소스
 
-```hcl
-max_run_duration_seconds = 36000
-instance_termination_action = "STOP"
-```
+- project/zone: `openstack-k8s`, `asia-northeast3-a`
+- VPC/subnet: `osk8s-mgmt`, `osk8s-seoul` (`10.20.0.0/24`)
+- controller: `10.20.0.10`
+- compute01/02: `10.20.0.21`, `10.20.0.22`
+- Kolla alias VIP: `10.20.0.250`
+- Floating IP route: `172.24.4.0/24 → osk8s-controller`
+- 모든 지속 호스트: 36,000초 후 `STOP`
 
-Run from the repository root:
+Network, subnetwork, 내부 주소와 지속 호스트에는 `prevent_destroy`가 적용된다.
 
-```bash
-make gcp-iac-init ENV=cloud-gcp-amd64
-make gcp-iac-import ENV=cloud-gcp-amd64
-make gcp-iac-plan ENV=cloud-gcp-amd64
-```
-
-The OpenStack Floating IP route was deliberately disabled during adoption. The
-controller veth/NAT host gate, OpenStack bootstrap and image metadata checks
-passed on 2026-08-21, so `openstack.auto.tfvars` now keeps the route enabled.
-Confirm that the full plan is empty after any route change:
+## 초기 채택
 
 ```bash
-make gcp-iac-plan ENV=cloud-gcp-amd64
+make gcp-iac-init
+make gcp-iac-validate
+make gcp-iac-import
+make gcp-iac-plan
+make gcp-iac-show-plan
 ```
 
-The Kubernetes node image is built on a disposable `n2-standard-4` instance
-with an 80 GiB disk and nested KVM. Its plan is checked separately so creation
-may add only `google_compute_instance.image_builder`, and deletion may remove
-only that instance. The builder inherits the same 36,000-second automatic STOP
-contract as the persistent OpenStack hosts.
+정상 결과는 `No changes`다. replacement 또는 destroy가 표시되면 apply하지 않는다.
+state, backup과 saved plan은 Git에서 제외된다.
+
+## 일회성 Kubernetes image builder
 
 ```bash
-make kubernetes-image-builder-create ENV=cloud-gcp-amd64
-make kubernetes-image-build ENV=cloud-gcp-amd64
-make kubernetes-image-upload ENV=cloud-gcp-amd64
-make kubernetes-image-verify ENV=cloud-gcp-amd64
-make kubernetes-image-builder-destroy \
-  ENV=cloud-gcp-amd64 CONFIRM=cloud-gcp-amd64
+make kubernetes-image-builder-create
+make kubernetes-image-build
+make kubernetes-image-upload
+make kubernetes-image-verify
+make kubernetes-image-builder-destroy CONFIRM=cloud-gcp-amd64
 ```
 
-The QCOW2 image, checksum and build metadata remain under
-`.state/cloud-gcp-amd64/images` after the builder is deleted. A normal full
-plan must return to `No changes` after deletion.
+builder 생성/삭제 validator는 `osk8s-image-builder` 한 대 이외의 plan을 거부한다.
+빌더도 36,000초 자동 STOP 계약을 사용한다.
 
-The management cluster runs on the Kolla controller. Kolla's Docker daemon
-keeps `bridge=none`, `ip-forward=false` and `iptables=false`; the integration
-does not modify or restart that daemon. A dedicated systemd unit creates the
-standard Docker `kind` network with CIDR `172.30.0.0/24`, bridge
-`br-kind-mgmt`, and explicit forwarding and masquerade rules.
+## Controller management network
 
 ```bash
-make gcp-controller-management-prepare ENV=cloud-gcp-amd64
-make management-cluster-create ENV=cloud-gcp-amd64
-make management-cluster-verify ENV=cloud-gcp-amd64
-make capi-providers-install ENV=cloud-gcp-amd64
-make capi-providers-verify ENV=cloud-gcp-amd64
-make capi-credentials-verify ENV=cloud-gcp-amd64
+make gcp-controller-management-prepare
+make management-cluster-create
+make management-cluster-verify
 ```
 
-The kind API binds to `10.20.0.10:16443`. Firewall access is limited to the IAP
-TCP-forwarding range and the `osk8s-controller-management` target tag. Local
-kubectl traffic uses an IAP tunnel on `127.0.0.1:16443`; there is no public
-Kubernetes API firewall rule. The existing controller retains its
-36,000-second automatic STOP contract.
+controller에는 management API용 network tag와 IAP TCP 16443 접근만 허용한다.
+public Kubernetes API firewall은 생성하지 않는다. kind network와 NAT lifecycle은
+controller의 systemd unit이 담당한다.
 
-Provider, workload and autoscaler commands re-establish the IAP tunnel inside
-their own process lifetime. They do not depend on a background tunnel left by
-an earlier Make invocation. The verified provider set is CAPI/CABPK/KCP
-v1.13.4, CAPO v0.14.6 and ORC v2.4.0; an in-cluster probe also verified the
-OpenStack application credential against Keystone.
-
-The workload kubeconfig connects to `127.0.0.1:16444` through an IAP SSH local
-forward on the controller while retaining the real OpenStack Floating IP as
-the TLS server name. No public workload API firewall or macOS route is needed.
+## 안전 확인
 
 ```bash
-make gcp-openstack-recover ENV=cloud-gcp-amd64
-make workload-cluster-create ENV=cloud-gcp-amd64
-make workload-cluster-verify ENV=cloud-gcp-amd64 WORKERS=1
+make gcp-iac-plan
+make gcp-status
 ```
 
-The runtime recovery gate waits for Keystone, Placement, both nova-compute
-services and both hypervisors. If Placement started before its database and
-remained unhealthy, only `placement_api` is restarted after database readiness
-and `nova_scheduler` is refreshed. The verified baseline has one v1.35.7 AMD64
-control plane on compute02 and one worker on compute01, both Ready with Calico,
-API and DNS probes passing.
+검토 항목은 다음과 같다.
 
-To prove the complete container path, preserve the OpenStack verification
-server, probe both Keystone and its Floating IP service from a kind Pod, then
-remove only the temporary verification resources:
-
-```bash
-KEEP_TEST_RESOURCES=YES make openstack-verify ENV=cloud-gcp-amd64
-make management-cluster-verify ENV=cloud-gcp-amd64
-make openstack-verification-cleanup ENV=cloud-gcp-amd64
-```
-
-`management-cluster-destroy CONFIRM=cloud-gcp-amd64` deletes only the kind
-cluster, repository-local kubeconfig and dedicated bridge/NAT. The controller
-and OpenStack resources remain protected.
-
-Never apply a plan containing instance replacement or disk destruction. The
-configuration also uses `prevent_destroy` for the imported network, addresses
-and hosts as a final safety boundary.
+- 전체 plan `No changes`
+- controller와 compute 두 대의 정확한 이름·내부 IP
+- `canIpForward=true`
+- compute nested virtualization
+- `maxRunDuration=36000s`, termination action `STOP`
+- Floating IP route의 destination과 controller next hop

@@ -30,7 +30,17 @@ trap cleanup EXIT
 
 COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata \
   -C "${PROJECT_ROOT}" -czf "${archive}" \
-  ansible config kolla openstack scripts
+  ansible/ansible.cfg \
+  ansible/files \
+  ansible/inventory/cloud-gcp-amd64/generated-hosts.ini \
+  ansible/playbooks \
+  ansible/requirements.yml \
+  ansible/templates \
+  config/clusterctl.yaml \
+  config/environments/cloud-gcp-amd64.env \
+  kolla/globals-cloud-gcp-amd64.yml.tpl \
+  openstack \
+  scripts
 copy_to "${archive}" "${CONTROLLER_NAME}" "${remote_archive}"
 run_on "${CONTROLLER_NAME}" env \
   KOLLA_DEPLOY_DIR="${KOLLA_DEPLOY_DIR}" \
