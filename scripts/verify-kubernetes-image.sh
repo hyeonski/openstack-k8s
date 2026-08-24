@@ -5,11 +5,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
-if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-  require_command gcloud
-else
-  require_command limactl
-fi
+require_command gcloud
 instance_running "${CONTROLLER_NAME}" || die "controller is not running"
 for compute_name in "${COMPUTE_NAMES[@]}"; do
   instance_running "${compute_name}" || die "${compute_name} is not running"

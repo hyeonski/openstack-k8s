@@ -5,11 +5,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
-if [[ "${HOST_PROVIDER}" == "gcp" ]]; then
-  require_command gcloud
-else
-  require_command limactl
-fi
+require_command gcloud
 instance_running "${CONTROLLER_NAME}" || die "controller is not running"
 for compute_name in "${COMPUTE_NAMES[@]}"; do
   instance_running "${compute_name}" || die "${compute_name} is not running"
@@ -56,7 +52,6 @@ chmod 600 "${GENERATED_DIR}/generated-hosts.ini"
 
 cat > "${GENERATED_DIR}/addresses.env" <<EOF
 CONTROLLER_MANAGEMENT_IP="${controller_ip}"
-COMPUTE_MANAGEMENT_IP="${compute_ips[0]}"
 COMPUTE_MANAGEMENT_IPS="${compute_ips[*]}"
 COMPUTE_INVENTORY_SPECS="${compute_specs[*]}"
 EOF

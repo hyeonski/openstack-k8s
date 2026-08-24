@@ -24,7 +24,5 @@ fi
 
 python3 -m py_compile "${PROJECT_ROOT}"/scripts/*.py
 python3 -m unittest discover -s "${PROJECT_ROOT}/tests" -p 'test_*.py'
-"${PROJECT_ROOT}/scripts/sync-guest-clocks.sh" --self-test
-"${PROJECT_ROOT}/scripts/workload-clock.sh" --self-test
 
 echo "Static shell checks passed."

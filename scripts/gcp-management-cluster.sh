@@ -5,7 +5,6 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
-[[ "${HOST_PROVIDER}" == "gcp" ]] || die "GCP management cluster requires a GCP profile"
 require_command gcloud
 require_command kubectl
 require_command curl
@@ -240,7 +239,7 @@ verify_resource_headroom() {
 
 verify_cluster() {
   instance_running "${runtime_host}" ||
-    die "management runtime host is stopped; run make gcp-start ENV=${ENV}"
+    die "management runtime host is stopped; run make gcp-start"
   cluster_exists || die "kind cluster not found on ${runtime_host}: ${MANAGEMENT_CLUSTER_NAME}"
   run_on "${runtime_host}" sudo systemctl is-active --quiet \
     openstack-k8s-kind-network.service
@@ -309,7 +308,7 @@ verify_cluster() {
 case "${action}" in
   tunnel)
     instance_running "${runtime_host}" ||
-      die "management runtime host is stopped; run make gcp-start ENV=${ENV}"
+      die "management runtime host is stopped; run make gcp-start"
     cluster_exists ||
       die "kind cluster not found on ${runtime_host}: ${MANAGEMENT_CLUSTER_NAME}"
     [[ -f "${kubeconfig}" ]] || fetch_kubeconfig

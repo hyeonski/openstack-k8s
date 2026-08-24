@@ -5,8 +5,6 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
-[[ "${HOST_PROVIDER}" == "gcp" ]] ||
-  die "GCP workload API tunnel requires a GCP profile"
 require_command gcloud
 require_command kubectl
 require_command nc

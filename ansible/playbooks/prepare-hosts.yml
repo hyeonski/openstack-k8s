@@ -11,11 +11,10 @@
         that:
           - ansible_distribution == "Ubuntu"
           - ansible_distribution_version is version("24.04", ">=")
-          - ansible_architecture in lookup('env', 'EXPECTED_ANSIBLE_ARCHITECTURES').split(',')
+          - ansible_architecture == "x86_64"
         fail_msg: >-
           {{ lookup('env', 'ENVIRONMENT_NAME') }} requires Ubuntu 24.04 or
-          newer on one of
-          {{ lookup('env', 'EXPECTED_ANSIBLE_ARCHITECTURES') }}; got
+          newer on x86_64; got
           {{ ansible_distribution }} {{ ansible_distribution_version }}
           {{ ansible_architecture }}
 
@@ -120,14 +119,11 @@
   become: true
   gather_facts: true
   tasks:
-    - name: Install architecture-specific KVM verification packages
+    - name: Install x86 KVM verification packages
       ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 3600
-        name: >-
-          {{ ['qemu-system-arm', 'qemu-efi-aarch64']
-             if ansible_architecture in ['aarch64', 'arm64']
-             else ['qemu-system-x86'] }}
+        name: qemu-system-x86
         state: present
 
     - name: Stop host libvirt units before using containerized libvirt
@@ -163,7 +159,7 @@
           - kvm_device.stat.exists
           - kvm_device.stat.ischr | default(false)
         fail_msg: >-
-          /dev/kvm is unavailable in the Lima compute VM. Per the selected
+          /dev/kvm is unavailable in the GCP compute host. Per the selected
           policy, deployment stops here instead of falling back to QEMU TCG.
 
     - name: Install nested KVM boot verifier

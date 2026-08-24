@@ -29,22 +29,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-case "$(uname -m)" in
-  aarch64|arm64)
-    qemu_binary="qemu-system-aarch64"
-    machine_args=( -machine virt,accel=kvm -cpu host )
-    console="ttyAMA0"
-    ;;
-  x86_64)
-    qemu_binary="qemu-system-x86_64"
-    machine_args=( -machine accel=kvm -cpu host )
-    console="ttyS0"
-    ;;
-  *)
-    echo "unsupported KVM verification architecture: $(uname -m)" >&2
-    exit 1
-    ;;
-esac
+[[ "$(uname -m)" == "x86_64" ]] || {
+  echo "GCP KVM verification requires x86_64; found $(uname -m)" >&2
+  exit 1
+}
+qemu_binary="qemu-system-x86_64"
+machine_args=( -machine accel=kvm -cpu host )
+console="ttyS0"
 
 set +e
 timeout 45 "${qemu_binary}" \

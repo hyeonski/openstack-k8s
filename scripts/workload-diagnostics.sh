@@ -139,6 +139,7 @@ capture_openstack() {
 }
 
 capture_host_health() {
+  local compute_name
   run_on "${CONTROLLER_NAME}" sh -lc '
     date -u
     timedatectl show -p NTPSynchronized --value
@@ -147,30 +148,32 @@ capture_host_health() {
     uptime
   ' >"${status_dir}/controller-health.txt" 2>&1 || true
 
-  run_on "${COMPUTE_NAME}" bash -lc '
-    date -u
-    timedatectl show -p NTPSynchronized --value
-    free -h
-    swapon --show
-    uptime
-    echo "memory pressure"
-    cat /proc/pressure/memory
-    echo "cpu pressure"
-    cat /proc/pressure/cpu
-    echo "largest processes"
-    ps -eo pid,rss,pcpu,comm --sort=-rss | head -20
-    echo "kernel OOM records"
-    sudo journalctl -k -b --no-pager |
-      grep -Ei "out of memory|oom-kill|killed process" | tail -100 || true
-    echo "container memory"
-    sudo docker stats --no-stream --format \
-      "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}" || true
-    echo "libvirt domains"
-    sudo docker exec nova_libvirt virsh list --all || true
-    sudo docker exec nova_libvirt virsh domstats --balloon --vcpu --state || true
-    echo "nova-compute tail"
-    sudo tail -n 500 /var/log/kolla/nova/nova-compute.log || true
-  ' >"${status_dir}/compute-health.txt" 2>&1 || true
+  for compute_name in "${COMPUTE_NAMES[@]}"; do
+    run_on "${compute_name}" bash -lc '
+      date -u
+      timedatectl show -p NTPSynchronized --value
+      free -h
+      swapon --show
+      uptime
+      echo "memory pressure"
+      cat /proc/pressure/memory
+      echo "cpu pressure"
+      cat /proc/pressure/cpu
+      echo "largest processes"
+      ps -eo pid,rss,pcpu,comm --sort=-rss | head -20
+      echo "kernel OOM records"
+      sudo journalctl -k -b --no-pager |
+        grep -Ei "out of memory|oom-kill|killed process" | tail -100 || true
+      echo "container memory"
+      sudo docker stats --no-stream --format \
+        "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}" || true
+      echo "libvirt domains"
+      sudo docker exec nova_libvirt virsh list --all || true
+      sudo docker exec nova_libvirt virsh domstats --balloon --vcpu --state || true
+      echo "nova-compute tail"
+      sudo tail -n 500 /var/log/kolla/nova/nova-compute.log || true
+    ' >"${status_dir}/${compute_name}-health.txt" 2>&1 || true
+  done
 }
 
 capture_guest_bootstrap() {
