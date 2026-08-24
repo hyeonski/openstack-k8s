@@ -40,7 +40,8 @@
 
 ## 증설
 
-- MachineDeployment 수동 1→2→1 통과
+- MachineDeployment 수동 2→1→2→1 통과
+- 수동 스케일 전 Cluster Autoscaler 중지와 이전 테스트 부하 정리
 - Cluster Autoscaler v1.35.0, node group min/max `1:2`
 - CPU request 기반 `Insufficient cpu` Pending Pod 생성
 - MachineDeployment와 worker Node 1→2
@@ -49,10 +50,18 @@
 
 ## 현재 리팩터링 재검증
 
-GCP-only 전환 후 아래 항목을 다시 실행하고 이 절을 갱신한다.
+2026-08-24 GCP-only 전환 후 다음 검증을 다시 통과했다.
 
-- IaC validate/plan
-- host readiness와 controller sync
-- OpenStack runtime
-- management/CAPI/CAPO
-- workload 수동 증설 및 Autoscaler E2E
+- OpenTofu configuration validate 통과, refresh plan `No changes`
+- controller와 compute 2대 `RUNNING`, host readiness 통과
+- controller 입력 동기화 후 배포 트리에 로컬 VM/ARM64 잔재 없음
+- Keystone와 Placement ready, nova-compute와 hypervisor 각각 2개
+- kind management cluster, CAPI/CAPO/ORC, OpenStack credential 통과
+- workload 수동 2→1→2→1, 각 단계의 CAPI/Nova/노드/CNI/DNS 통과
+- Autoscaler image/arguments/RBAC/min-max 검증과 Pending Pod 기반 1→2 통과
+
+재검증 도중 이전 Autoscaler 테스트 부하가 남아 있으면 수동 2→1 축소 직후
+Autoscaler가 다시 2대로 올리는 상태 충돌을 확인했다. 수동 스케일 진입점이
+Autoscaler deployment를 0으로 내리고 이전 test deployment와 targeted probe를
+정리하도록 보완했으며, 이후 전체 수명주기를 재검증했다. Autoscaler 설치
+단계는 선언된 manifest를 다시 적용해 replica를 1로 복원한다.

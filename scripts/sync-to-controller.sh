@@ -29,6 +29,7 @@ cleanup() {
 trap cleanup EXIT
 
 COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata \
+  --exclude='scripts/__pycache__' \
   -C "${PROJECT_ROOT}" -czf "${archive}" \
   ansible/ansible.cfg \
   ansible/files \
@@ -59,9 +60,13 @@ run_on "${CONTROLLER_NAME}" env \
         -m 0755 "${KOLLA_DEPLOY_DIR}"
       for component in ansible config kolla openstack scripts; do
         install -d -m 0755 "${KOLLA_DEPLOY_DIR}/${component}"
-        rsync -a --delete "${staging}/${component}/" \
+        rsync -a --delete --delete-excluded --exclude '__pycache__/' \
+          "${staging}/${component}/" \
           "${KOLLA_DEPLOY_DIR}/${component}/"
       done
+      rm -f \
+        "${KOLLA_DEPLOY_DIR}/cache/images/cirros-aarch64.img" \
+        "${KOLLA_DEPLOY_DIR}/cache/images/ubuntu-24.04-arm64.img"
     '
 
 "${PROJECT_ROOT}/scripts/setup-project-ssh.sh"

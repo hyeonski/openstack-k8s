@@ -441,10 +441,42 @@ create_cluster() {
   verify_cluster 1
 }
 
+quiesce_autoscaler_for_manual_scaling() {
+  local autoscaler_pods
+
+  ensure_workload_api_access
+  if kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${CLUSTER_AUTOSCALER_NAMESPACE}" get deployment \
+      cluster-autoscaler >/dev/null 2>&1; then
+    log "Suspending Cluster Autoscaler during manual worker scaling"
+    kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${CLUSTER_AUTOSCALER_NAMESPACE}" scale deployment \
+      cluster-autoscaler --replicas=0 >/dev/null
+    autoscaler_pods="$(kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${CLUSTER_AUTOSCALER_NAMESPACE}" get pods \
+      -l app.kubernetes.io/name=cluster-autoscaler -o name)"
+    if [[ -n "${autoscaler_pods}" ]]; then
+      kubectl --kubeconfig "${management_kubeconfig}" \
+        -n "${CLUSTER_AUTOSCALER_NAMESPACE}" wait --for=delete pod \
+        -l app.kubernetes.io/name=cluster-autoscaler --timeout=2m
+    fi
+  fi
+
+  log "Removing previous Autoscaler scale-up probes before manual worker scaling"
+  kubectl --kubeconfig "${workload_kubeconfig}" \
+    -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" delete deployment \
+    "${CLUSTER_AUTOSCALER_TEST_NAME}" --ignore-not-found --wait=true >/dev/null
+  kubectl --kubeconfig "${workload_kubeconfig}" \
+    -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" delete pod \
+    "${CLUSTER_AUTOSCALER_TARGETED_PROBE_NAME}" --ignore-not-found \
+    --wait=false >/dev/null
+}
+
 scale_workers_up() {
   require_management
   "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
   [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
+  quiesce_autoscaler_for_manual_scaling
 
   local available desired started finished run_dir timing_file timing_status
   run_dir="$(current_or_new_run)"
@@ -510,6 +542,7 @@ scale_workers_down() {
   require_management
   "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
   [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
+  quiesce_autoscaler_for_manual_scaling
 
   local desired available started finished run_dir timing_file
   run_dir="$(current_or_new_run)"
