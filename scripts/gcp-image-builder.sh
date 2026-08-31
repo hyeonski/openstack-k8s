@@ -24,7 +24,12 @@ ensure_state_dirs
 plan_file="${STATE_DIR}/gcp-image-builder.tfplan"
 
 run_iac() {
-  "${engine}" -chdir="${iac_dir}" "$@"
+  TF_VAR_project_id="${GCP_PROJECT_ID}" \
+    TF_VAR_environment_name="${ENV}" \
+    TF_VAR_region="${GCP_REGION}" \
+    TF_VAR_zone="${GCP_ZONE}" \
+    TF_VAR_source_image="https://www.googleapis.com/compute/v1/projects/${GCP_SOURCE_IMAGE_PROJECT}/global/images/${GCP_SOURCE_IMAGE_NAME}" \
+    "${engine}" -chdir="${iac_dir}" "$@"
 }
 
 plan_and_apply() {
@@ -33,7 +38,9 @@ plan_and_apply() {
   local status
 
   set +e
+  ensure_private_directory "$(dirname "${IAC_STATE_FILE}")"
   run_iac plan -input=false -detailed-exitcode \
+    -state="${IAC_STATE_FILE}" \
     -var="enable_image_builder=${enabled}" \
     -var="image_builder_name=${IMAGE_BUILDER_NAME}" \
     -var="image_builder_machine_type=${IMAGE_BUILDER_MACHINE_TYPE}" \
@@ -50,7 +57,7 @@ plan_and_apply() {
       run_iac show -json "${plan_file}" |
         python3 "${PROJECT_ROOT}/scripts/validate-image-builder-plan.py" \
           "${expected_action}"
-      run_iac apply -input=false "${plan_file}"
+      run_iac apply -input=false -state="${IAC_STATE_FILE}" "${plan_file}"
       ;;
     *)
       exit "${status}"

@@ -10,12 +10,42 @@ management_kubeconfig="${STATE_DIR}/kubeconfigs/management.yaml"
 clusterctl_dir="${STATE_DIR}/bin"
 clusterctl_bin="${clusterctl_dir}/clusterctl"
 clusterctl_config="${PROJECT_ROOT}/config/clusterctl.yaml"
-clusterctl_url="https://github.com/kubernetes-sigs/cluster-api/releases/download/${CLUSTER_API_VERSION}/clusterctl-darwin-arm64"
 orc_manifest="${DOWNLOAD_DIR}/orc-${ORC_VERSION}-install.yaml"
 orc_url="https://github.com/k-orc/openstack-resource-controller/releases/download/${ORC_VERSION}/install.yaml"
 auth_probe_template="${PROJECT_ROOT}/kubernetes/capi/openstack-auth-probe.yaml.tpl"
 auth_probe_manifest="${GENERATED_DIR}/openstack-auth-probe.yaml"
 auth_probe_name="${WORKLOAD_CLUSTER_NAME}-openstack-auth-probe"
+
+clusterctl_platform() {
+  local os architecture
+  case "$(uname -s)" in
+    Darwin) os="darwin" ;;
+    Linux) os="linux" ;;
+    *) die "unsupported clusterctl operating system: $(uname -s)" ;;
+  esac
+  case "$(uname -m)" in
+    arm64|aarch64) architecture="arm64" ;;
+    x86_64|amd64) architecture="amd64" ;;
+    *) die "unsupported clusterctl architecture: $(uname -m)" ;;
+  esac
+  printf '%s-%s\n' "${os}" "${architecture}"
+}
+
+clusterctl_checksum() {
+  local platform="$1"
+  local variable_name
+  case "${platform}" in
+    darwin-arm64) variable_name="CLUSTERCTL_DARWIN_ARM64_SHA256" ;;
+    darwin-amd64) variable_name="CLUSTERCTL_DARWIN_AMD64_SHA256" ;;
+    linux-amd64) variable_name="CLUSTERCTL_LINUX_AMD64_SHA256" ;;
+    linux-arm64) variable_name="CLUSTERCTL_LINUX_ARM64_SHA256" ;;
+    *) die "unsupported clusterctl platform: ${platform}" ;;
+  esac
+  local checksum="${!variable_name:-}"
+  [[ "${checksum}" =~ ^[0-9a-f]{64}$ ]] ||
+    die "missing pinned checksum ${variable_name} for clusterctl ${platform}"
+  printf '%s\n' "${checksum}"
+}
 
 ensure_pinned_download() {
   local url="$1"
@@ -39,15 +69,19 @@ ensure_pinned_download() {
 }
 
 ensure_clusterctl() {
+  local platform checksum url
+  platform="$(clusterctl_platform)"
+  checksum="$(clusterctl_checksum "${platform}")"
+  url="https://github.com/kubernetes-sigs/cluster-api/releases/download/${CLUSTER_API_VERSION}/clusterctl-${platform}"
   mkdir_private "${clusterctl_dir}"
   if [[ -x "${clusterctl_bin}" ]] &&
-    printf '%s  %s\n' "${CLUSTERCTL_DARWIN_ARM64_SHA256}" "${clusterctl_bin}" |
+    printf '%s  %s\n' "${checksum}" "${clusterctl_bin}" |
       shasum -a 256 -c - >/dev/null 2>&1; then
     return
   fi
 
   ensure_pinned_download \
-    "${clusterctl_url}" "${clusterctl_bin}" "${CLUSTERCTL_DARWIN_ARM64_SHA256}"
+    "${url}" "${clusterctl_bin}" "${checksum}"
   chmod 700 "${clusterctl_bin}"
 }
 

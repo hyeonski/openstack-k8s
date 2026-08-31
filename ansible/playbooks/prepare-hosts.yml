@@ -23,15 +23,56 @@
         update_cache: true
         cache_valid_time: 3600
         name:
+          - ca-certificates
           - chrony
+          - cloud-guest-utils
           - curl
+          - file
+          - git
           - iptables
           - jq
+          - openssh-client
           - python3
+          - python3-apt
           - python3-docker
           - python3-libvirt
+          - python3-venv
           - rsync
         state: present
+
+    - name: Set the declared host name
+      ansible.builtin.hostname:
+        name: "{{ node_hostname }}"
+
+    - name: Load persistent bridge modules
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/openstack-k8s.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          br_netfilter
+          overlay
+
+    - name: Load bridge modules now
+      ansible.builtin.command: "modprobe {{ item }}"
+      changed_when: false
+      loop:
+        - br_netfilter
+        - overlay
+
+    - name: Configure host kernel networking
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: true
+        sysctl_file: /etc/sysctl.d/99-openstack-k8s.conf
+      loop:
+        - { name: net.ipv4.ip_forward, value: "1" }
+        - { name: net.bridge.bridge-nf-call-iptables, value: "1" }
+        - { name: net.bridge.bridge-nf-call-ip6tables, value: "1" }
+        - { name: vm.swappiness, value: "10" }
 
     - name: Enable time synchronization
       ansible.builtin.systemd:
@@ -125,6 +166,21 @@
         cache_valid_time: 3600
         name: qemu-system-x86
         state: present
+
+    - name: Load nested KVM module
+      ansible.builtin.command: modprobe kvm_intel
+      changed_when: false
+
+    - name: Read nested KVM setting
+      ansible.builtin.slurp:
+        src: /sys/module/kvm_intel/parameters/nested
+      register: nested_kvm_setting
+
+    - name: Require nested KVM acceleration
+      ansible.builtin.assert:
+        that:
+          - (nested_kvm_setting.content | b64decode | trim) == "Y"
+        fail_msg: Nested KVM is not enabled in the GCP compute host.
 
     - name: Stop host libvirt units before using containerized libvirt
       ansible.builtin.systemd:

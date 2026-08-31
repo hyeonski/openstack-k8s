@@ -1,7 +1,13 @@
 variable "project_id" {
-  description = "Existing GCP project containing the OpenStack lab."
+  description = "Existing billed GCP project that will contain the OpenStack lab."
   type        = string
   default     = "openstack-k8s"
+}
+
+variable "environment_name" {
+  description = "Stable environment label used to scope lifecycle operations."
+  type        = string
+  default     = "cloud-gcp-amd64"
 }
 
 variable "region" {
@@ -17,7 +23,7 @@ variable "zone" {
 }
 
 variable "source_image" {
-  description = "Exact Ubuntu image used by the imported hosts."
+  description = "Exact Ubuntu image used by provisioned or adopted hosts."
   type        = string
   default     = "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/ubuntu-minimal-2404-noble-amd64-v20260817"
 }

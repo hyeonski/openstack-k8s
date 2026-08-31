@@ -33,7 +33,7 @@ COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata \
   -C "${PROJECT_ROOT}" -czf "${archive}" \
   ansible/ansible.cfg \
   ansible/files \
-  ansible/inventory/cloud-gcp-amd64/generated-hosts.ini \
+  "ansible/inventory/${ENV}/generated-hosts.ini" \
   ansible/playbooks \
   ansible/requirements.yml \
   ansible/templates \

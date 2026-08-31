@@ -74,6 +74,51 @@ make lint
 
 ## GCP 인프라 계약
 
+### 빈 프로젝트에서 시작
+
+Google 계정 인증과 Billing이 연결된 빈 project 하나를 준비한 뒤 환경 override를
+지정한다. project 생성과 Billing 연결은 조직마다 권한과 정책이 달라 자동화의
+수동 경계로 둔다.
+
+```bash
+cp config/environments/local.env.example /tmp/openstack-k8s.env
+# /tmp/openstack-k8s.env의 project와 사용자 값을 수정
+export ENV_OVERRIDE_FILE=/tmp/openstack-k8s.env
+
+make bootstrap-preflight
+make gcp-bootstrap CONFIRM=cloud-gcp-amd64-greenfield
+make gcp-iac-init
+make gcp-iac-validate
+make gcp-foundation-plan
+make gcp-foundation-show-plan
+make gcp-foundation-apply CONFIRM=cloud-gcp-amd64-greenfield
+```
+
+foundation plan validator는 지속 GCP foundation 리소스의 create만 허용하고 update,
+replace, delete와 image builder/Floating IP route 변경은 거부한다. 새 환경은
+`.state/<environment>/tofu/terraform.tfstate`를 사용하며 기존 채택 환경의 state와
+분리된다.
+
+호스트 외부 네트워크와 OpenStack bootstrap을 통과한 뒤에만 route를 적용한다.
+
+```bash
+make gcp-floating-ip-route-plan
+make gcp-floating-ip-route-show-plan
+make gcp-floating-ip-route-apply CONFIRM=cloud-gcp-amd64-greenfield
+```
+
+전체 greenfield 경로는 동일한 확인값을 요구한다.
+
+```bash
+make lab-up CONFIRM=cloud-gcp-amd64-greenfield
+```
+
+`lab-up`은 성공한 선언형 단계를 안전하게 재실행하며, 비용이 큰 Kubernetes QCOW2는
+checksum이 일치하는 기존 산출물을 재사용한다. 실패 시 자동 삭제하지 않고 상태와
+로그를 보존한다.
+
+### 기존 리소스 채택
+
 기존 리소스를 처음 state에 채택할 때만 import를 사용한다.
 
 ```bash
@@ -86,6 +131,9 @@ make gcp-iac-show-plan
 평상시에는 `gcp-iac-plan`이 `No changes`여야 한다. instance 또는 disk 교체,
 예상하지 않은 삭제가 표시되면 apply하지 않는다. network, subnet, 내부 주소와
 OpenStack 호스트에는 `prevent_destroy`가 적용된다.
+
+Ansible inventory의 관리 IP는 환경 파일이나 별도 `gcloud` 조회가 아니라
+OpenTofu의 `host_internal_ips` output에서 생성한다.
 
 ## 호스트 운영과 OpenStack
 

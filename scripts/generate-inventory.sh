@@ -6,19 +6,36 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
 require_command gcloud
+require_command python3
 instance_running "${CONTROLLER_NAME}" || die "controller is not running"
 for compute_name in "${COMPUTE_NAMES[@]}"; do
   instance_running "${compute_name}" || die "${compute_name} is not running"
 done
 ensure_state_dirs
 
-controller_ip="$(controller_ipv4)"
-[[ -n "${controller_ip}" ]] || die "unable to discover controller management IP"
+if [[ -n "${IAC_ENGINE:-}" ]]; then
+  iac_engine="${IAC_ENGINE}"
+elif command -v tofu >/dev/null 2>&1; then
+  iac_engine="tofu"
+elif command -v terraform >/dev/null 2>&1; then
+  iac_engine="terraform"
+else
+  die "OpenTofu or Terraform is required"
+fi
 
-compute_ips=()
-while IFS= read -r compute_ip; do
-  compute_ips+=("${compute_ip}")
-done < <(compute_ipv4s)
+host_keys=(controller "${COMPUTE_INVENTORY_NAMES[@]}")
+host_ips=()
+while IFS= read -r host_ip; do
+  host_ips+=("${host_ip}")
+done < <(
+  "${iac_engine}" -chdir="${PROJECT_ROOT}/infra/gcp" \
+    output -state="${IAC_STATE_FILE}" -json host_internal_ips |
+    python3 "${PROJECT_ROOT}/scripts/parse-iac-host-ips.py" "${host_keys[@]}"
+)
+[[ "${#host_ips[@]}" -eq "${#host_keys[@]}" ]] ||
+  die "OpenTofu host outputs are missing; apply or import the GCP foundation first"
+controller_ip="${host_ips[0]}"
+compute_ips=("${host_ips[@]:1}")
 [[ "${#compute_ips[@]}" -eq "${#COMPUTE_NAMES[@]}" ]] ||
   die "compute name and management IP counts differ"
 [[ "${#COMPUTE_INVENTORY_NAMES[@]}" -eq "${#COMPUTE_NAMES[@]}" ]] ||

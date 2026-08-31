@@ -6,10 +6,12 @@ override ENV := cloud-gcp-amd64
 export PROJECT_ROOT := $(CURDIR)
 export ENV
 
-.PHONY: help preflight secrets-check inventory host-prepare kolla-sync openstack-precheck \
-	gcp-iac-init gcp-iac-validate gcp-iac-import gcp-iac-plan gcp-iac-show-plan \
+.PHONY: help bootstrap-preflight preflight secrets-check inventory host-prepare kolla-sync openstack-precheck \
+	gcp-bootstrap gcp-iac-init gcp-iac-validate gcp-iac-import gcp-iac-plan gcp-iac-show-plan \
+	gcp-iac-apply gcp-foundation-plan gcp-foundation-show-plan gcp-foundation-apply \
+	gcp-floating-ip-route-plan gcp-floating-ip-route-show-plan gcp-floating-ip-route-apply \
 	gcp-status gcp-start gcp-stop gcp-host-verify gcp-deployment-key-setup \
-	gcp-sync-inputs gcp-controller-management-prepare \
+	gcp-wait-ssh gcp-sync-inputs gcp-controller-management-prepare lab-up \
 	openstack-pull openstack-deploy openstack-validate \
 	openstack-post-deploy openstack-bootstrap openstack-verify openstack-verification-cleanup \
 	kubernetes-image-builder-create kubernetes-image-builder-destroy \
@@ -29,7 +31,8 @@ help:
 	@echo "Usage: make <target>"
 	@echo
 	@echo "GCP host lifecycle:"
-	@echo "  preflight              Read-only host and configuration checks"
+	@echo "  bootstrap-preflight    Check auth and local tools without requiring infrastructure"
+	@echo "  preflight              Read-only checks for an existing GCP foundation"
 	@echo "  secrets-check          Validate local secret permissions and Git ignores"
 	@echo "  status                 Show GCP instance and project state"
 	@echo "  gcp-status             Show exact GCP host state and runtime limit"
@@ -40,12 +43,18 @@ help:
 	@echo "  gcp-sync-inputs        Sync deployment code without installing Kolla"
 	@echo "  gcp-controller-management-prepare Move the private kind API gate to the controller"
 	@echo
-	@echo "GCP infrastructure adoption:"
+	@echo "GCP infrastructure:"
+	@echo "  gcp-bootstrap          Enable required APIs in an existing billed project"
 	@echo "  gcp-iac-init           Initialize OpenTofu/Terraform providers"
 	@echo "  gcp-iac-validate       Validate the GCP declaration"
 	@echo "  gcp-iac-import         Import existing resources without changing GCP"
 	@echo "  gcp-iac-plan           Save and classify the adoption plan"
 	@echo "  gcp-iac-show-plan      Display the saved adoption plan"
+	@echo "  gcp-foundation-plan    Plan only safe greenfield foundation creates"
+	@echo "  gcp-foundation-apply   Apply the saved foundation plan (CONFIRM=$(ENV))"
+	@echo "  gcp-floating-ip-route-plan  Plan the post-host Floating IP route"
+	@echo "  gcp-floating-ip-route-apply Apply the isolated route (CONFIRM=$(ENV))"
+	@echo "  lab-up                 Deploy the full testbed (CONFIRM=$(ENV))"
 	@echo
 	@echo "OpenStack deployment:"
 	@echo "  inventory              Generate the current Ansible/Kolla inventory"
@@ -92,8 +101,14 @@ help:
 	@echo "Development:"
 	@echo "  lint                    Static checks that do not mutate the host"
 
+bootstrap-preflight:
+	@scripts/gcp-bootstrap-preflight.sh
+
 preflight:
 	@scripts/preflight.sh
+
+gcp-bootstrap:
+	@scripts/gcp-project-bootstrap.sh "$(CONFIRM)"
 
 gcp-iac-init:
 	@scripts/gcp-iac.sh init
@@ -110,6 +125,26 @@ gcp-iac-plan:
 gcp-iac-show-plan:
 	@scripts/gcp-iac.sh show-plan
 
+gcp-foundation-plan:
+	@scripts/gcp-iac.sh foundation-plan
+
+gcp-foundation-show-plan:
+	@scripts/gcp-iac.sh foundation-show-plan
+
+gcp-foundation-apply:
+	@scripts/gcp-iac.sh foundation-apply "$(CONFIRM)"
+
+gcp-iac-apply: gcp-foundation-apply
+
+gcp-floating-ip-route-plan:
+	@scripts/gcp-iac.sh route-plan
+
+gcp-floating-ip-route-show-plan:
+	@scripts/gcp-iac.sh route-show-plan
+
+gcp-floating-ip-route-apply:
+	@scripts/gcp-iac.sh route-apply "$(CONFIRM)"
+
 gcp-status:
 	@scripts/gcp-hosts.sh status
 
@@ -122,6 +157,9 @@ gcp-stop:
 gcp-host-verify:
 	@scripts/gcp-hosts.sh verify
 	@scripts/gcp-openstack-recover.sh
+
+gcp-wait-ssh:
+	@scripts/gcp-wait-ssh.sh
 
 gcp-openstack-recover:
 	@scripts/gcp-openstack-recover.sh
@@ -142,9 +180,7 @@ inventory:
 	@scripts/generate-inventory.sh
 
 host-prepare: kolla-sync
-	@scripts/run-controller.sh ansible-playbook \
-		-i /opt/openstack-k8s/ansible/inventory/$(ENV)/generated-hosts.ini \
-		/opt/openstack-k8s/ansible/playbooks/prepare-hosts.yml
+	@scripts/run-host-prepare.sh
 
 kolla-sync: inventory
 	@scripts/sync-to-controller.sh
@@ -240,6 +276,9 @@ cluster-autoscaler-test:
 
 cluster-autoscaler-diagnostics:
 	@scripts/cluster-autoscaler.sh diagnostics
+
+lab-up:
+	@scripts/lab-up.sh "$(CONFIRM)"
 
 status:
 	@scripts/status.sh

@@ -16,7 +16,7 @@ locals {
         enable-osconfig = "TRUE"
       }
       labels = {
-        env                   = "cloud-gcp-amd64"
+        env                   = var.environment_name
         goog-ops-agent-policy = "v2-template-1-7-0"
         role                  = "controller"
       }
@@ -32,7 +32,7 @@ locals {
       key_revocation_action_type = null
       metadata                   = {}
       labels = {
-        env  = "cloud-gcp-amd64"
+        env  = var.environment_name
         role = "compute"
       }
     }
@@ -47,7 +47,7 @@ locals {
       key_revocation_action_type = null
       metadata                   = {}
       labels = {
-        env  = "cloud-gcp-amd64"
+        env  = var.environment_name
         role = "compute"
       }
     }
@@ -170,10 +170,9 @@ resource "google_compute_instance" "hosts" {
     mode        = "READ_WRITE"
 
     initialize_params {
-      image             = var.source_image
-      size              = each.value.disk_size_gb
-      type              = "pd-balanced"
-      resource_policies = each.key == "controller" ? [google_compute_resource_policy.daily_snapshots.self_link] : []
+      image = var.source_image
+      size  = each.value.disk_size_gb
+      type  = "pd-balanced"
     }
   }
 
@@ -294,7 +293,7 @@ resource "google_compute_instance" "image_builder" {
   enable_display      = false
   tags                = ["osk8s-node"]
   labels = {
-    env  = "cloud-gcp-amd64"
+    env  = var.environment_name
     role = "image-builder"
   }
 

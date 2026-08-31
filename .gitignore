@@ -1,4 +1,5 @@
 .DS_Store
+config/environments/local.env
 
 # Local state and secrets
 .state/

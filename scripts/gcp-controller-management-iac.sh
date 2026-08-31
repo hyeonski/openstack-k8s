@@ -22,11 +22,18 @@ iac_dir="${PROJECT_ROOT}/infra/gcp"
 plan_file="${STATE_DIR}/gcp-controller-management.tfplan"
 
 run_iac() {
-  "${engine}" -chdir="${iac_dir}" "$@"
+  TF_VAR_project_id="${GCP_PROJECT_ID}" \
+    TF_VAR_environment_name="${ENV}" \
+    TF_VAR_region="${GCP_REGION}" \
+    TF_VAR_zone="${GCP_ZONE}" \
+    TF_VAR_source_image="https://www.googleapis.com/compute/v1/projects/${GCP_SOURCE_IMAGE_PROJECT}/global/images/${GCP_SOURCE_IMAGE_NAME}" \
+    "${engine}" -chdir="${iac_dir}" "$@"
 }
 
 set +e
-run_iac plan -input=false -detailed-exitcode -out="${plan_file}"
+ensure_private_directory "$(dirname "${IAC_STATE_FILE}")"
+run_iac plan -input=false -detailed-exitcode \
+  -state="${IAC_STATE_FILE}" -out="${plan_file}"
 plan_status="$?"
 set -e
 case "${plan_status}" in
@@ -36,7 +43,7 @@ case "${plan_status}" in
   2)
     run_iac show -json "${plan_file}" |
       python3 "${PROJECT_ROOT}/scripts/validate-controller-management-plan.py"
-    run_iac apply -input=false "${plan_file}"
+    run_iac apply -input=false -state="${IAC_STATE_FILE}" "${plan_file}"
     ;;
   *)
     exit "${plan_status}"

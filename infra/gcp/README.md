@@ -1,8 +1,34 @@
 # GCP infrastructure
 
-이 디렉터리는 기존 `openstack-k8s` GCP 리소스를 OpenTofu/Terraform으로 선언하고
-안전하게 채택·검증한다. 기본 경로는 기존 인프라와 선언이 일치하는지 확인하는
-것이며, plan을 검토하지 않은 apply는 허용하지 않는다.
+이 디렉터리는 `openstack-k8s` GCP foundation을 OpenTofu/Terraform으로 선언하고
+신규 생성하거나 기존 리소스를 안전하게 채택·검증한다. 저장된 plan을 검토하지
+않은 persistent foundation apply는 허용하지 않는다.
+
+## 신규 foundation
+
+Billing이 연결된 빈 project와 `ENV_OVERRIDE_FILE`을 준비한다.
+
+```bash
+make bootstrap-preflight
+make gcp-bootstrap CONFIRM=cloud-gcp-amd64-greenfield
+make gcp-iac-init
+make gcp-iac-validate
+make gcp-foundation-plan
+make gcp-foundation-show-plan
+make gcp-foundation-apply CONFIRM=cloud-gcp-amd64-greenfield
+```
+
+foundation 단계에서는 Floating IP route와 일회성 image builder를 만들지 않는다.
+controller 외부 네트워크와 OpenStack bootstrap 뒤 route 전용 plan을 적용한다.
+
+```bash
+make gcp-floating-ip-route-plan
+make gcp-floating-ip-route-show-plan
+make gcp-floating-ip-route-apply CONFIRM=cloud-gcp-amd64-greenfield
+```
+
+기존 `cloud-gcp-amd64/openstack-k8s` 환경은 이전 local state 위치를 보존하고, 새
+환경 이름 또는 project는 `.state/<environment>/tofu` 아래의 격리 state를 사용한다.
 
 ## 고정 리소스
 
@@ -16,7 +42,7 @@
 
 Network, subnetwork, 내부 주소와 지속 호스트에는 `prevent_destroy`가 적용된다.
 
-## 초기 채택
+## 기존 인프라 초기 채택
 
 ```bash
 make gcp-iac-init

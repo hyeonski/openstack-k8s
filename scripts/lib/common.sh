@@ -6,7 +6,7 @@ if [[ -z "${PROJECT_ROOT:-}" ]]; then
   PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fi
 
-CONFIG="${PROJECT_ROOT}/config/environments/cloud-gcp-amd64.env"
+CONFIG="${ENV_CONFIG:-${PROJECT_ROOT}/config/environments/cloud-gcp-amd64.env}"
 
 if [[ ! -f "${CONFIG}" ]]; then
   echo "ERROR: environment config not found: ${CONFIG}" >&2
@@ -15,6 +15,15 @@ fi
 
 # shellcheck disable=SC1090
 source "${CONFIG}"
+
+if [[ -n "${ENV_OVERRIDE_FILE:-}" ]]; then
+  if [[ ! -f "${ENV_OVERRIDE_FILE}" ]]; then
+    echo "ERROR: environment override not found: ${ENV_OVERRIDE_FILE}" >&2
+    exit 2
+  fi
+  # shellcheck disable=SC1090
+  source "${ENV_OVERRIDE_FILE}"
+fi
 
 ENV="${ENVIRONMENT_NAME}"
 
@@ -25,10 +34,28 @@ DOWNLOAD_DIR="${STATE_DIR}/downloads"
 ARTIFACT_ROOT="${PROJECT_ROOT}/artifacts"
 CURRENT_RUN_FILE="${STATE_DIR}/current-run"
 
+if [[ -z "${IAC_STATE_FILE:-}" ]]; then
+  if [[ "${ENV}" == "cloud-gcp-amd64" && "${GCP_PROJECT_ID}" == "openstack-k8s" ]]; then
+    # Preserve the imported environment's existing state location.
+    IAC_STATE_FILE="${PROJECT_ROOT}/infra/gcp/terraform.tfstate"
+  else
+    # New environment profiles use isolated local state by default.
+    IAC_STATE_FILE="${STATE_DIR}/tofu/terraform.tfstate"
+  fi
+fi
+
 mkdir_private() {
   local path="$1"
   mkdir -p "${path}"
   chmod 700 "${path}"
+}
+
+ensure_private_directory() {
+  local path="$1"
+  if [[ ! -d "${path}" ]]; then
+    mkdir -p "${path}"
+    chmod 700 "${path}"
+  fi
 }
 
 ensure_state_dirs() {

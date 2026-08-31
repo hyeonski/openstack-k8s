@@ -14,7 +14,7 @@ lifecycle_nodes=("${openstack_nodes[@]}")
 case "${action}" in
   status)
     gcloud compute instances list --project="${GCP_PROJECT_ID}" \
-      --filter="zone:(${GCP_ZONE}) AND labels.env=cloud-gcp-amd64" \
+      --filter="zone:(${GCP_ZONE}) AND labels.env=${ENV}" \
       --format='table(name,status,machineType.basename(),networkInterfaces[0].networkIP,scheduling.maxRunDuration.seconds:label=MAX_RUN_SECONDS)'
     ;;
   start)
