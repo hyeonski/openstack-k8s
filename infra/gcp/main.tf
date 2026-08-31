@@ -161,8 +161,13 @@ resource "google_compute_instance" "hosts" {
     "osk8s-controller-management",
     "osk8s-node",
   ] : ["osk8s-node"]
-  labels   = each.value.labels
-  metadata = each.value.metadata
+  labels = each.value.labels
+  metadata = merge(
+    each.value.metadata,
+    var.target_ssh_user != "" && var.deployment_ssh_public_key != "" ? {
+      ssh-keys = "${var.target_ssh_user}:${var.deployment_ssh_public_key}\n"
+    } : {}
+  )
 
   boot_disk {
     auto_delete = true
@@ -259,9 +264,6 @@ resource "google_compute_resource_policy" "daily_snapshots" {
       on_source_disk_delete = "KEEP_AUTO_SNAPSHOTS"
     }
 
-    snapshot_properties {
-      guest_flush = false
-    }
   }
 }
 

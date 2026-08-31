@@ -5,6 +5,12 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
+action="${1:-}"
+confirmation="${2:-}"
+if [[ "${action}" == "delete" && "${confirmation}" != "${ENV}" ]]; then
+  die "refusing deletion; run with CONFIRM=${ENV}"
+fi
+
 require_command gcloud
 require_command python3
 
@@ -19,16 +25,20 @@ else
 fi
 
 iac_dir="${PROJECT_ROOT}/infra/gcp"
-action="${1:-}"
 ensure_state_dirs
+ensure_deployment_ssh_key
 plan_file="${STATE_DIR}/gcp-image-builder.tfplan"
 
 run_iac() {
+  local deployment_public_key
+  deployment_public_key="$(<"$(deployment_ssh_private_key).pub")"
   TF_VAR_project_id="${GCP_PROJECT_ID}" \
     TF_VAR_environment_name="${ENV}" \
     TF_VAR_region="${GCP_REGION}" \
     TF_VAR_zone="${GCP_ZONE}" \
     TF_VAR_source_image="https://www.googleapis.com/compute/v1/projects/${GCP_SOURCE_IMAGE_PROJECT}/global/images/${GCP_SOURCE_IMAGE_NAME}" \
+    TF_VAR_target_ssh_user="${TARGET_SSH_USER}" \
+    TF_VAR_deployment_ssh_public_key="${deployment_public_key}" \
     "${engine}" -chdir="${iac_dir}" "$@"
 }
 
@@ -57,7 +67,12 @@ plan_and_apply() {
       run_iac show -json "${plan_file}" |
         python3 "${PROJECT_ROOT}/scripts/validate-image-builder-plan.py" \
           "${expected_action}"
-      run_iac apply -input=false -state="${IAC_STATE_FILE}" "${plan_file}"
+      run_iac apply -input=false -state="${IAC_STATE_FILE}" \
+        -var="enable_image_builder=${enabled}" \
+        -var="image_builder_name=${IMAGE_BUILDER_NAME}" \
+        -var="image_builder_machine_type=${IMAGE_BUILDER_MACHINE_TYPE}" \
+        -var="image_builder_disk_size_gb=${IMAGE_BUILDER_DISK_GIB}" \
+        "${plan_file}"
       ;;
     *)
       exit "${status}"
@@ -122,6 +137,6 @@ case "${action}" in
     log "Disposable GCP image builder is absent"
     ;;
   *)
-    die "usage: gcp-image-builder.sh create|delete"
+    die "usage: gcp-image-builder.sh create|delete [${ENV}]"
     ;;
 esac

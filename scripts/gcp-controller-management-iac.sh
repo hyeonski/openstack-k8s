@@ -18,15 +18,20 @@ else
 fi
 
 ensure_state_dirs
+ensure_deployment_ssh_key
 iac_dir="${PROJECT_ROOT}/infra/gcp"
 plan_file="${STATE_DIR}/gcp-controller-management.tfplan"
 
 run_iac() {
+  local deployment_public_key
+  deployment_public_key="$(<"$(deployment_ssh_private_key).pub")"
   TF_VAR_project_id="${GCP_PROJECT_ID}" \
     TF_VAR_environment_name="${ENV}" \
     TF_VAR_region="${GCP_REGION}" \
     TF_VAR_zone="${GCP_ZONE}" \
     TF_VAR_source_image="https://www.googleapis.com/compute/v1/projects/${GCP_SOURCE_IMAGE_PROJECT}/global/images/${GCP_SOURCE_IMAGE_NAME}" \
+    TF_VAR_target_ssh_user="${TARGET_SSH_USER}" \
+    TF_VAR_deployment_ssh_public_key="${deployment_public_key}" \
     "${engine}" -chdir="${iac_dir}" "$@"
 }
 

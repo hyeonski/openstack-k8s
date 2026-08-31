@@ -22,11 +22,17 @@ else
 fi
 
 run_iac() {
+  local deployment_public_key=""
+  if [[ -f "$(deployment_ssh_private_key).pub" ]]; then
+    deployment_public_key="$(<"$(deployment_ssh_private_key).pub")"
+  fi
   TF_VAR_project_id="${GCP_PROJECT_ID}" \
     TF_VAR_environment_name="${ENV}" \
     TF_VAR_region="${GCP_REGION}" \
     TF_VAR_zone="${GCP_ZONE}" \
     TF_VAR_source_image="https://www.googleapis.com/compute/v1/projects/${GCP_SOURCE_IMAGE_PROJECT}/global/images/${GCP_SOURCE_IMAGE_NAME}" \
+    TF_VAR_target_ssh_user="${TARGET_SSH_USER}" \
+    TF_VAR_deployment_ssh_public_key="${deployment_public_key}" \
     "${engine}" -chdir="${iac_dir}" "$@"
 }
 
@@ -144,6 +150,7 @@ case "${action}" in
     ;;
   foundation-plan)
     ensure_state_dirs
+    ensure_deployment_ssh_key
     require_command python3
     if plan_with_status "${foundation_plan}" \
         -var="enable_openstack_floating_ip_route=false" \
@@ -164,13 +171,18 @@ case "${action}" in
     run_iac show "${foundation_plan}"
     ;;
   foundation-apply)
+    ensure_deployment_ssh_key
     require_confirmation "${2:-}"
     [[ -f "${foundation_plan}" ]] || die "run gcp-iac foundation-plan first"
     validate_saved_plan "${foundation_plan}" validate-foundation-plan.py
-    run_iac apply -input=false -state="${IAC_STATE_FILE}" "${foundation_plan}"
+    run_iac apply -input=false -state="${IAC_STATE_FILE}" \
+      -var="enable_openstack_floating_ip_route=false" \
+      -var="enable_image_builder=false" \
+      "${foundation_plan}"
     ;;
   route-plan)
     ensure_state_dirs
+    ensure_deployment_ssh_key
     require_command python3
     if plan_with_status "${route_plan}" \
         -var="enable_openstack_floating_ip_route=true" \
@@ -191,10 +203,14 @@ case "${action}" in
     run_iac show "${route_plan}"
     ;;
   route-apply)
+    ensure_deployment_ssh_key
     require_confirmation "${2:-}"
     [[ -f "${route_plan}" ]] || die "run gcp-iac route-plan first"
     validate_saved_plan "${route_plan}" validate-floating-ip-route-plan.py
-    run_iac apply -input=false -state="${IAC_STATE_FILE}" "${route_plan}"
+    run_iac apply -input=false -state="${IAC_STATE_FILE}" \
+      -var="enable_openstack_floating_ip_route=true" \
+      -var="enable_image_builder=false" \
+      "${route_plan}"
     ;;
   foundation-ready)
     expected=(

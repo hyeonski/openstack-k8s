@@ -67,6 +67,25 @@ ensure_state_dirs() {
   mkdir -p "${ARTIFACT_ROOT}"
 }
 
+deployment_ssh_private_key() {
+  printf '%s\n' "${SECRET_DIR}/deployment_ed25519"
+}
+
+ensure_deployment_ssh_key() {
+  ensure_state_dirs
+  require_command ssh-keygen
+
+  local key
+  key="$(deployment_ssh_private_key)"
+  if [[ ! -f "${key}" ]]; then
+    [[ ! -e "${key}.pub" ]] || die "deployment SSH public key exists without its private key: ${key}.pub"
+    ssh-keygen -q -t ed25519 -N "" -C "openstack-k8s-${ENV}" -f "${key}"
+  elif [[ ! -f "${key}.pub" ]]; then
+    ssh-keygen -y -f "${key}" >"${key}.pub"
+  fi
+  chmod 600 "${key}" "${key}.pub"
+}
+
 utc_timestamp() {
   date -u +"%Y%m%dT%H%M%SZ"
 }

@@ -105,7 +105,7 @@ bootstrap-preflight:
 	@scripts/gcp-bootstrap-preflight.sh
 
 preflight:
-	@scripts/preflight.sh
+	@scripts/gcp-preflight.sh
 
 gcp-bootstrap:
 	@scripts/gcp-project-bootstrap.sh "$(CONFIRM)"
@@ -216,10 +216,10 @@ openstack-verification-cleanup:
 	@scripts/openstack-verification-cleanup.sh
 
 kubernetes-image-builder-create:
-	@scripts/kubernetes-image-builder-create.sh
+	@scripts/gcp-image-builder.sh create
 
 kubernetes-image-builder-destroy:
-	@scripts/kubernetes-image-builder-destroy.sh "$(CONFIRM)"
+	@scripts/gcp-image-builder.sh delete "$(CONFIRM)"
 
 kubernetes-image-build:
 	@scripts/build-kubernetes-image.sh
@@ -233,13 +233,13 @@ kubernetes-image-verify:
 kubernetes-image: kubernetes-image-upload kubernetes-image-verify
 
 management-cluster-create:
-	@scripts/management-cluster.sh create
+	@scripts/gcp-management-cluster.sh create
 
 management-cluster-verify:
-	@scripts/management-cluster.sh verify
+	@scripts/gcp-management-cluster.sh verify
 
 management-cluster-destroy:
-	@scripts/management-cluster.sh destroy "$(CONFIRM)"
+	@scripts/gcp-management-cluster.sh destroy "$(CONFIRM)"
 
 capi-providers-install:
 	@scripts/capi-providers.sh install

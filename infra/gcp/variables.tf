@@ -34,6 +34,18 @@ variable "max_run_duration_seconds" {
   default     = 36000
 }
 
+variable "target_ssh_user" {
+  description = "Linux account that receives the project-scoped deployment SSH key."
+  type        = string
+  default     = ""
+}
+
+variable "deployment_ssh_public_key" {
+  description = "Public half of the controller-to-compute deployment SSH key."
+  type        = string
+  default     = ""
+}
+
 variable "enable_openstack_floating_ip_route" {
   description = "Create the route only after controller external networking is deployed."
   type        = bool

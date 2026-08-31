@@ -56,6 +56,10 @@ run_on "${CONTROLLER_NAME}" env \
       }
       trap cleanup EXIT
       tar -xzf "${REMOTE_ARCHIVE}" -C "${staging}"
+      if ! command -v rsync >/dev/null 2>&1; then
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y rsync
+      fi
       sudo install -d -o "${TARGET_SSH_USER}" -g "${TARGET_SSH_USER}" \
         -m 0755 "${KOLLA_DEPLOY_DIR}"
       for component in ansible config kolla openstack scripts; do

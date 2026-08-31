@@ -15,6 +15,7 @@ cluster_manifest="${GENERATED_DIR}/${WORKLOAD_CLUSTER_NAME}.yaml"
 calico_manifest="${DOWNLOAD_DIR}/calico-${CALICO_VERSION}.yaml"
 calico_url="https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml"
 machine_deployment="${WORKLOAD_CLUSTER_NAME}-md-0"
+autoscaler_replicas_before_manual_scaling=""
 
 require_kubectl_timeout() {
   local name="$1"
@@ -448,6 +449,11 @@ quiesce_autoscaler_for_manual_scaling() {
   if kubectl --kubeconfig "${management_kubeconfig}" \
       -n "${CLUSTER_AUTOSCALER_NAMESPACE}" get deployment \
       cluster-autoscaler >/dev/null 2>&1; then
+    autoscaler_replicas_before_manual_scaling="$(kubectl \
+      --kubeconfig "${management_kubeconfig}" \
+      -n "${CLUSTER_AUTOSCALER_NAMESPACE}" get deployment \
+      cluster-autoscaler -o jsonpath='{.spec.replicas}')"
+    trap 'resume_autoscaler_after_manual_scaling || warn "failed to restore Cluster Autoscaler replica count"' EXIT
     log "Suspending Cluster Autoscaler during manual worker scaling"
     kubectl --kubeconfig "${management_kubeconfig}" \
       -n "${CLUSTER_AUTOSCALER_NAMESPACE}" scale deployment \
@@ -470,6 +476,23 @@ quiesce_autoscaler_for_manual_scaling() {
     -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" delete pod \
     "${CLUSTER_AUTOSCALER_TARGETED_PROBE_NAME}" --ignore-not-found \
     --wait=false >/dev/null
+}
+
+resume_autoscaler_after_manual_scaling() {
+  trap - EXIT
+  [[ -n "${autoscaler_replicas_before_manual_scaling}" ]] || return 0
+
+  local replicas="${autoscaler_replicas_before_manual_scaling}"
+  autoscaler_replicas_before_manual_scaling=""
+  log "Restoring Cluster Autoscaler to ${replicas} replica(s)"
+  kubectl --kubeconfig "${management_kubeconfig}" \
+    -n "${CLUSTER_AUTOSCALER_NAMESPACE}" scale deployment \
+    cluster-autoscaler --replicas="${replicas}" >/dev/null
+  if [[ "${replicas}" != "0" ]]; then
+    kubectl --kubeconfig "${management_kubeconfig}" \
+      -n "${CLUSTER_AUTOSCALER_NAMESPACE}" rollout status \
+      deployment/cluster-autoscaler --timeout=5m
+  fi
 }
 
 scale_workers_up() {
@@ -511,6 +534,7 @@ scale_workers_up() {
       } >"${timing_file}"
       chmod 600 "${timing_file}"
     fi
+    resume_autoscaler_after_manual_scaling
     return
   fi
   [[ "${desired}" == "1" && "${available}" == "1" ]] ||
@@ -536,6 +560,7 @@ scale_workers_up() {
     printf 'ready_epoch=%s\n' "${finished}"
     printf 'elapsed_seconds=%s\n' "$((finished - started))"
   } >"${timing_file}"
+  resume_autoscaler_after_manual_scaling
 }
 
 scale_workers_down() {
@@ -558,6 +583,7 @@ scale_workers_down() {
   if [[ "${desired}" == "1" ]]; then
     log "${machine_deployment} already desires one worker; verifying cleanup"
     verify_cluster 1
+    resume_autoscaler_after_manual_scaling
     return
   fi
   [[ "${desired}" == "2" && "${available}" == "2" ]] ||
@@ -575,6 +601,7 @@ scale_workers_down() {
   printf 'status=passed\nstarted_epoch=%s\nready_epoch=%s\nelapsed_seconds=%s\n' \
     "${started}" "${finished}" "$((finished - started))" >"${timing_file}"
   chmod 600 "${timing_file}"
+  resume_autoscaler_after_manual_scaling
 }
 
 scale_workers() {

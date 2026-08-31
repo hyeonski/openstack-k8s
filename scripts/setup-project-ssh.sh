@@ -6,19 +6,21 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
 ensure_state_dirs
-key="${SECRET_DIR}/deployment_ed25519"
-require_command ssh-keygen
-
-if [[ ! -f "${key}" ]]; then
-  ssh-keygen -q -t ed25519 -N "" -C "openstack-k8s-${ENV}" -f "${key}"
-  chmod 600 "${key}"
-  chmod 600 "${key}.pub"
-fi
+ensure_deployment_ssh_key
+key="$(deployment_ssh_private_key)"
+require_command gcloud
 
 pubkey="$(<"${key}.pub")"
+metadata_file="${SECRET_DIR}/deployment_ssh_metadata"
+printf '%s:%s\n' "${TARGET_SSH_USER}" "${pubkey}" >"${metadata_file}"
+chmod 600 "${metadata_file}"
+
 while IFS= read -r node; do
-  run_on "${node}" bash -lc \
-    "umask 077; mkdir -p ~/.ssh; touch ~/.ssh/authorized_keys; grep -qxF '${pubkey}' ~/.ssh/authorized_keys || printf '%s\n' '${pubkey}' >> ~/.ssh/authorized_keys; chmod 700 ~/.ssh; chmod 600 ~/.ssh/authorized_keys"
+  gcloud compute instances add-metadata "${node}" \
+    --project="${GCP_PROJECT_ID}" \
+    --zone="${GCP_ZONE}" \
+    --metadata-from-file="ssh-keys=${metadata_file}" \
+    --quiet
 done < <(all_instance_names)
 
 tmpkey="/tmp/openstack-k8s-deployment-key"
@@ -26,4 +28,27 @@ copy_to "${key}" "${CONTROLLER_NAME}" "${tmpkey}"
 run_on "${CONTROLLER_NAME}" bash -lc \
   "umask 077; mkdir -p ~/.ssh; install -m 600 '${tmpkey}' ~/.ssh/openstack_k8s; rm -f '${tmpkey}'"
 
-log "Project-scoped deployment SSH key installed"
+controller_ip="$(controller_ipv4)"
+index=0
+for compute_ip in "${COMPUTE_MANAGEMENT_IPS[@]}"; do
+  compute_name="${COMPUTE_INVENTORY_NAMES[index]}"
+  connected="no"
+  for _attempt in {1..12}; do
+    if run_on "${CONTROLLER_NAME}" ssh \
+        -i "/home/${TARGET_SSH_USER}/.ssh/openstack_k8s" \
+        -o BatchMode=yes \
+        -o ConnectTimeout=5 \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        "${TARGET_SSH_USER}@${compute_ip}" true; then
+      connected="yes"
+      break
+    fi
+    sleep 5
+  done
+  [[ "${connected}" == "yes" ]] ||
+    die "controller ${controller_ip} cannot authenticate to ${compute_name} (${compute_ip})"
+  index=$((index + 1))
+done
+
+log "Project-scoped deployment SSH key installed and verified"
