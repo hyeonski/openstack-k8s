@@ -6,6 +6,11 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
 [[ "$#" -gt 0 ]] || die "usage: run-controller.sh COMMAND [ARG...]"
+if [[ "$#" -eq 1 && "$1" == "prepare-hosts" ]]; then
+  set -- ansible-playbook \
+    -i "${KOLLA_DEPLOY_DIR}/ansible/inventory/${ENV}/generated-hosts.ini" \
+    "${KOLLA_DEPLOY_DIR}/ansible/playbooks/prepare-hosts.yml"
+fi
 instance_running "${CONTROLLER_NAME}" || die "controller is not running"
 
 quoted=()

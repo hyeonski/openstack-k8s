@@ -11,6 +11,19 @@ action="${1:-}"
 openstack_nodes=("${CONTROLLER_NAME}" "${COMPUTE_NAMES[@]}")
 lifecycle_nodes=("${openstack_nodes[@]}")
 
+wait_for_ssh() {
+  local node="$1"
+  local attempt
+  for ((attempt = 1; attempt <= 60; attempt++)); do
+    if run_on "${node}" true >/dev/null 2>&1; then
+      log "SSH ready: ${node}"
+      return
+    fi
+    sleep 5
+  done
+  die "SSH did not become ready: ${node}"
+}
+
 case "${action}" in
   status)
     gcloud compute instances list --project="${GCP_PROJECT_ID}" \
@@ -45,6 +58,11 @@ case "${action}" in
     gcloud compute instances stop "${targets[@]}" \
       --project="${GCP_PROJECT_ID}" --zone="${GCP_ZONE}" --quiet
     ;;
+  wait-ssh)
+    for node in "${openstack_nodes[@]}"; do
+      wait_for_ssh "${node}"
+    done
+    ;;
   verify)
     roles=(controller "${COMPUTE_INVENTORY_NAMES[@]}")
     [[ "${#roles[@]}" -eq "${#openstack_nodes[@]}" ]] ||
@@ -64,6 +82,6 @@ case "${action}" in
     done
     ;;
   *)
-    die "usage: gcp-hosts.sh {status|start|stop|verify}"
+    die "usage: gcp-hosts.sh {status|start|stop|wait-ssh|verify}"
     ;;
 esac

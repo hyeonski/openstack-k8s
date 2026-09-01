@@ -31,26 +31,6 @@ require_positive_integer() {
     die "${name} must be a positive integer: ${value}"
 }
 
-ensure_pinned_download() {
-  local url="$1"
-  local destination="$2"
-  local checksum="$3"
-  local temporary="${destination}.download"
-
-  require_command curl
-  require_command shasum
-  mkdir_private "$(dirname "${destination}")"
-  if [[ -f "${destination}" ]] &&
-    printf '%s  %s\n' "${checksum}" "${destination}" | shasum -a 256 -c - >/dev/null 2>&1; then
-    return
-  fi
-  rm -f "${temporary}"
-  curl -fL --retry 3 --output "${temporary}" "${url}"
-  printf '%s  %s\n' "${checksum}" "${temporary}" | shasum -a 256 -c -
-  chmod 600 "${temporary}"
-  mv "${temporary}" "${destination}"
-}
-
 require_management() {
   require_command kubectl
   require_command gcloud

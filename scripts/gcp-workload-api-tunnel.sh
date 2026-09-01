@@ -16,27 +16,9 @@ workload_kubeconfig="${STATE_DIR}/kubeconfigs/${WORKLOAD_CLUSTER_NAME}.yaml"
 tunnel_pid_file="${STATE_DIR}/workload-api-iap-tunnel.pid"
 tunnel_log="${STATE_DIR}/workload-api-iap-tunnel.log"
 
-managed_tunnel_process() {
-  [[ -f "${tunnel_pid_file}" ]] || return 1
-  local pid
-  pid="$(<"${tunnel_pid_file}")"
-  [[ "${pid}" =~ ^[0-9]+$ ]] || return 1
-  kill -0 "${pid}" 2>/dev/null || return 1
-  ps -p "${pid}" -o command= 2>/dev/null |
-    grep -Fq "127.0.0.1:${WORKLOAD_LOCAL_API_PORT}"
-}
-
 stop_tunnel() {
-  if managed_tunnel_process; then
-    local pid
-    pid="$(<"${tunnel_pid_file}")"
-    kill "${pid}" 2>/dev/null || true
-    for _ in {1..20}; do
-      kill -0 "${pid}" 2>/dev/null || break
-      sleep 0.25
-    done
-  fi
-  rm -f "${tunnel_pid_file}"
+  stop_managed_process \
+    "${tunnel_pid_file}" "127.0.0.1:${WORKLOAD_LOCAL_API_PORT}"
 }
 
 control_plane_endpoint() {
@@ -80,7 +62,8 @@ start_tunnel() {
   endpoint="$(control_plane_endpoint)"
   [[ -n "${endpoint}" ]] || die "workload control plane endpoint is empty"
 
-  if managed_tunnel_process &&
+  if managed_process_matches \
+      "${tunnel_pid_file}" "127.0.0.1:${WORKLOAD_LOCAL_API_PORT}" &&
       nc -z 127.0.0.1 "${WORKLOAD_LOCAL_API_PORT}" 2>/dev/null; then
     rewrite_kubeconfig "${endpoint}"
     return

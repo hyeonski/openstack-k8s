@@ -14,33 +14,9 @@ fi
 require_command gcloud
 require_command python3
 
-if [[ -n "${IAC_ENGINE:-}" ]]; then
-  engine="${IAC_ENGINE}"
-elif command -v tofu >/dev/null 2>&1; then
-  engine="tofu"
-elif command -v terraform >/dev/null 2>&1; then
-  engine="terraform"
-else
-  die "OpenTofu or Terraform is required"
-fi
-
-iac_dir="${PROJECT_ROOT}/infra/gcp"
 ensure_state_dirs
 ensure_deployment_ssh_key
 plan_file="${STATE_DIR}/gcp-image-builder.tfplan"
-
-run_iac() {
-  local deployment_public_key
-  deployment_public_key="$(<"$(deployment_ssh_private_key).pub")"
-  TF_VAR_project_id="${GCP_PROJECT_ID}" \
-    TF_VAR_environment_name="${ENV}" \
-    TF_VAR_region="${GCP_REGION}" \
-    TF_VAR_zone="${GCP_ZONE}" \
-    TF_VAR_source_image="https://www.googleapis.com/compute/v1/projects/${GCP_SOURCE_IMAGE_PROJECT}/global/images/${GCP_SOURCE_IMAGE_NAME}" \
-    TF_VAR_target_ssh_user="${TARGET_SSH_USER}" \
-    TF_VAR_deployment_ssh_public_key="${deployment_public_key}" \
-    "${engine}" -chdir="${iac_dir}" "$@"
-}
 
 plan_and_apply() {
   local enabled="$1"
@@ -49,7 +25,7 @@ plan_and_apply() {
 
   set +e
   ensure_private_directory "$(dirname "${IAC_STATE_FILE}")"
-  run_iac plan -input=false -detailed-exitcode \
+  run_gcp_iac plan -input=false -detailed-exitcode \
     -state="${IAC_STATE_FILE}" \
     -var="enable_image_builder=${enabled}" \
     -var="image_builder_name=${IMAGE_BUILDER_NAME}" \
@@ -64,10 +40,10 @@ plan_and_apply() {
       return
       ;;
     2)
-      run_iac show -json "${plan_file}" |
+      run_gcp_iac show -json "${plan_file}" |
         python3 "${PROJECT_ROOT}/scripts/validate-image-builder-plan.py" \
           "${expected_action}"
-      run_iac apply -input=false -state="${IAC_STATE_FILE}" \
+      run_gcp_iac apply -input=false -state="${IAC_STATE_FILE}" \
         -var="enable_image_builder=${enabled}" \
         -var="image_builder_name=${IMAGE_BUILDER_NAME}" \
         -var="image_builder_machine_type=${IMAGE_BUILDER_MACHINE_TYPE}" \

@@ -13,23 +13,12 @@ for compute_name in "${COMPUTE_NAMES[@]}"; do
 done
 ensure_state_dirs
 
-if [[ -n "${IAC_ENGINE:-}" ]]; then
-  iac_engine="${IAC_ENGINE}"
-elif command -v tofu >/dev/null 2>&1; then
-  iac_engine="tofu"
-elif command -v terraform >/dev/null 2>&1; then
-  iac_engine="terraform"
-else
-  die "OpenTofu or Terraform is required"
-fi
-
 host_keys=(controller "${COMPUTE_INVENTORY_NAMES[@]}")
 host_ips=()
 while IFS= read -r host_ip; do
   host_ips+=("${host_ip}")
 done < <(
-  "${iac_engine}" -chdir="${PROJECT_ROOT}/infra/gcp" \
-    output -state="${IAC_STATE_FILE}" -json host_internal_ips |
+  run_gcp_iac output -state="${IAC_STATE_FILE}" -json host_internal_ips |
     python3 "${PROJECT_ROOT}/scripts/parse-iac-host-ips.py" "${host_keys[@]}"
 )
 [[ "${#host_ips[@]}" -eq "${#host_keys[@]}" ]] ||

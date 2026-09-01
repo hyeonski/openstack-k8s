@@ -30,21 +30,8 @@ rendered_network_env="${STATE_DIR}/controller-kind-network.env"
 kind_url="https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
 
 ensure_kind_binary() {
-  mkdir_private "${kind_dir}"
-  if [[ -x "${kind_binary}" ]] &&
-      printf '%s  %s\n' "${KIND_LINUX_AMD64_SHA256}" "${kind_binary}" |
-        shasum -a 256 -c - >/dev/null 2>&1; then
-    return
-  fi
-
-  local temporary="${kind_binary}.download"
-  rm -f "${temporary}"
-  log "Downloading kind ${KIND_VERSION} for Linux AMD64"
-  curl -fL --retry 3 --output "${temporary}" "${kind_url}"
-  printf '%s  %s\n' "${KIND_LINUX_AMD64_SHA256}" "${temporary}" |
-    shasum -a 256 -c -
-  chmod 700 "${temporary}"
-  mv "${temporary}" "${kind_binary}"
+  ensure_pinned_download \
+    "${kind_url}" "${kind_binary}" "${KIND_LINUX_AMD64_SHA256}" 0700
 }
 
 run_kind() {
@@ -132,18 +119,8 @@ prepare_controller_runtime() {
     openstack-k8s-kind-network.service
 }
 
-managed_tunnel_process() {
-  [[ -f "${tunnel_pid_file}" ]] || return 1
-  local pid
-  pid="$(<"${tunnel_pid_file}")"
-  [[ "${pid}" =~ ^[0-9]+$ ]] || return 1
-  kill -0 "${pid}" 2>/dev/null || return 1
-  ps -p "${pid}" -o command= 2>/dev/null |
-    grep -Fq "start-iap-tunnel"
-}
-
 tunnel_running() {
-  managed_tunnel_process || return 1
+  managed_process_matches "${tunnel_pid_file}" "start-iap-tunnel" || return 1
   local pid
   pid="$(<"${tunnel_pid_file}")"
   ps -p "${pid}" -o command= 2>/dev/null |
@@ -151,16 +128,7 @@ tunnel_running() {
 }
 
 stop_tunnel() {
-  if managed_tunnel_process; then
-    local pid
-    pid="$(<"${tunnel_pid_file}")"
-    kill "${pid}" 2>/dev/null || true
-    for _ in {1..20}; do
-      kill -0 "${pid}" 2>/dev/null || break
-      sleep 0.25
-    done
-  fi
-  rm -f "${tunnel_pid_file}"
+  stop_managed_process "${tunnel_pid_file}" "start-iap-tunnel"
 }
 
 start_tunnel() {
@@ -316,7 +284,7 @@ case "${action}" in
     kubectl --kubeconfig "${kubeconfig}" get --raw=/readyz >/dev/null
     ;;
   create)
-    "${PROJECT_ROOT}/scripts/gcp-controller-management-iac.sh"
+    "${PROJECT_ROOT}/scripts/gcp-iac.sh" controller-management
     ensure_kind_binary
     render_remote_inputs
     prepare_controller_runtime

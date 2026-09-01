@@ -32,6 +32,7 @@ run_make inventory
 run_make gcp-deployment-key-setup
 run_make host-prepare
 run_make gcp-host-verify
+run_make gcp-openstack-recover
 
 run_make openstack-precheck
 run_make openstack-pull

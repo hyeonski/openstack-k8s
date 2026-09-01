@@ -18,7 +18,7 @@ sync_log="${run_dir}/logs/sync-to-controller.log"
 log_file="${run_dir}/logs/kubernetes-image-verification.log"
 
 set +e
-scripts/sync-to-controller.sh 2>&1 | tee "${sync_log}"
+"${PROJECT_ROOT}/scripts/sync-to-controller.sh" 2>&1 | tee "${sync_log}"
 sync_result="${PIPESTATUS[0]}"
 set -e
 if [[ "${sync_result}" -ne 0 ]]; then

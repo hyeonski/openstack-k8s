@@ -5,6 +5,25 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
+action="${1:-verify}"
+
+cleanup_verification() {
+  run_on "${CONTROLLER_NAME}" env \
+    KOLLA_DEPLOY_DIR="${KOLLA_DEPLOY_DIR}" \
+    bash "${KOLLA_DEPLOY_DIR}/scripts/cleanup-openstack-verification.sh"
+  rm -f "$(safe_realpath_within_project "${GENERATED_DIR}/verification.env")"
+  log "Local and remote OpenStack verification state was removed"
+}
+
+case "${action}" in
+  cleanup)
+    cleanup_verification
+    exit 0
+    ;;
+  verify) ;;
+  *) die "usage: openstack-verify.sh {verify|cleanup}" ;;
+esac
+
 [[ -f "${SECRET_DIR}/capi-clouds.yaml" ]] ||
   die "CAPO credentials are missing; run make openstack-bootstrap"
 

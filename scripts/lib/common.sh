@@ -133,6 +133,85 @@ require_command() {
   command -v "${cmd}" >/dev/null 2>&1 || die "required command not found: ${cmd}"
 }
 
+select_iac_engine() {
+  if [[ -n "${IAC_ENGINE:-}" ]]; then
+    printf '%s\n' "${IAC_ENGINE}"
+  elif command -v tofu >/dev/null 2>&1; then
+    printf '%s\n' tofu
+  elif command -v terraform >/dev/null 2>&1; then
+    printf '%s\n' terraform
+  else
+    die "OpenTofu or Terraform is required"
+  fi
+}
+
+run_gcp_iac() {
+  local engine deployment_public_key=""
+  engine="$(select_iac_engine)"
+  if [[ -f "$(deployment_ssh_private_key).pub" ]]; then
+    deployment_public_key="$(<"$(deployment_ssh_private_key).pub")"
+  fi
+  TF_VAR_project_id="${GCP_PROJECT_ID}" \
+    TF_VAR_environment_name="${ENV}" \
+    TF_VAR_region="${GCP_REGION}" \
+    TF_VAR_zone="${GCP_ZONE}" \
+    TF_VAR_source_image="https://www.googleapis.com/compute/v1/projects/${GCP_SOURCE_IMAGE_PROJECT}/global/images/${GCP_SOURCE_IMAGE_NAME}" \
+    TF_VAR_target_ssh_user="${TARGET_SSH_USER}" \
+    TF_VAR_deployment_ssh_public_key="${deployment_public_key}" \
+    "${engine}" -chdir="${PROJECT_ROOT}/infra/gcp" "$@"
+}
+
+ensure_pinned_download() {
+  local url="$1"
+  local destination="$2"
+  local checksum="$3"
+  local mode="${4:-0600}"
+  local temporary="${destination}.download"
+
+  require_command curl
+  require_command shasum
+  mkdir_private "$(dirname "${destination}")"
+  if [[ -f "${destination}" ]] &&
+    printf '%s  %s\n' "${checksum}" "${destination}" |
+      shasum -a 256 -c - >/dev/null 2>&1; then
+    chmod "${mode}" "${destination}"
+    return
+  fi
+
+  rm -f "${temporary}"
+  log "Downloading pinned artifact: $(basename "${destination}")"
+  curl -fL --retry 3 --output "${temporary}" "${url}"
+  printf '%s  %s\n' "${checksum}" "${temporary}" | shasum -a 256 -c -
+  chmod "${mode}" "${temporary}"
+  mv "${temporary}" "${destination}"
+}
+
+managed_process_matches() {
+  local pid_file="$1"
+  local command_pattern="$2"
+  local pid
+  [[ -f "${pid_file}" ]] || return 1
+  pid="$(<"${pid_file}")"
+  [[ "${pid}" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "${pid}" 2>/dev/null || return 1
+  ps -p "${pid}" -o command= 2>/dev/null | grep -Fq "${command_pattern}"
+}
+
+stop_managed_process() {
+  local pid_file="$1"
+  local command_pattern="$2"
+  local pid
+  if managed_process_matches "${pid_file}" "${command_pattern}"; then
+    pid="$(<"${pid_file}")"
+    kill "${pid}" 2>/dev/null || true
+    for _ in {1..20}; do
+      kill -0 "${pid}" 2>/dev/null || break
+      sleep 0.25
+    done
+  fi
+  rm -f "${pid_file}"
+}
+
 ensure_management_api_access() {
   "${PROJECT_ROOT}/scripts/gcp-management-cluster.sh" tunnel
 }

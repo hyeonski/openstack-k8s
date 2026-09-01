@@ -9,7 +9,7 @@ source "${PROJECT_ROOT}/scripts/lib/common.sh"
   die "admin clouds.yaml is missing; run make openstack-post-deploy"
 
 instance_running "${CONTROLLER_NAME}" || die "controller is not running"
-scripts/sync-to-controller.sh
+"${PROJECT_ROOT}/scripts/sync-to-controller.sh"
 
 run_on "${CONTROLLER_NAME}" env \
   KOLLA_DEPLOY_DIR="${KOLLA_DEPLOY_DIR}" \

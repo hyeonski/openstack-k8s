@@ -6,35 +6,10 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 
 action="${1:-}"
-iac_dir="${PROJECT_ROOT}/infra/gcp"
 foundation_plan="${STATE_DIR}/gcp-foundation.tfplan"
 route_plan="${STATE_DIR}/gcp-floating-ip-route.tfplan"
 adoption_plan="${STATE_DIR}/gcp-adoption.tfplan"
-
-if [[ -n "${IAC_ENGINE:-}" ]]; then
-  engine="${IAC_ENGINE}"
-elif command -v tofu >/dev/null 2>&1; then
-  engine="tofu"
-elif command -v terraform >/dev/null 2>&1; then
-  engine="terraform"
-else
-  die "OpenTofu or Terraform is required"
-fi
-
-run_iac() {
-  local deployment_public_key=""
-  if [[ -f "$(deployment_ssh_private_key).pub" ]]; then
-    deployment_public_key="$(<"$(deployment_ssh_private_key).pub")"
-  fi
-  TF_VAR_project_id="${GCP_PROJECT_ID}" \
-    TF_VAR_environment_name="${ENV}" \
-    TF_VAR_region="${GCP_REGION}" \
-    TF_VAR_zone="${GCP_ZONE}" \
-    TF_VAR_source_image="https://www.googleapis.com/compute/v1/projects/${GCP_SOURCE_IMAGE_PROJECT}/global/images/${GCP_SOURCE_IMAGE_NAME}" \
-    TF_VAR_target_ssh_user="${TARGET_SSH_USER}" \
-    TF_VAR_deployment_ssh_public_key="${deployment_public_key}" \
-    "${engine}" -chdir="${iac_dir}" "$@"
-}
+controller_management_plan="${STATE_DIR}/gcp-controller-management.tfplan"
 
 require_confirmation() {
   local confirmation="${1:-}"
@@ -48,7 +23,7 @@ plan_with_status() {
   local status
   ensure_private_directory "$(dirname "${IAC_STATE_FILE}")"
   set +e
-  run_iac plan -input=false -detailed-exitcode \
+  run_gcp_iac plan -input=false -detailed-exitcode \
     -state="${IAC_STATE_FILE}" "$@" -out="${plan_file}"
   status=$?
   set -e
@@ -62,34 +37,34 @@ plan_with_status() {
 validate_saved_plan() {
   local plan_file="$1"
   local validator="$2"
-  run_iac show -json "${plan_file}" |
+  run_gcp_iac show -json "${plan_file}" |
     python3 "${PROJECT_ROOT}/scripts/${validator}"
 }
 
 import_if_missing() {
   local address="$1"
   local resource_id="$2"
-  if run_iac state show -state="${IAC_STATE_FILE}" "${address}" >/dev/null 2>&1; then
+  if run_gcp_iac state show -state="${IAC_STATE_FILE}" "${address}" >/dev/null 2>&1; then
     log "Already imported: ${address}"
     return
   fi
   log "Importing existing resource: ${address}"
-  run_iac import -input=false -state="${IAC_STATE_FILE}" \
+  run_gcp_iac import -input=false -state="${IAC_STATE_FILE}" \
     "${address}" "${resource_id}"
 }
 
 case "${action}" in
   init)
-    run_iac init -input=false
+    run_gcp_iac init -input=false
     ;;
   validate)
-    run_iac validate
+    run_gcp_iac validate
     ;;
   import)
     ensure_state_dirs
     ensure_private_directory "$(dirname "${IAC_STATE_FILE}")"
     require_command gcloud
-    run_iac init -input=false
+    run_gcp_iac init -input=false
     import_if_missing google_compute_network.management \
       "projects/${GCP_PROJECT_ID}/global/networks/${GCP_NETWORK_NAME}"
     import_if_missing google_compute_subnetwork.seoul \
@@ -133,7 +108,7 @@ case "${action}" in
     ensure_state_dirs
     ensure_private_directory "$(dirname "${IAC_STATE_FILE}")"
     set +e
-    run_iac plan -input=false -detailed-exitcode \
+    run_gcp_iac plan -input=false -detailed-exitcode \
       -state="${IAC_STATE_FILE}" \
       -out="${adoption_plan}"
     plan_status=$?
@@ -146,7 +121,7 @@ case "${action}" in
     ;;
   show-plan)
     [[ -f "${adoption_plan}" ]] || die "run gcp-iac plan first"
-    run_iac show "${adoption_plan}"
+    run_gcp_iac show "${adoption_plan}"
     ;;
   foundation-plan)
     ensure_state_dirs
@@ -168,14 +143,14 @@ case "${action}" in
     ;;
   foundation-show-plan)
     [[ -f "${foundation_plan}" ]] || die "run gcp-iac foundation-plan first"
-    run_iac show "${foundation_plan}"
+    run_gcp_iac show "${foundation_plan}"
     ;;
   foundation-apply)
     ensure_deployment_ssh_key
     require_confirmation "${2:-}"
     [[ -f "${foundation_plan}" ]] || die "run gcp-iac foundation-plan first"
     validate_saved_plan "${foundation_plan}" validate-foundation-plan.py
-    run_iac apply -input=false -state="${IAC_STATE_FILE}" \
+    run_gcp_iac apply -input=false -state="${IAC_STATE_FILE}" \
       -var="enable_openstack_floating_ip_route=false" \
       -var="enable_image_builder=false" \
       "${foundation_plan}"
@@ -200,17 +175,42 @@ case "${action}" in
     ;;
   route-show-plan)
     [[ -f "${route_plan}" ]] || die "run gcp-iac route-plan first"
-    run_iac show "${route_plan}"
+    run_gcp_iac show "${route_plan}"
     ;;
   route-apply)
     ensure_deployment_ssh_key
     require_confirmation "${2:-}"
     [[ -f "${route_plan}" ]] || die "run gcp-iac route-plan first"
     validate_saved_plan "${route_plan}" validate-floating-ip-route-plan.py
-    run_iac apply -input=false -state="${IAC_STATE_FILE}" \
+    run_gcp_iac apply -input=false -state="${IAC_STATE_FILE}" \
       -var="enable_openstack_floating_ip_route=true" \
       -var="enable_image_builder=false" \
       "${route_plan}"
+    ;;
+  controller-management)
+    ensure_state_dirs
+    ensure_deployment_ssh_key
+    require_command python3
+    set +e
+    ensure_private_directory "$(dirname "${IAC_STATE_FILE}")"
+    run_gcp_iac plan -input=false -detailed-exitcode \
+      -state="${IAC_STATE_FILE}" -out="${controller_management_plan}"
+    plan_status="$?"
+    set -e
+    case "${plan_status}" in
+      0)
+        log "Controller management network already matches the declaration"
+        ;;
+      2)
+        validate_saved_plan "${controller_management_plan}" \
+          validate-controller-management-plan.py
+        run_gcp_iac apply -input=false -state="${IAC_STATE_FILE}" \
+          "${controller_management_plan}"
+        ;;
+      *)
+        exit "${plan_status}"
+        ;;
+    esac
     ;;
   foundation-ready)
     expected=(
@@ -229,13 +229,13 @@ case "${action}" in
       google_compute_resource_policy.daily_snapshots
       google_compute_subnetwork.seoul
     )
-    state_list="$(run_iac state list -state="${IAC_STATE_FILE}" 2>/dev/null || true)"
+    state_list="$(run_gcp_iac state list -state="${IAC_STATE_FILE}" 2>/dev/null || true)"
     for address in "${expected[@]}"; do
       grep -Fxq "${address}" <<<"${state_list}" || exit 1
     done
     log "Persistent GCP foundation is present in OpenTofu state"
     ;;
   *)
-    die "usage: gcp-iac.sh {init|validate|import|plan|show-plan|foundation-plan|foundation-show-plan|foundation-apply CONFIRM|foundation-ready|route-plan|route-show-plan|route-apply CONFIRM}"
+    die "usage: gcp-iac.sh {init|validate|import|plan|show-plan|foundation-plan|foundation-show-plan|foundation-apply CONFIRM|foundation-ready|route-plan|route-show-plan|route-apply CONFIRM|controller-management}"
     ;;
 esac

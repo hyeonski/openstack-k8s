@@ -11,7 +11,7 @@ export ENV
 	gcp-iac-apply gcp-foundation-plan gcp-foundation-show-plan gcp-foundation-apply \
 	gcp-floating-ip-route-plan gcp-floating-ip-route-show-plan gcp-floating-ip-route-apply \
 	gcp-status gcp-start gcp-stop gcp-host-verify gcp-deployment-key-setup \
-	gcp-wait-ssh gcp-sync-inputs gcp-controller-management-prepare lab-up \
+	gcp-wait-ssh gcp-openstack-recover gcp-sync-inputs gcp-controller-management-prepare lab-up \
 	openstack-pull openstack-deploy openstack-validate \
 	openstack-post-deploy openstack-bootstrap openstack-verify openstack-verification-cleanup \
 	kubernetes-image-builder-create kubernetes-image-builder-destroy \
@@ -39,6 +39,7 @@ help:
 	@echo "  gcp-start              Start only the declared GCP hosts"
 	@echo "  gcp-stop               Stop only the declared GCP hosts"
 	@echo "  gcp-host-verify        Run the GCP host readiness gate"
+	@echo "  gcp-openstack-recover  Recover OpenStack services after GCP host restart"
 	@echo "  gcp-deployment-key-setup Install the project key for controller-to-compute SSH"
 	@echo "  gcp-sync-inputs        Sync deployment code without installing Kolla"
 	@echo "  gcp-controller-management-prepare Move the private kind API gate to the controller"
@@ -102,7 +103,7 @@ help:
 	@echo "  lint                    Static checks that do not mutate the host"
 
 bootstrap-preflight:
-	@scripts/gcp-bootstrap-preflight.sh
+	@scripts/gcp-preflight.sh bootstrap
 
 preflight:
 	@scripts/gcp-preflight.sh
@@ -156,10 +157,9 @@ gcp-stop:
 
 gcp-host-verify:
 	@scripts/gcp-hosts.sh verify
-	@scripts/gcp-openstack-recover.sh
 
 gcp-wait-ssh:
-	@scripts/gcp-wait-ssh.sh
+	@scripts/gcp-hosts.sh wait-ssh
 
 gcp-openstack-recover:
 	@scripts/gcp-openstack-recover.sh
@@ -171,7 +171,7 @@ gcp-sync-inputs: inventory
 	@scripts/sync-to-controller.sh inputs-only
 
 gcp-controller-management-prepare:
-	@scripts/gcp-controller-management-iac.sh
+	@scripts/gcp-iac.sh controller-management
 
 secrets-check:
 	@scripts/secrets-check.sh
@@ -180,7 +180,7 @@ inventory:
 	@scripts/generate-inventory.sh
 
 host-prepare: kolla-sync
-	@scripts/run-host-prepare.sh
+	@scripts/run-controller.sh prepare-hosts
 
 kolla-sync: inventory
 	@scripts/sync-to-controller.sh
@@ -213,7 +213,7 @@ openstack-verify:
 	@scripts/openstack-verify.sh
 
 openstack-verification-cleanup:
-	@scripts/openstack-verification-cleanup.sh
+	@scripts/openstack-verify.sh cleanup
 
 kubernetes-image-builder-create:
 	@scripts/gcp-image-builder.sh create
