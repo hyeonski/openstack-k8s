@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 
 set -Eeuo pipefail
+umask 077
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
+set -a
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
+set +a
 
 action="${1:-}"
 management_kubeconfig="${STATE_DIR}/kubeconfigs/management.yaml"
@@ -109,36 +112,6 @@ openstack_external_network_id() {
   '
 }
 
-nova_server_count() {
-  run_on "${CONTROLLER_NAME}" env WORKLOAD_CLUSTER_NAME="${WORKLOAD_CLUSTER_NAME}" bash -lc '
-    set -Eeuo pipefail
-    source /opt/kolla-venv/bin/activate
-    export OS_CLIENT_CONFIG_FILE=/etc/kolla/capi-clouds.yaml
-    openstack --os-cloud capi server list -f value -c Name
-  ' | awk -v prefix="${WORKLOAD_CLUSTER_NAME}" 'index($0, prefix) == 1 {count++} END {print count + 0}'
-}
-
-wait_for_node_count() {
-  local expected="$1"
-  local attempts="${2:-360}"
-  local attempt count
-  for ((attempt = 1; attempt <= attempts; attempt++)); do
-    count="$(kubectl --kubeconfig "${workload_kubeconfig}" get nodes \
-      -o name 2>/dev/null | wc -l | tr -d ' ')"
-    if [[ "${count}" == "${expected}" ]]; then
-      if ! kubectl --kubeconfig "${workload_kubeconfig}" wait \
-          --for=condition=Ready nodes --all --timeout="${WORKLOAD_NODE_READY_TIMEOUT}"; then
-        capture_failure_diagnostics "node-ready-timeout"
-        die "workload nodes did not become Ready within ${WORKLOAD_NODE_READY_TIMEOUT}"
-      fi
-      return
-    fi
-    sleep 5
-  done
-  capture_failure_diagnostics "node-count-timeout"
-  die "timed out waiting for ${expected} workload nodes; found ${count:-0}"
-}
-
 capture_failure_diagnostics() {
   local reason="$1"
   if ! "${PROJECT_ROOT}/scripts/workload-diagnostics.sh" "${reason}"; then
@@ -154,46 +127,6 @@ wait_for_calico_ready() {
     capture_failure_diagnostics "calico-readiness-timeout"
     die "Calico nodes did not become Ready within ${WORKLOAD_CALICO_READY_TIMEOUT}"
   fi
-}
-
-wait_for_available_workers() {
-  local expected="$1"
-  local attempts="${2:-360}"
-  local attempt available
-  for ((attempt = 1; attempt <= attempts; attempt++)); do
-    available="$(kubectl --kubeconfig "${management_kubeconfig}" \
-      -n "${WORKLOAD_NAMESPACE}" get machinedeployment "${machine_deployment}" \
-      -o jsonpath='{.status.availableReplicas}' 2>/dev/null || true)"
-    if [[ "${available}" == "${expected}" ]]; then
-      return
-    fi
-    sleep 5
-  done
-  capture_failure_diagnostics "worker-available-timeout"
-  die "timed out waiting for ${expected} available workers; found ${available:-0}"
-}
-
-wait_for_machine_identity() {
-  local expected="$1"
-  local attempts="${2:-360}"
-  local attempt machine_count complete_count
-  for ((attempt = 1; attempt <= attempts; attempt++)); do
-    machine_count="$(kubectl --kubeconfig "${management_kubeconfig}" \
-      -n "${WORKLOAD_NAMESPACE}" get machines \
-      -l "cluster.x-k8s.io/cluster-name=${WORKLOAD_CLUSTER_NAME}" \
-      -o name 2>/dev/null | wc -l | tr -d ' ')"
-    complete_count="$(kubectl --kubeconfig "${management_kubeconfig}" \
-      -n "${WORKLOAD_NAMESPACE}" get machines \
-      -l "cluster.x-k8s.io/cluster-name=${WORKLOAD_CLUSTER_NAME}" \
-      -o jsonpath='{range .items[*]}{range .status.addresses[?(@.type=="InternalIP")]}{.address}{end}{"\t"}{.spec.providerID}{"\n"}{end}' \
-      2>/dev/null | awk -F '\t' '$1 != "" && $2 ~ /^openstack:\/\/\// {count++} END {print count + 0}')"
-    if [[ "${machine_count}" == "${expected}" && "${complete_count}" == "${expected}" ]]; then
-      return
-    fi
-    sleep 5
-  done
-  capture_failure_diagnostics "machine-identity-timeout"
-  die "timed out waiting for ${expected} Machines with InternalIP and OpenStack providerID; found ${complete_count:-0}/${machine_count:-0}"
 }
 
 wait_for_control_plane_available() {
@@ -238,49 +171,6 @@ wait_for_control_plane_available() {
   log "Cluster and KubeadmControlPlane are strictly Available"
 }
 
-run_management_api_probe() {
-  local endpoint probe_name
-  endpoint="$(kubectl --kubeconfig "${management_kubeconfig}" \
-    -n "${WORKLOAD_NAMESPACE}" get cluster "${WORKLOAD_CLUSTER_NAME}" \
-    -o jsonpath='{.spec.controlPlaneEndpoint.host}')"
-  [[ -n "${endpoint}" ]] || die "workload control plane endpoint is empty"
-  probe_name="${WORKLOAD_CLUSTER_NAME}-api-probe"
-  if kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
-      get pod "${probe_name}" >/dev/null 2>&1; then
-    die "existing workload API probe must be inspected before retry: ${probe_name}"
-  fi
-  kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" run \
-    "${probe_name}" --image=busybox:1.37.0 --restart=Never --command -- \
-    sh -ceu "nc -z -w 15 '${endpoint}' 6443"
-  if ! kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" wait \
-      --for=jsonpath='{.status.phase}'=Succeeded "pod/${probe_name}" --timeout=3m; then
-    kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
-      describe pod "${probe_name}" || true
-    die "management-to-workload API probe failed; pod preserved"
-  fi
-  kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
-    delete pod "${probe_name}" --wait=false >/dev/null
-}
-
-run_cni_probe() {
-  local probe_name="${WORKLOAD_CLUSTER_NAME}-cni-probe"
-  if kubectl --kubeconfig "${workload_kubeconfig}" -n default get pod \
-      "${probe_name}" >/dev/null 2>&1; then
-    die "existing CNI probe must be inspected before retry: ${probe_name}"
-  fi
-  kubectl --kubeconfig "${workload_kubeconfig}" -n default run "${probe_name}" \
-    --image=busybox:1.37.0 --restart=Never --command -- \
-    sh -ceu 'nslookup kubernetes.default.svc.cluster.local >/dev/null'
-  if ! kubectl --kubeconfig "${workload_kubeconfig}" -n default wait \
-      --for=jsonpath='{.status.phase}'=Succeeded "pod/${probe_name}" --timeout=5m; then
-    kubectl --kubeconfig "${workload_kubeconfig}" -n default describe pod \
-      "${probe_name}" || true
-    die "workload DNS/CNI probe failed; pod preserved"
-  fi
-  kubectl --kubeconfig "${workload_kubeconfig}" -n default delete pod \
-    "${probe_name}" --wait=false >/dev/null
-}
-
 tune_calico_probes_for_gcp_capacity() {
   local probe_patch
   # Three nested Nova guests fully consume a GCP compute host's four
@@ -303,77 +193,21 @@ tune_calico_probes_for_gcp_capacity() {
     >/dev/null
 }
 
-capture_status() {
-  local expected_workers="$1"
-  local run_dir status_dir
-  run_dir="$(current_or_new_run)"
-  status_dir="${run_dir}/m2"
-  mkdir -p "${status_dir}"
-  chmod 700 "${status_dir}"
-
-  kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" get \
-    clusters,machinedeployments,machines,kubeadmcontrolplanes,openstackclusters,openstackmachines \
-    -o wide >"${status_dir}/capi-resources-workers-${expected_workers}.txt"
-  kubectl --kubeconfig "${workload_kubeconfig}" get nodes -o wide \
-    >"${status_dir}/workload-nodes-workers-${expected_workers}.txt"
-  kubectl --kubeconfig "${workload_kubeconfig}" get pods -A -o wide \
-    >"${status_dir}/workload-pods-workers-${expected_workers}.txt"
-  run_on "${CONTROLLER_NAME}" env WORKLOAD_CLUSTER_NAME="${WORKLOAD_CLUSTER_NAME}" bash -lc '
-    set -Eeuo pipefail
-    source /opt/kolla-venv/bin/activate
-    export OS_CLIENT_CONFIG_FILE=/etc/kolla/capi-clouds.yaml
-    openstack --os-cloud capi server list --name "${WORKLOAD_CLUSTER_NAME}"
-  ' >"${status_dir}/openstack-servers-workers-${expected_workers}.txt"
+verify_cluster() {
+  require_positive_integer WORKLOAD_STATUS_TIMEOUT_SECONDS "${WORKLOAD_STATUS_TIMEOUT_SECONDS}"
+  python3 "${PROJECT_ROOT}/scripts/workload_state.py" "${1:-1}" \
+    --wait "${WORKLOAD_STATUS_TIMEOUT_SECONDS}"
 }
 
-verify_cluster() {
-  local expected_workers="${1:-1}"
-  local expected_nodes expected_machines node_count machine_count server_count
-  expected_nodes=$((expected_workers + 1))
-  expected_machines="${expected_nodes}"
-
-  require_kubectl_timeout WORKLOAD_NODE_READY_TIMEOUT "${WORKLOAD_NODE_READY_TIMEOUT}"
-  require_kubectl_timeout WORKLOAD_CALICO_READY_TIMEOUT "${WORKLOAD_CALICO_READY_TIMEOUT}"
-
+prepare_cluster() {
   require_management
-  [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
   ensure_workload_api_access
-  wait_for_machine_identity "${expected_machines}"
   tune_calico_probes_for_gcp_capacity
-  wait_for_available_workers "${expected_workers}"
-  wait_for_node_count "${expected_nodes}"
-  wait_for_control_plane_available
-
-  node_count="$(kubectl --kubeconfig "${workload_kubeconfig}" get nodes -o name | wc -l | tr -d ' ')"
-  [[ "${node_count}" == "${expected_nodes}" ]] || die "unexpected workload node count: ${node_count}"
-  machine_count="$(kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
-    get machines -o name | wc -l | tr -d ' ')"
-  [[ "${machine_count}" == "${expected_machines}" ]] || die "unexpected Machine count: ${machine_count}"
-  server_count="$(nova_server_count)"
-  [[ "${server_count}" == "${expected_machines}" ]] || die "unexpected Nova server count: ${server_count}"
-
-  while IFS=$'\t' read -r node version architecture provider_id; do
-    [[ "${version}" == "${KUBERNETES_VERSION}" ]] ||
-      die "unexpected Kubernetes version on ${node}: ${version}"
-    [[ "${architecture}" == "${WORKLOAD_KUBERNETES_ARCHITECTURE}" ]] ||
-      die "unexpected architecture on ${node}: ${architecture}; expected ${WORKLOAD_KUBERNETES_ARCHITECTURE}"
-    [[ "${provider_id}" == openstack:///* ]] || die "missing OpenStack providerID on ${node}"
-  done < <(kubectl --kubeconfig "${workload_kubeconfig}" get nodes \
-    -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.nodeInfo.kubeletVersion}{"\t"}{.status.nodeInfo.architecture}{"\t"}{.spec.providerID}{"\n"}{end}')
-
   wait_for_calico_ready
-  kubectl --kubeconfig "${workload_kubeconfig}" -n kube-system wait \
-    --for=condition=Ready pod -l k8s-app=calico-kube-controllers --timeout=5m
-  run_management_api_probe
-  run_cni_probe
-  capture_status "${expected_workers}"
+}
 
-  "${clusterctl_bin}" describe cluster "${WORKLOAD_CLUSTER_NAME}" \
-    --namespace "${WORKLOAD_NAMESPACE}" \
-    --config "${clusterctl_config}" \
-    --kubeconfig "${management_kubeconfig}"
-  kubectl --kubeconfig "${workload_kubeconfig}" get nodes -o wide
-  log "workload cluster passed with ${expected_workers} Ready worker(s)"
+probe_cluster() {
+  python3 "${PROJECT_ROOT}/scripts/test_resources.py" probe
 }
 
 create_cluster() {
@@ -419,7 +253,9 @@ create_cluster() {
   ensure_pinned_download "${calico_url}" "${calico_manifest}" "${CALICO_MANIFEST_SHA256}"
   log "Installing Calico ${CALICO_VERSION}"
   kubectl --kubeconfig "${workload_kubeconfig}" apply -f "${calico_manifest}"
+  prepare_cluster
   verify_cluster 1
+  probe_cluster
 }
 
 quiesce_autoscaler_for_manual_scaling() {
@@ -448,14 +284,8 @@ quiesce_autoscaler_for_manual_scaling() {
     fi
   fi
 
-  log "Removing previous Autoscaler scale-up probes before manual worker scaling"
-  kubectl --kubeconfig "${workload_kubeconfig}" \
-    -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" delete deployment \
-    "${CLUSTER_AUTOSCALER_TEST_NAME}" --ignore-not-found --wait=true >/dev/null
-  kubectl --kubeconfig "${workload_kubeconfig}" \
-    -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" delete pod \
-    "${CLUSTER_AUTOSCALER_TARGETED_PROBE_NAME}" --ignore-not-found \
-    --wait=false >/dev/null
+  log "Preserving and removing repository-owned test resources before manual scaling"
+  python3 "${PROJECT_ROOT}/scripts/test_resources.py" cleanup
 }
 
 resume_autoscaler_after_manual_scaling() {
@@ -477,7 +307,6 @@ resume_autoscaler_after_manual_scaling() {
 
 scale_workers_up() {
   require_management
-  "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
   [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
   quiesce_autoscaler_for_manual_scaling
 
@@ -498,6 +327,7 @@ scale_workers_up() {
     timing_status="$(awk -F= '$1 == "status" { print $2; exit }' "${timing_file}" 2>/dev/null || true)"
     started="$(awk -F= '$1 == "started_epoch" { print $2; exit }' "${timing_file}" 2>/dev/null || true)"
     verify_cluster 2
+    probe_cluster
     if [[ "${timing_status}" == "in_progress" && "${started}" =~ ^[0-9]+$ ]]; then
       finished="$(date +%s)"
       {
@@ -532,6 +362,7 @@ scale_workers_up() {
   kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
     scale machinedeployment "${machine_deployment}" --replicas=2
   verify_cluster 2
+  probe_cluster
   finished="$(date +%s)"
 
   {
@@ -545,7 +376,6 @@ scale_workers_up() {
 
 scale_workers_down() {
   require_management
-  "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
   [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
   quiesce_autoscaler_for_manual_scaling
 
@@ -563,6 +393,7 @@ scale_workers_down() {
   if [[ "${desired}" == "1" ]]; then
     log "${machine_deployment} already desires one worker; verifying cleanup"
     verify_cluster 1
+    probe_cluster
     resume_autoscaler_after_manual_scaling
     return
   fi
@@ -577,6 +408,7 @@ scale_workers_down() {
   kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
     scale machinedeployment "${machine_deployment}" --replicas=1
   verify_cluster 1
+  probe_cluster
   finished="$(date +%s)"
   printf 'status=passed\nstarted_epoch=%s\nready_epoch=%s\nelapsed_seconds=%s\n' \
     "${started}" "${finished}" "$((finished - started))" >"${timing_file}"
@@ -606,7 +438,10 @@ destroy_cluster() {
 
 case "${action}" in
   create) create_cluster ;;
+  status) python3 "${PROJECT_ROOT}/scripts/workload_state.py" "${2:-1}" ;;
   verify) verify_cluster "${2:-1}" ;;
+  prepare) prepare_cluster ;;
+  probe) probe_cluster ;;
   capi-ready)
     require_management
     wait_for_control_plane_available
@@ -620,5 +455,5 @@ case "${action}" in
     capture_failure_diagnostics "manual"
     ;;
   destroy) destroy_cluster "$@" ;;
-  *) die "usage: $0 {create|verify [workers]|capi-ready|scale|diagnostics|destroy CONFIRM CONFIRM_CLUSTER}" ;;
+  *) die "usage: $0 {create|prepare|status [workers]|verify [workers]|probe|capi-ready|scale|diagnostics|destroy CONFIRM CONFIRM_CLUSTER}" ;;
 esac

@@ -478,6 +478,7 @@ test_scale_up() {
   }
 
   "${PROJECT_ROOT}/scripts/workload-cluster.sh" verify 2
+  "${PROJECT_ROOT}/scripts/workload-cluster.sh" probe
   check_orphan_calico_ipam "${new_node}" "${status_dir}"
   kubectl --kubeconfig "${management_kubeconfig}" \
     -n "${CLUSTER_AUTOSCALER_NAMESPACE}" logs deployment/cluster-autoscaler --tail=1000 \

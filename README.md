@@ -203,8 +203,11 @@ Keystone API 접근, CAPI/CAPO/ORC deployment availability와 application creden
 ## Workload cluster와 Autoscaler
 
 ```bash
-make workload-cluster-create
-make workload-cluster-verify WORKERS=1
+make workload-cluster-create           # 설치 → 구성 준비 → 조회 → 능동 검사
+make workload-cluster-prepare          # 기존 환경의 Calico 의도 설정 적용
+make workload-cluster-status WORKERS=1 # 한번 조회: 관리 구성/시험 자원 변경 없음
+make workload-cluster-verify WORKERS=1 # 동일한 조회로 제한 시간 내 수렴 대기
+make workload-cluster-probe            # 실행 소유 Pod로 API/CNI/DNS 능동 검사
 make workload-cluster-scale WORKERS=2
 make workload-cluster-scale WORKERS=1
 
@@ -212,6 +215,12 @@ make cluster-autoscaler-install
 make cluster-autoscaler-verify
 make cluster-autoscaler-test
 ```
+
+조회는 기존 kubeconfig/터널을 사용하고 자동 준비·복구를 수행하지 않는다.
+준비 중, 설정 불일치, 조회 불가, 시간 초과를 구분해 로컬 결과를 남긴다.
+능동 검사는 management→workload API 및 각 Node의 CNI/DNS를 확인하고,
+성공한 임시 Pod만 증거 저장 후 UID 조건으로 삭제한다. 실패 자원은 보존한다.
+[책임 분리와 검증 기록](docs/worker-autoscaling-validation.md)을 따른다.
 
 workload 기준선은 control plane 1대와 worker 1대다. 수동 증설은
 `MachineDeployment`를 1→2로 변경하고 새 worker의 Nova ACTIVE, Node/Calico Ready,

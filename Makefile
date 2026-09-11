@@ -19,7 +19,7 @@ export ENV
 	kubernetes-image management-cluster-create management-cluster-verify \
 	management-cluster-destroy capi-providers-install capi-providers-verify \
 	capi-credentials-verify workload-cluster-create workload-cluster-verify \
-	workload-cluster-scale \
+	workload-cluster-scale workload-cluster-prepare workload-cluster-status workload-cluster-probe \
 	workload-cluster-diagnostics workload-cluster-destroy \
 	cluster-autoscaler-install cluster-autoscaler-verify \
 	cluster-autoscaler-test cluster-autoscaler-diagnostics \
@@ -88,7 +88,10 @@ help:
 	@echo "  capi-providers-verify     Verify provider versions and controller readiness"
 	@echo "  capi-credentials-verify   Verify the application credential from a kind Pod"
 	@echo "  workload-cluster-create   Create and verify one control plane and one worker"
-	@echo "  workload-cluster-verify   Verify the current workload cluster (WORKERS=1)"
+	@echo "  workload-cluster-prepare  Explicitly apply intended Calico probe settings"
+	@echo "  workload-cluster-status   One read-only observation (WORKERS=1)"
+	@echo "  workload-cluster-probe    Run owned API and per-node CNI/DNS probes"
+	@echo "  workload-cluster-verify   Read-only convergence check (WORKERS=1)"
 	@echo "  workload-cluster-scale    Manually scale the MachineDeployment from 1 to 2"
 	@echo "  workload-cluster-diagnostics Collect CAPI/Nova/bootstrap/compute diagnostics"
 	@echo "  workload-cluster-destroy  Delete exact workload Cluster (two confirmations)"
@@ -252,6 +255,15 @@ capi-credentials-verify:
 
 workload-cluster-create:
 	@scripts/workload-cluster.sh create
+
+workload-cluster-prepare:
+	@scripts/workload-cluster.sh prepare
+
+workload-cluster-status:
+	@scripts/workload-cluster.sh status "$(or $(WORKERS),1)"
+
+workload-cluster-probe:
+	@scripts/workload-cluster.sh probe
 
 workload-cluster-verify:
 	@scripts/workload-cluster.sh verify "$(or $(WORKERS),1)"
