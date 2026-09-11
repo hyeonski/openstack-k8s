@@ -19,6 +19,7 @@ calico_manifest="${DOWNLOAD_DIR}/calico-${CALICO_VERSION}.yaml"
 calico_url="https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml"
 machine_deployment="${WORKLOAD_CLUSTER_NAME}-md-0"
 autoscaler_replicas_before_manual_scaling=""
+manual_scaling_run_dir=""
 
 require_kubectl_timeout() {
   local name="$1"
@@ -262,14 +263,18 @@ quiesce_autoscaler_for_manual_scaling() {
   local autoscaler_pods
 
   ensure_workload_api_access
-  if kubectl --kubeconfig "${management_kubeconfig}" \
-      -n "${CLUSTER_AUTOSCALER_NAMESPACE}" get deployment \
-      cluster-autoscaler >/dev/null 2>&1; then
+  local existing_ca
+  existing_ca="$(kubectl --kubeconfig "${management_kubeconfig}" \
+    -n "${CLUSTER_AUTOSCALER_NAMESPACE}" get deployment cluster-autoscaler --ignore-not-found -o name)"
+  if [[ -n "${existing_ca}" ]]; then
     autoscaler_replicas_before_manual_scaling="$(kubectl \
       --kubeconfig "${management_kubeconfig}" \
       -n "${CLUSTER_AUTOSCALER_NAMESPACE}" get deployment \
       cluster-autoscaler -o jsonpath='{.spec.replicas}')"
-    trap 'resume_autoscaler_after_manual_scaling || warn "failed to restore Cluster Autoscaler replica count"' EXIT
+    printf '%s\n' "${autoscaler_replicas_before_manual_scaling}" >"${run_dir}/autoscaler-original-replicas.txt"
+    trap 'resume_autoscaler_after_manual_scaling || { warn "failed to restore Cluster Autoscaler; see ${manual_scaling_run_dir}"; exit 1; }' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
     log "Suspending Cluster Autoscaler during manual worker scaling"
     kubectl --kubeconfig "${management_kubeconfig}" \
       -n "${CLUSTER_AUTOSCALER_NAMESPACE}" scale deployment \
@@ -293,135 +298,41 @@ resume_autoscaler_after_manual_scaling() {
   [[ -n "${autoscaler_replicas_before_manual_scaling}" ]] || return 0
 
   local replicas="${autoscaler_replicas_before_manual_scaling}"
-  autoscaler_replicas_before_manual_scaling=""
   log "Restoring Cluster Autoscaler to ${replicas} replica(s)"
   kubectl --kubeconfig "${management_kubeconfig}" \
     -n "${CLUSTER_AUTOSCALER_NAMESPACE}" scale deployment \
-    cluster-autoscaler --replicas="${replicas}" >/dev/null
+    cluster-autoscaler --replicas="${replicas}" >/dev/null || return 1
   if [[ "${replicas}" != "0" ]]; then
     kubectl --kubeconfig "${management_kubeconfig}" \
       -n "${CLUSTER_AUTOSCALER_NAMESPACE}" rollout status \
-      deployment/cluster-autoscaler --timeout=5m
+      deployment/cluster-autoscaler --timeout=5m || return 1
   fi
-}
-
-scale_workers_up() {
-  require_management
-  [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
-  quiesce_autoscaler_for_manual_scaling
-
-  local available desired started finished run_dir timing_file timing_status
-  run_dir="$(current_or_new_run)"
-  mkdir -p "${run_dir}/m2"
-  chmod 700 "${run_dir}/m2"
-  timing_file="${run_dir}/m2/manual-scale-1-to-2.txt"
-
-  desired="$(kubectl --kubeconfig "${management_kubeconfig}" \
-    -n "${WORKLOAD_NAMESPACE}" get machinedeployment "${machine_deployment}" \
-    -o jsonpath='{.spec.replicas}')"
-  available="$(kubectl --kubeconfig "${management_kubeconfig}" \
-    -n "${WORKLOAD_NAMESPACE}" get machinedeployment "${machine_deployment}" \
-    -o jsonpath='{.status.availableReplicas}')"
-  if [[ "${desired}" == "2" ]]; then
-    log "${machine_deployment} already desires two workers; resuming verification from available=${available:-0}"
-    timing_status="$(awk -F= '$1 == "status" { print $2; exit }' "${timing_file}" 2>/dev/null || true)"
-    started="$(awk -F= '$1 == "started_epoch" { print $2; exit }' "${timing_file}" 2>/dev/null || true)"
-    verify_cluster 2
-    probe_cluster
-    if [[ "${timing_status}" == "in_progress" && "${started}" =~ ^[0-9]+$ ]]; then
-      finished="$(date +%s)"
-      {
-        printf 'status=passed_after_resume\n'
-        printf 'started_epoch=%s\n' "${started}"
-        printf 'ready_epoch=%s\n' "${finished}"
-        printf 'elapsed_seconds=%s\n' "$((finished - started))"
-      } >"${timing_file}"
-      chmod 600 "${timing_file}"
-    elif [[ -z "${timing_status}" ]]; then
-      {
-        printf 'status=verified_at_two\n'
-        printf 'verified_utc=%s\n' "$(date -u +%FT%TZ)"
-      } >"${timing_file}"
-      chmod 600 "${timing_file}"
-    fi
-    resume_autoscaler_after_manual_scaling
-    return
-  fi
-  [[ "${desired}" == "1" && "${available}" == "1" ]] ||
-    die "manual scale requires desired=1 and available=1; found desired=${desired}, available=${available:-0}"
-
-  started="$(date +%s)"
-  {
-    printf 'status=in_progress\n'
-    printf 'started_epoch=%s\n' "${started}"
-    printf 'started_utc=%s\n' "$(date -u +%FT%TZ)"
-  } >"${timing_file}"
-  chmod 600 "${timing_file}"
-
-  log "Scaling ${machine_deployment} from 1 to 2 workers"
-  kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
-    scale machinedeployment "${machine_deployment}" --replicas=2
-  verify_cluster 2
-  probe_cluster
-  finished="$(date +%s)"
-
-  {
-    printf 'status=passed\n'
-    printf 'started_epoch=%s\n' "${started}"
-    printf 'ready_epoch=%s\n' "${finished}"
-    printf 'elapsed_seconds=%s\n' "$((finished - started))"
-  } >"${timing_file}"
-  resume_autoscaler_after_manual_scaling
-}
-
-scale_workers_down() {
-  require_management
-  [[ -f "${workload_kubeconfig}" ]] || die "workload kubeconfig is missing"
-  quiesce_autoscaler_for_manual_scaling
-
-  local desired available started finished run_dir timing_file
-  run_dir="$(current_or_new_run)"
-  mkdir -p "${run_dir}/m3"
-  chmod 700 "${run_dir}/m3"
-  timing_file="${run_dir}/m3/manual-scale-2-to-1.txt"
-  desired="$(kubectl --kubeconfig "${management_kubeconfig}" \
-    -n "${WORKLOAD_NAMESPACE}" get machinedeployment "${machine_deployment}" \
-    -o jsonpath='{.spec.replicas}')"
-  available="$(kubectl --kubeconfig "${management_kubeconfig}" \
-    -n "${WORKLOAD_NAMESPACE}" get machinedeployment "${machine_deployment}" \
-    -o jsonpath='{.status.availableReplicas}')"
-  if [[ "${desired}" == "1" ]]; then
-    log "${machine_deployment} already desires one worker; verifying cleanup"
-    verify_cluster 1
-    probe_cluster
-    resume_autoscaler_after_manual_scaling
-    return
-  fi
-  [[ "${desired}" == "2" && "${available}" == "2" ]] ||
-    die "scale-down preparation requires desired=2 available=2; found desired=${desired}, available=${available:-0}"
-
-  started="$(date +%s)"
-  printf 'status=in_progress\nstarted_epoch=%s\nstarted_utc=%s\n' \
-    "${started}" "$(date -u +%FT%TZ)" >"${timing_file}"
-  chmod 600 "${timing_file}"
-  log "Scaling ${machine_deployment} from 2 to 1 worker for the M3 baseline"
-  kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
-    scale machinedeployment "${machine_deployment}" --replicas=1
-  verify_cluster 1
-  probe_cluster
-  finished="$(date +%s)"
-  printf 'status=passed\nstarted_epoch=%s\nready_epoch=%s\nelapsed_seconds=%s\n' \
-    "${started}" "${finished}" "$((finished - started))" >"${timing_file}"
-  chmod 600 "${timing_file}"
-  resume_autoscaler_after_manual_scaling
+  autoscaler_replicas_before_manual_scaling=""
+  printf 'restored=%s\n' "${replicas}" >"${manual_scaling_run_dir}/autoscaler-restored.txt"
 }
 
 scale_workers() {
-  case "${1:-2}" in
-    1) scale_workers_down ;;
-    2) scale_workers_up ;;
-    *) die "WORKERS must be 1 or 2 for workload-cluster-scale" ;;
-  esac
+  local target="${1:-2}" desired run_dir started
+  [[ "${target}" =~ ^[1-3]$ ]] || die "WORKERS must be within 1:3"
+  require_management
+  ensure_workload_api_access
+  run_dir="$(current_or_new_run)/manual-$(utc_timestamp)-$$"
+  mkdir_private "${run_dir}"
+  # EXIT runs after the function's local variables have left scope on failure.
+  manual_scaling_run_dir="${run_dir}"
+  quiesce_autoscaler_for_manual_scaling
+  desired="$(kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
+    get machinedeployment "${machine_deployment}" -o jsonpath='{.spec.replicas}')"
+  [[ "${desired}" =~ ^[1-3]$ ]] || die "existing desired replicas outside 1:3: ${desired}"
+  started="$(date +%s)"
+  printf 'status=in_progress\nfrom=%s\nto=%s\nstarted_epoch=%s\n' \
+    "${desired}" "${target}" "${started}" >"${run_dir}/timing.txt"
+  kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
+    scale machinedeployment "${machine_deployment}" --replicas="${target}"
+  verify_cluster "${target}"
+  probe_cluster
+  printf 'status=passed\nfinished_epoch=%s\n' "$(date +%s)" >>"${run_dir}/timing.txt"
+  resume_autoscaler_after_manual_scaling
 }
 
 destroy_cluster() {
@@ -446,7 +357,8 @@ case "${action}" in
     require_management
     wait_for_control_plane_available
     ;;
-  scale) scale_workers "${2:-2}" ;;
+  scale) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" manual "${2:-2}" ;;
+  scale-unlocked) scale_workers "${2:-2}" ;;
   diagnostics)
     require_management
     if [[ -f "${workload_kubeconfig}" ]]; then

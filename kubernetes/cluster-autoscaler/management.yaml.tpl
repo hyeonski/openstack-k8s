@@ -79,7 +79,20 @@ spec:
         - --kubeconfig=/etc/cluster-autoscaler/workload/value
         - --clusterapi-cloud-config-authoritative
         - --node-group-auto-discovery=clusterapi:namespace=${WORKLOAD_NAMESPACE},clusterName=${WORKLOAD_CLUSTER_NAME}
-        - --scale-down-enabled=false
+        - --scale-down-enabled=true
+        - --scan-interval=10s
+        - --new-pod-scale-up-delay=30s
+        - --scale-down-delay-after-add=10m
+        - --scale-down-delay-after-delete=1m
+        - --scale-down-delay-after-failure=3m
+        - --max-scale-down-parallelism=1
+        - --scale-down-unneeded-time=10m
+        - --scale-down-unready-time=20m
+        - --scale-down-utilization-threshold=0.5
+        - --max-node-provision-time=15m
+        - --skip-nodes-with-system-pods=false
+        - --skip-nodes-with-local-storage=true
+        - --max-graceful-termination-sec=600
         - --leader-elect=true
         - --v=4
         resources:

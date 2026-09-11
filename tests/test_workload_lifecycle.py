@@ -13,6 +13,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import workload_state as state
+import autoscaler_cycle as cycle
 import test_resources as resources
 
 ENV = {'ENVIRONMENT_NAME': 'cloud-gcp-amd64', 'WORKLOAD_CLUSTER_NAME': 'test', 'WORKLOAD_NAMESPACE': 'default',
@@ -117,6 +118,104 @@ class StateTests(unittest.TestCase):
             self.assertEqual(save.call_args.args[1]['last_observation']['state'], 'preparing')
 
 
+class CycleTests(unittest.TestCase):
+    def test_cpu_request_prevents_two_on_fresh_worker(self):
+        selected, _ = cycle.choose_request(fixture())
+        self.assertGreater(selected * 2, 2000)
+        self.assertLessEqual(selected, 2000)
+
+    def test_insufficient_capacity_is_not_loosened(self):
+        s = fixture()
+        s['pods']['items'][-1]['spec']['containers'] = [{'resources': {'requests': {'cpu': '1100m'}}}]
+        with self.assertRaisesRegex(RuntimeError, 'capacity insufficient'):
+            cycle.choose_request(s)
+
+    def test_deleted_identity_and_owned_ports(self):
+        removed = cycle.retirement(fixture(3), fixture(2))
+        self.assertEqual(removed[0]['server'], 'id-3')
+        self.assertEqual(removed[0]['deleted_ports'], ['port-3'])
+
+    def test_orphan_port_and_shared_deletion_fail(self):
+        s = fixture(1)
+        s['nova']['ports'].append({'id': 'port-2', 'device_id': ''})
+        with self.assertRaisesRegex(RuntimeError, 'port remains'):
+            cycle.retirement(fixture(2), s)
+        s = fixture(1)
+        s['nova']['security_groups'] = []
+        with self.assertRaisesRegex(RuntimeError, 'shared'):
+            cycle.retirement(fixture(2), s)
+
+    def test_control_plane_replacement_is_rejected(self):
+        s = fixture(1)
+        s['machines']['items'][0]['metadata']['uid'] = 'replacement'
+        with self.assertRaisesRegex(RuntimeError, 'control plane identity'):
+            cycle.retirement(fixture(2), s)
+
+    def test_scale_in_requires_actual_removed_node_event(self):
+        with self.assertRaisesRegex(RuntimeError, 'deleted Node UID'):
+            cycle.verify_transition(fixture(2), fixture(1), 'down', [{'involvedObject': {'uid': 'n-1'}}])
+        removed = cycle.verify_transition(fixture(2), fixture(1), 'down', [{'involvedObject': {'uid': 'n-2'}}])
+        self.assertEqual(len(removed), 1)
+
+    def test_final_cleanup_cannot_hide_worker_replacement(self):
+        s = fixture(1)
+        # Replacement uses the old name: identity continuity still fails.
+        s['machines']['items'][1]['metadata']['uid'] = 'replacement'
+        with self.assertRaises(RuntimeError):
+            cycle.verify_transition(fixture(1), s, None, [])
+
+    def test_actual_pod_requests_and_termination_checked(self):
+        s = fixture()
+        pod = {'metadata': {'name': 'load', 'uid': 'load-1', 'labels': {'app.kubernetes.io/name': 'load'}},
+               'spec': {'nodeName': 'test-1', 'containers': [{'resources': {'requests': {'cpu': '1200m'}}}]}, 'status': {'conditions': [ready()]}}
+        s['pods']['items'].append(pod)
+        self.assertTrue(cycle.pod_contract(s, 'load', 1200, 1))
+        self.assertFalse(cycle.pod_contract(s, 'load', 1100, 1))
+        pod['metadata']['deletionTimestamp'] = 'now'
+        self.assertFalse(cycle.pod_contract(s, 'load', 1200, 1))
+
+    def test_stale_and_unrelated_ca_events_do_not_prove_transition(self):
+        before, current = fixture(), fixture(2)
+        current['pods']['items'].append({'metadata': {'uid': 'new', 'labels': {'app.kubernetes.io/name': 'load'}}, 'spec': {}})
+        event = {'metadata': {'uid': 'event'}, 'lastTimestamp': '2026-09-11T01:00:30Z', 'source': {'component': 'cluster-autoscaler'},
+                 'reason': 'TriggeredScaleUp', 'involvedObject': {'uid': 'new', 'kind': 'Pod'}}
+        start = '2026-09-11T01:00:00+00:00'
+        self.assertEqual(len(cycle.ca_decisions(json.dumps({'items': [event]}), 'up', before, current, 'load', start)), 1)
+        event['lastTimestamp'] = '2026-09-11T00:00:00Z'
+        self.assertEqual(cycle.ca_decisions(json.dumps({'items': [event]}), 'up', before, current, 'load', start), [])
+
+    def test_pdb_blocked_stage_terminates_without_scaling(self):
+        s = fixture(2)
+        with patch.dict(os.environ, ENV), patch.object(cycle, 'save') as saved, patch.object(cycle.time, 'monotonic', side_effect=[0, 0, 101, 101, 101]), patch.object(cycle.time, 'sleep'):
+            client = state.Client()
+            with patch.object(client, 'snapshot', return_value=s), patch.object(client, 'k') as mutation, patch.object(cycle, 'decision_evidence', return_value=({'pdb': 'disruptionsAllowed=0'}, {})):
+                with self.assertRaises(TimeoutError):
+                    cycle.stage(client, Path('/tmp/offline'), 1, 'load', 1200, s, 'down')
+                mutation.assert_not_called()
+            self.assertEqual(saved.call_args.args[1]['state'], 'timeout')
+
+    def test_cycle_sequence_changes_only_test_deployment(self):
+        class FakeClient:
+            cluster, ns = 'test', 'default'
+            def __init__(self): self.calls = []
+            def k(self, plane, *args, **kwargs):
+                self.calls.append((plane, args, kwargs))
+                return json.dumps({'kind': 'Deployment', 'metadata': {'uid': 'owned', 'name': 'load', 'namespace': 'default'}})
+            def get(self, *args): return {'metadata': {'uid': 'owned'}}
+        client = FakeClient()
+        targets = []
+        def fake_stage(client, path, target, *args, **kwargs):
+            targets.append(target)
+            return fixture(target)
+        with patch.dict(os.environ, ENV), tempfile.TemporaryDirectory() as tmp, patch.object(cycle, 'stage', side_effect=fake_stage), patch.object(cycle, 'save'), patch.object(cycle, 'probe'), patch.object(cycle, 'residues', return_value=[]), patch.object(cycle, 'command', return_value='no orphan'), patch.object(cycle, 'delete_owned'):
+            cycle.run(client, Path(tmp))
+        self.assertEqual(targets, [1, 2, 3, 2, 1, 2, 1, 1])
+        self.assertTrue(all(plane == 'w' for plane, _, _ in client.calls))
+        self.assertFalse(any('machinedeployment' in str(args) for _, args, _ in client.calls))
+        patches = [json.loads(args[-1])[-1]['value'] for _, args, _ in client.calls if args[0] == 'patch']
+        self.assertEqual(patches, [3, 2, 1, 2, 1])
+
+
 class OwnershipTests(unittest.TestCase):
     def test_delete_has_uid_precondition(self):
         with patch.dict(os.environ, ENV):
@@ -157,6 +256,45 @@ class OwnershipTests(unittest.TestCase):
                     else:
                         resources.probe(client, Path('/tmp/offline'), 'run')
                         self.assertGreaterEqual(actions.index('delete'), 4)
+
+    def test_manual_scaling_restores_ca_on_success_and_failure(self):
+        source = (ROOT / 'scripts/workload-cluster.sh').read_text().split('case "${action}" in')[0]
+        source = source.replace('PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"', 'PROJECT_ROOT=' + str(ROOT))
+        for original, result in ((0, 0), (0, 1), (1, 0), (1, 1)):
+            with tempfile.TemporaryDirectory() as tmp:
+                script = source + r'''
+require_management() { :; }
+ensure_workload_api_access() { :; }
+current_or_new_run() { printf '%s\n' "$TEST_TMP"; }
+python3() { :; }
+verify_cluster() { return "$TEST_VERIFY_STATUS"; }
+probe_cluster() { :; }
+kubectl() {
+  printf '%s\n' "$*" >>"$TEST_TMP/calls"
+  case "$*" in
+    *"get deployment cluster-autoscaler --ignore-not-found"*) echo deployment/cluster-autoscaler ;;
+    *"get deployment cluster-autoscaler -o jsonpath"*) echo "$TEST_CA_REPLICAS" ;;
+    *"get machinedeployment"*) echo 2 ;;
+    *"get pods"*) : ;;
+  esac
+}
+scale_workers 1
+'''
+                env = {**os.environ, 'TEST_TMP': tmp, 'TEST_VERIFY_STATUS': str(result),
+                       'TEST_CA_REPLICAS': str(original)}
+                proc = subprocess.run(['bash', '-c', script], env=env, text=True, capture_output=True)
+                self.assertEqual(proc.returncode, result, proc.stderr)
+                calls = (Path(tmp) / 'calls').read_text()
+                self.assertIn('scale deployment cluster-autoscaler --replicas=0', calls)
+                self.assertIn(f'scale deployment cluster-autoscaler --replicas={original}', calls)
+                if original == 0:
+                    self.assertNotIn('scale deployment cluster-autoscaler --replicas=1', calls)
+                restored = list(Path(tmp).glob('manual-*/autoscaler-restored.txt'))
+                self.assertEqual(len(restored), 1, f'original={original} result={result}: {proc.stderr}')
+                self.assertEqual(restored[0].read_text().strip(), f'restored={original}')
+                self.assertEqual(restored[0].stat().st_mode & 0o777, 0o600)
+                self.assertIn('scale machinedeployment osk8s-workload-md-0 --replicas=1', calls)
+
 
 if __name__ == '__main__':
     unittest.main()

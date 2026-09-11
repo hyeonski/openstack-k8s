@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
 
 set -Eeuo pipefail
+umask 077
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
+set -a
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
+set +a
 
 action="${1:-}"
+[[ "${CLUSTER_AUTOSCALER_NODE_GROUP_MIN_SIZE}:${CLUSTER_AUTOSCALER_NODE_GROUP_MAX_SIZE}" == "1:3" ]] ||
+  die "ADR-0016 requires the fixed worker range 1:3"
 management_kubeconfig="${STATE_DIR}/kubeconfigs/management.yaml"
 workload_kubeconfig="${STATE_DIR}/kubeconfigs/${WORKLOAD_CLUSTER_NAME}.yaml"
 machine_deployment="${WORKLOAD_CLUSTER_NAME}-md-0"
 manifest_root="${PROJECT_ROOT}/kubernetes/cluster-autoscaler"
 management_template="${manifest_root}/management.yaml.tpl"
 workload_rbac_template="${manifest_root}/workload-rbac.yaml.tpl"
-test_template="${manifest_root}/test-workload.yaml.tpl"
-probe_template="${manifest_root}/targeted-probe.yaml.tpl"
 management_manifest="${GENERATED_DIR}/cluster-autoscaler-management.yaml"
 workload_rbac_manifest="${GENERATED_DIR}/cluster-autoscaler-workload-rbac.yaml"
-test_manifest="${GENERATED_DIR}/cluster-autoscaler-test-workload.yaml"
-probe_manifest="${GENERATED_DIR}/cluster-autoscaler-targeted-probe.yaml"
 credential_temp_dir=""
 
 cleanup_credential_temp() {
@@ -141,8 +142,8 @@ install_autoscaler() {
     get machinedeployment "${machine_deployment}" -o jsonpath='{.spec.replicas}')"
   available="$(kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
     get machinedeployment "${machine_deployment}" -o jsonpath='{.status.availableReplicas}')"
-  [[ ("${desired}" == "1" || "${desired}" == "2") && "${available}" == "${desired}" ]] ||
-    die "install requires a stable node group within 1:2; found desired=${desired} available=${available:-0}"
+  [[ "${desired}" =~ ^[1-3]$ && "${available}" == "${desired}" ]] ||
+    die "install requires a stable node group within 1:3; found desired=${desired} available=${available:-0}"
   render_base_manifests
   annotate_node_group
   create_workload_kubeconfig_secret
@@ -166,7 +167,7 @@ verify_autoscaler() {
   max_size="$(kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
     get machinedeployment "${machine_deployment}" \
     -o jsonpath='{.metadata.annotations.cluster\.x-k8s\.io/cluster-api-autoscaler-node-group-max-size}')"
-  [[ "${min_size}" == "1" && "${max_size}" == "2" ]] ||
+  [[ "${min_size}" == "${CLUSTER_AUTOSCALER_NODE_GROUP_MIN_SIZE}" && "${max_size}" == "${CLUSTER_AUTOSCALER_NODE_GROUP_MAX_SIZE}" ]] ||
     die "unexpected MachineDeployment autoscaler range: ${min_size:-unset}:${max_size:-unset}"
 
   image="$(kubectl --kubeconfig "${management_kubeconfig}" \
@@ -191,14 +192,21 @@ required = {
     "--cloud-provider=clusterapi",
     "--kubeconfig=/etc/cluster-autoscaler/workload/value",
     "--clusterapi-cloud-config-authoritative",
-    "--scale-down-enabled=false",
+    "--scale-down-enabled=true",
     "--node-group-auto-discovery=clusterapi:namespace=" + sys.argv[1] + ",clusterName=" + sys.argv[2],
 }
+from pathlib import Path
+policy = {line.strip()[2:] for line in Path(sys.argv[3]).read_text().splitlines()
+          if line.strip().startswith("- --") and "${" not in line}
+required |= policy
 missing = sorted(required - set(args))
+keys = [arg.split("=", 1)[0] for arg in args]
+if len(keys) != len(set(keys)):
+    raise SystemExit("duplicate Cluster Autoscaler flags")
 if missing or any(arg.startswith("--cloud-config") for arg in args):
     raise SystemExit(f"invalid Cluster Autoscaler arguments: missing={missing}")
-' "${WORKLOAD_NAMESPACE}" "${WORKLOAD_CLUSTER_NAME}" ||
-    die "Cluster Autoscaler arguments do not match ADR-0012"
+' "${WORKLOAD_NAMESPACE}" "${WORKLOAD_CLUSTER_NAME}" "${management_template}" ||
+    die "Cluster Autoscaler arguments do not match ADR-0016"
   kubectl --kubeconfig "${management_kubeconfig}" auth can-i \
     --as="system:serviceaccount:${CLUSTER_AUTOSCALER_NAMESPACE}:${CLUSTER_AUTOSCALER_SERVICE_ACCOUNT}" \
     patch machinedeployments.cluster.x-k8s.io --subresource=scale \
@@ -208,6 +216,14 @@ if missing or any(arg.startswith("--cloud-config") for arg in args):
     --as="system:serviceaccount:${CLUSTER_AUTOSCALER_WORKLOAD_NAMESPACE}:${CLUSTER_AUTOSCALER_SERVICE_ACCOUNT}" \
     list pods --all-namespaces | grep -qx yes ||
     die "workload ServiceAccount cannot list Pods"
+  kubectl --kubeconfig "${workload_kubeconfig}" auth can-i \
+    --as="system:serviceaccount:${CLUSTER_AUTOSCALER_WORKLOAD_NAMESPACE}:${CLUSTER_AUTOSCALER_SERVICE_ACCOUNT}" \
+    create pods --subresource=eviction --all-namespaces | grep -qx yes ||
+    die "workload ServiceAccount cannot evict Pods"
+  kubectl --kubeconfig "${workload_kubeconfig}" auth can-i \
+    --as="system:serviceaccount:${CLUSTER_AUTOSCALER_WORKLOAD_NAMESPACE}:${CLUSTER_AUTOSCALER_SERVICE_ACCOUNT}" \
+    list poddisruptionbudgets.policy --all-namespaces | grep -qx yes ||
+    die "workload ServiceAccount cannot read PDBs"
   local resource
   for resource in resourceslices deviceclasses resourceclaims; do
     kubectl --kubeconfig "${workload_kubeconfig}" auth can-i \
@@ -235,121 +251,6 @@ if missing or any(arg.startswith("--cloud-config") for arg in args):
   [[ "${node_architecture}" == "${MANAGEMENT_KUBERNETES_ARCHITECTURE}" ]] ||
     die "Autoscaler is running on ${node_architecture}; expected ${MANAGEMENT_KUBERNETES_ARCHITECTURE}"
   log "Cluster Autoscaler image, arguments, RBAC and node-group range passed"
-}
-
-write_name_list() {
-  local path="$1"
-  shift
-  printf '%s\n' "$@" | sed '/^$/d' | sort >"${path}"
-  chmod 600 "${path}"
-}
-
-select_cpu_request() {
-  local worker="$1" status_dir="$2"
-  local node_json pods_json selection
-  node_json="${GENERATED_DIR}/m3-worker-node.json"
-  pods_json="${GENERATED_DIR}/m3-worker-pods.json"
-  kubectl --kubeconfig "${workload_kubeconfig}" get node "${worker}" -o json >"${node_json}"
-  kubectl --kubeconfig "${workload_kubeconfig}" get pods -A \
-    --field-selector="spec.nodeName=${worker}" -o json >"${pods_json}"
-  selection="$("${PROJECT_ROOT}/scripts/select-autoscaler-cpu.py" "${node_json}" "${pods_json}")"
-  rm -f "${node_json}" "${pods_json}"
-  {
-    printf 'worker=%s\n' "${worker}"
-    printf '%s\n' "${selection}"
-  } >"${status_dir}/cpu-selection.txt"
-  chmod 600 "${status_dir}/cpu-selection.txt"
-  awk -F= '$1 == "selected_request_millicpu" {print $2}' <<<"${selection}"
-}
-
-wait_for_pending_cpu() {
-  local status_dir="$1" attempt desired lines pod status reason message
-  for ((attempt = 1; attempt <= 120; attempt++)); do
-    desired="$(kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
-      get machinedeployment "${machine_deployment}" -o jsonpath='{.spec.replicas}')"
-    [[ "${desired}" == "1" ]] || {
-      capture_failure "scaled-before-pending-proof"
-      die "MachineDeployment scaled before the required Pending CPU evidence was captured"
-    }
-    lines="$(kubectl --kubeconfig "${workload_kubeconfig}" \
-      -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" get pods \
-      -l "app.kubernetes.io/name=${CLUSTER_AUTOSCALER_TEST_NAME}" \
-      -o jsonpath='{range .items[?(@.status.phase=="Pending")]}{.metadata.name}{"\t"}{range .status.conditions[?(@.type=="PodScheduled")]}{.status}{"\t"}{.reason}{"\t"}{.message}{end}{"\n"}{end}' 2>/dev/null || true)"
-    while IFS=$'\t' read -r pod status reason message; do
-      [[ -n "${pod}" ]] || continue
-      if [[ "${status}" == "False" && "${reason}" == "Unschedulable" &&
-          "${message}" == *"Insufficient cpu"* ]]; then
-        desired="$(kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
-          get machinedeployment "${machine_deployment}" -o jsonpath='{.spec.replicas}')"
-        [[ "${desired}" == "1" ]] || continue
-        printf 'pod=%s\nreason=%s\nmessage=%s\n' "${pod}" "${reason}" "${message}" \
-          >"${status_dir}/pending-insufficient-cpu.txt"
-        kubectl --kubeconfig "${workload_kubeconfig}" \
-          -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" describe pod "${pod}" \
-          >"${status_dir}/pending-pod-describe.txt"
-        printf '%s\n' "${pod}"
-        return
-      fi
-    done <<<"${lines}"
-    sleep 1
-  done
-  capture_failure "pending-cpu-timeout"
-  die "no Unschedulable Pod with Insufficient cpu was observed"
-}
-
-wait_for_new_machine_node() {
-  local old_file="$1" attempt machine node
-  for ((attempt = 1; attempt <= 360; attempt++)); do
-    while IFS=$'\t' read -r machine node; do
-      [[ -n "${machine}" && -n "${node}" ]] || continue
-      if ! grep -Fxq "${machine}" "${old_file}"; then
-        printf '%s\t%s\n' "${machine}" "${node}"
-        return
-      fi
-    done < <(kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
-      get machines -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.nodeRef.name}{"\n"}{end}' \
-      2>/dev/null || true)
-    sleep 5
-  done
-  capture_failure "new-machine-node-timeout"
-  die "new Machine did not acquire a Node reference"
-}
-
-wait_for_nova_active() {
-  local machine="$1" attempt status
-  for ((attempt = 1; attempt <= 180; attempt++)); do
-    status="$(run_on "${CONTROLLER_NAME}" env MACHINE_NAME="${machine}" bash -lc '
-      set -Eeuo pipefail
-      source /opt/kolla-venv/bin/activate
-      export OS_CLIENT_CONFIG_FILE=/etc/kolla/capi-clouds.yaml
-      openstack --os-cloud capi server show "${MACHINE_NAME}" -f value -c status
-    ' 2>/dev/null || true)"
-    [[ "${status}" == "ACTIVE" ]] && return
-    sleep 5
-  done
-  capture_failure "nova-active-timeout"
-  die "new Nova server did not become ACTIVE: ${machine} status=${status:-missing}"
-}
-
-run_targeted_probe() {
-  local node="$1" status_dir="$2"
-  CLUSTER_AUTOSCALER_TARGETED_PROBE_NAME="${CLUSTER_AUTOSCALER_TARGETED_PROBE_NAME}" \
-  CLUSTER_AUTOSCALER_TEST_NAMESPACE="${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" \
-  CLUSTER_AUTOSCALER_TEST_IMAGE="${CLUSTER_AUTOSCALER_TEST_IMAGE}" \
-  CLUSTER_AUTOSCALER_TARGET_NODE="${node}" \
-    "${PROJECT_ROOT}/scripts/render-template.py" "${probe_template}" "${probe_manifest}"
-  kubectl --kubeconfig "${workload_kubeconfig}" apply -f "${probe_manifest}" >/dev/null
-  if ! kubectl --kubeconfig "${workload_kubeconfig}" \
-      -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" wait \
-      --for=jsonpath='{.status.phase}'=Succeeded \
-      "pod/${CLUSTER_AUTOSCALER_TARGETED_PROBE_NAME}" --timeout=5m; then
-    capture_failure "targeted-cni-dns"
-    die "new-worker targeted CNI/DNS probe failed; Pod preserved"
-  fi
-  kubectl --kubeconfig "${workload_kubeconfig}" \
-    -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" get pod \
-    "${CLUSTER_AUTOSCALER_TARGETED_PROBE_NAME}" -o wide \
-    >"${status_dir}/targeted-cni-dns-probe.txt"
 }
 
 check_orphan_calico_ipam() {
@@ -393,111 +294,15 @@ CONTROLLER_CHECK
   }
 }
 
-test_scale_up() {
-  "${PROJECT_ROOT}/scripts/gcp-openstack-recover.sh"
-  verify_autoscaler
-  local desired available run_dir status_dir worker cpu_request pending_pod
-  local new_identity new_machine new_node started finished
-  desired="$(kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
-    get machinedeployment "${machine_deployment}" -o jsonpath='{.spec.replicas}')"
-  available="$(kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
-    get machinedeployment "${machine_deployment}" -o jsonpath='{.status.availableReplicas}')"
-  [[ "${desired}" == "1" && "${available}" == "1" ]] ||
-    die "M3 test requires desired=1 available=1; found desired=${desired} available=${available:-0}"
-  if kubectl --kubeconfig "${workload_kubeconfig}" \
-      -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" get deployment \
-      "${CLUSTER_AUTOSCALER_TEST_NAME}" >/dev/null 2>&1; then
-    die "existing M3 test workload must be inspected before retry"
-  fi
-  if kubectl --kubeconfig "${workload_kubeconfig}" \
-      -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" get pod \
-      "${CLUSTER_AUTOSCALER_TARGETED_PROBE_NAME}" >/dev/null 2>&1; then
-    die "existing M3 targeted probe must be inspected before retry"
-  fi
-
-  run_dir="$(current_or_new_run)"
-  status_dir="${run_dir}/m3"
-  mkdir -p "${status_dir}"
-  chmod 700 "${status_dir}"
-  kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
-    get machines -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' |
-    sort >"${status_dir}/machines-before.txt"
-  kubectl --kubeconfig "${workload_kubeconfig}" get nodes \
-    -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' |
-    sort >"${status_dir}/nodes-before.txt"
-  worker="$(kubectl --kubeconfig "${workload_kubeconfig}" get nodes \
-    -l '!node-role.kubernetes.io/control-plane' \
-    -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
-  [[ "$(wc -l <<<"${worker}" | tr -d ' ')" == "1" ]] || die "expected exactly one worker"
-  cpu_request="$(select_cpu_request "${worker}" "${status_dir}")"
-  [[ "${cpu_request}" =~ ^[1-9][0-9]*$ ]] || die "invalid selected CPU request"
-
-  CLUSTER_AUTOSCALER_TEST_NAME="${CLUSTER_AUTOSCALER_TEST_NAME}" \
-  CLUSTER_AUTOSCALER_TEST_NAMESPACE="${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" \
-  CLUSTER_AUTOSCALER_TEST_IMAGE="${CLUSTER_AUTOSCALER_TEST_IMAGE}" \
-  CLUSTER_AUTOSCALER_TEST_CPU_REQUEST="${cpu_request}m" \
-    "${PROJECT_ROOT}/scripts/render-template.py" "${test_template}" "${test_manifest}"
-  started="$(date +%s)"
-  printf 'status=in_progress\nstarted_utc=%s\nstarted_epoch=%s\n' \
-    "$(date -u +%FT%TZ)" "${started}" >"${status_dir}/scale-up-timing.txt"
-  log "Creating two ${cpu_request}m CPU Pods on one worker"
-  kubectl --kubeconfig "${workload_kubeconfig}" apply -f "${test_manifest}" >/dev/null
-  pending_pod="$(wait_for_pending_cpu "${status_dir}")"
-  log "Observed ${pending_pod}: Unschedulable due to Insufficient cpu"
-
-  if ! kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" wait \
-      --for=jsonpath='{.spec.replicas}'=2 "machinedeployment/${machine_deployment}" \
-      --timeout="${WORKLOAD_CAPI_READY_TIMEOUT}"; then
-    capture_failure "autoscaler-scale-up-timeout"
-    die "Cluster Autoscaler did not change MachineDeployment from 1 to 2"
-  fi
-  new_identity="$(wait_for_new_machine_node "${status_dir}/machines-before.txt")"
-  IFS=$'\t' read -r new_machine new_node <<<"${new_identity}"
-  printf 'machine=%s\nnode=%s\n' "${new_machine}" "${new_node}" \
-    >"${status_dir}/new-worker.txt"
-  wait_for_nova_active "${new_machine}"
-  kubectl --kubeconfig "${workload_kubeconfig}" wait --for=condition=Ready \
-    "node/${new_node}" --timeout="${WORKLOAD_NODE_READY_TIMEOUT}"
-  local calico_pod
-  calico_pod="$(kubectl --kubeconfig "${workload_kubeconfig}" -n kube-system get pods \
-    -l k8s-app=calico-node --field-selector="spec.nodeName=${new_node}" \
-    -o jsonpath='{.items[0].metadata.name}')"
-  kubectl --kubeconfig "${workload_kubeconfig}" -n kube-system wait \
-    --for=condition=Ready "pod/${calico_pod}" --timeout="${WORKLOAD_CALICO_READY_TIMEOUT}"
-  run_targeted_probe "${new_node}" "${status_dir}"
-  kubectl --kubeconfig "${workload_kubeconfig}" \
-    -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" wait \
-    --for=condition=Available "deployment/${CLUSTER_AUTOSCALER_TEST_NAME}" --timeout=5m
-  kubectl --kubeconfig "${workload_kubeconfig}" \
-    -n "${CLUSTER_AUTOSCALER_TEST_NAMESPACE}" get pods \
-    -l "app.kubernetes.io/name=${CLUSTER_AUTOSCALER_TEST_NAME}" -o wide \
-    >"${status_dir}/test-pods-after-scale-up.txt"
-  grep -q "${new_node}" "${status_dir}/test-pods-after-scale-up.txt" || {
-    capture_failure "pending-pod-not-on-new-worker"
-    die "the previously Pending workload did not run on the new worker"
-  }
-
-  "${PROJECT_ROOT}/scripts/workload-cluster.sh" verify 2
-  "${PROJECT_ROOT}/scripts/workload-cluster.sh" probe
-  check_orphan_calico_ipam "${new_node}" "${status_dir}"
-  kubectl --kubeconfig "${management_kubeconfig}" \
-    -n "${CLUSTER_AUTOSCALER_NAMESPACE}" logs deployment/cluster-autoscaler --tail=1000 \
-    >"${status_dir}/autoscaler-scale-up.log"
-  kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" get \
-    machinedeployments,machines,openstackmachines -o wide >"${status_dir}/capi-after-scale-up.txt"
-  kubectl --kubeconfig "${workload_kubeconfig}" get nodes -o wide \
-    >"${status_dir}/nodes-after-scale-up.txt"
-  finished="$(date +%s)"
-  printf 'status=passed\nstarted_epoch=%s\nready_epoch=%s\nelapsed_seconds=%s\n' \
-    "${started}" "${finished}" "$((finished - started))" >"${status_dir}/scale-up-timing.txt"
-  chmod -R go-rwx "${status_dir}"
-  log "M3 Pending Pod scale-up passed; new worker=${new_node} artifact=${status_dir}"
-}
-
 case "${action}" in
   install) install_autoscaler ;;
   verify) verify_autoscaler ;;
-  test) test_scale_up ;;
+  test)
+    verify_autoscaler
+    python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py"
+    ;;
+  test-cleanup) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" cleanup ;;
+  ipam-check) check_orphan_calico_ipam "${2:?node}" "${3:?evidence directory}" ;;
   diagnostics) capture_failure "manual" ;;
-  *) die "usage: $0 {install|verify|test|diagnostics}" ;;
+  *) die "usage: $0 {install|verify|test|test-cleanup|diagnostics}" ;;
 esac

@@ -22,7 +22,7 @@ export ENV
 	workload-cluster-scale workload-cluster-prepare workload-cluster-status workload-cluster-probe \
 	workload-cluster-diagnostics workload-cluster-destroy \
 	cluster-autoscaler-install cluster-autoscaler-verify \
-	cluster-autoscaler-test cluster-autoscaler-diagnostics \
+	cluster-autoscaler-test cluster-autoscaler-test-cleanup cluster-autoscaler-diagnostics \
 	status lint
 
 help:
@@ -92,14 +92,15 @@ help:
 	@echo "  workload-cluster-status   One read-only observation (WORKERS=1)"
 	@echo "  workload-cluster-probe    Run owned API and per-node CNI/DNS probes"
 	@echo "  workload-cluster-verify   Read-only convergence check (WORKERS=1)"
-	@echo "  workload-cluster-scale    Manually scale the MachineDeployment from 1 to 2"
+	@echo "  workload-cluster-scale    Manually scale workers within 1:3"
 	@echo "  workload-cluster-diagnostics Collect CAPI/Nova/bootstrap/compute diagnostics"
 	@echo "  workload-cluster-destroy  Delete exact workload Cluster (two confirmations)"
 	@echo
 	@echo "M3 Cluster Autoscaler:"
 	@echo "  cluster-autoscaler-install     Install pinned CA and dual-cluster RBAC"
 	@echo "  cluster-autoscaler-verify      Verify image, arguments, access and min/max"
-	@echo "  cluster-autoscaler-test        Run Pending Pod based 1-to-2 scale-up"
+	@echo "  cluster-autoscaler-test        Run automatic 1-2-3-2-1-2-1 requests test"
+	@echo "  cluster-autoscaler-test-cleanup Preserve evidence, remove owned test resources"
 	@echo "  cluster-autoscaler-diagnostics Preserve redacted M3 failure evidence"
 	@echo
 	@echo "Development:"
@@ -285,6 +286,9 @@ cluster-autoscaler-verify:
 
 cluster-autoscaler-test:
 	@scripts/cluster-autoscaler.sh test
+
+cluster-autoscaler-test-cleanup:
+	@scripts/cluster-autoscaler.sh test-cleanup
 
 cluster-autoscaler-diagnostics:
 	@scripts/cluster-autoscaler.sh diagnostics

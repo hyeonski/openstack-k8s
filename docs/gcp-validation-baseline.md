@@ -2,7 +2,9 @@
 
 기준일은 2026-08-24이며 대상은 `openstack-k8s` project의
 `asia-northeast3-a` 환경이다. 이 문서는 현재 자동화가 보존해야 할 검증 계약과
-최근 결과를 요약한다.
+당시 결과를 요약한다. 2026-09-11 변경의 결과와 미실행 항목은
+[worker 자동 증감 검증](worker-autoscaling-validation.md)에 별도로 기록한다.
+아래 자동 1→2 통과는 자동 1~3 증감/scale-in의 통과 증거가 아니다.
 
 ## 인프라
 

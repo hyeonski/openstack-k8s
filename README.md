@@ -1,7 +1,7 @@
 # GCP OpenStack Kubernetes Autoscaling Testbed
 
 이 저장소는 GCP의 중첩 가상화 VM 위에 OpenStack 2025.2를 배포하고,
-`Cluster API + CAPO + Cluster Autoscaler`로 Kubernetes worker 자동 증설을
+`Cluster API + CAPO + Cluster Autoscaler`로 Kubernetes worker 자동 증감을
 검증하는 GCP 전용 테스트베드다. 실행 환경은 `cloud-gcp-amd64` 하나이며 모든
 `make` 명령은 이 구성을 자동으로 사용한다.
 
@@ -47,7 +47,7 @@ control-plane Floating IP를 직접 사용한다.
 | CAPO | v0.14.6 |
 | ORC | v2.4.0 |
 | Calico | v3.32.1 |
-| Cluster Autoscaler | v1.35.0, digest 고정, worker `1:2` |
+| Cluster Autoscaler | v1.35.0, digest 고정, worker `1:3`, 자동 축소 활성화 |
 | 비용 제어 | GCE 인스턴스 36,000초 후 `STOP` |
 
 OpenStack은 Keystone, Glance, Placement, Nova, Neutron ML2/OVS와 Horizon만
@@ -156,8 +156,10 @@ make openstack-verify
 ```
 
 `gcp-host-verify`는 세 호스트의 OS, 시간 동기화, Docker, forwarding과
-controller→compute SSH를 확인하고, compute에서는 `/dev/kvm`과 실제 nested KVM
-kernel boot를 검증한다. VM 재기동 뒤에는 Keystone, Placement, nova-compute와
+compute의 `/dev/kvm`과 nested KVM 활성 상태를 확인한다. ADR-0015의
+controller→compute SSH와 실제 nested kernel boot는 별도로 수행해야 한다.
+이번 실환경 검증에서는 controller의 기존 배포 키로 두 compute에 접속하고,
+각 compute의 `/usr/local/sbin/verify-nested-kvm`을 실행해 통과했다. VM 재기동 뒤에는 Keystone, Placement, nova-compute와
 hypervisor가 준비될 때까지 `gcp-openstack-recover`가 대기한다.
 
 ```bash
@@ -208,32 +210,52 @@ make workload-cluster-prepare          # 기존 환경의 Calico 의도 설정 �
 make workload-cluster-status WORKERS=1 # 한번 조회: 관리 구성/시험 자원 변경 없음
 make workload-cluster-verify WORKERS=1 # 동일한 조회로 제한 시간 내 수렴 대기
 make workload-cluster-probe            # 실행 소유 Pod로 API/CNI/DNS 능동 검사
-make workload-cluster-scale WORKERS=2
-make workload-cluster-scale WORKERS=1
 
 make cluster-autoscaler-install
 make cluster-autoscaler-verify
-make cluster-autoscaler-test
+make workload-cluster-scale WORKERS=2  # 수동 증감 범위: 1~3
+make workload-cluster-scale WORKERS=3
+make workload-cluster-scale WORKERS=2
+make workload-cluster-scale WORKERS=1
+make cluster-autoscaler-test           # 자동 1→2→3→2→1→2→1
 ```
+
+GCP controller 1대·compute 2대와 workload control plane Nova VM 1대는 고정이다.
+worker Nova VM만 최소 1~최대 3대로 증감하므로 workload VM 총합은 2~4대다.
+compute별 4 vCPU·16 GiB, CP/worker별 2 vCPU·2 GiB·20 GB를 유지한다.
+worker 3대는 기능 검증용 상한이며 성능 여유가 검증된 값은 아니다.
 
 조회는 기존 kubeconfig/터널을 사용하고 자동 준비·복구를 수행하지 않는다.
 준비 중, 설정 불일치, 조회 불가, 시간 초과를 구분해 로컬 결과를 남긴다.
 능동 검사는 management→workload API 및 각 Node의 CNI/DNS를 확인하고,
 성공한 임시 Pod만 증거 저장 후 UID 조건으로 삭제한다. 실패 자원은 보존한다.
-[책임 분리와 검증 기록](docs/worker-autoscaling-validation.md)을 따른다.
 
-workload 기준선은 control plane 1대와 worker 1대다. 수동 증설은
-`MachineDeployment`를 1→2로 변경하고 새 worker의 Nova ACTIVE, Node/Calico Ready,
-CNI/DNS probe를 검증한다. Autoscaler 검증은 CPU request로 Pod 하나를
-`Insufficient cpu` Pending 상태로 만들고 worker 1→2, 새 worker targeted probe와
-고아 `calico-ipam` 부재를 확인한다.
+자동 시험은 CPU requests를 한 번 선택해 고정하고 replica를 2,3,2,1,2,1로
+변경한다. CA 판단·실제 Pod 배치·worker 삭제 및 공유 자원 유지, 다음 증설까지
+검사하며 MachineDeployment를 수동 scale해 성공 처리하지 않는다.
+CA는 증설 후 10분, 불필요 노드 10분의 축소 정책을 사용한다. 실제 CPU 사용량
+감소나 고객 HTTP 성능 시험과는 다르다. **고객 HTTP 요청의 무중단 처리는
+검증하지 않는다.**
 
-실패 시 자동 정리하지 않고 진단 상태를 보존한다.
+실환경에서는 [계층별 실행 절차와 검증 상태](docs/worker-autoscaling-validation.md)를
+따른다. 2026-09-11 최종 코드로 수동 1→2→3→2→1과 자동
+1→2→3→2→1→2→1, 삭제 자원·공유 자원 대조 및 최종 API/CNI/DNS를 통과했다.
+로컬 55개 테스트·정적 검사도 통과했다. 과거 2026-08-24의 자동 1→2 결과와
+이번 결과 및 실환경에 주입하지 않은 실패 사례는 검증 문서에서 구분한다.
+검증 후 기동했던 GCP 세 호스트는 모두 TERMINATED로 복귀했다.
+정지된 GCP 인스턴스는 실환경 검증 승인을 받은 뒤 기동한다.
 
 ```bash
 make workload-cluster-diagnostics
 make cluster-autoscaler-diagnostics
+# 이전 실행 증거 확인 후 소유 표시가 있는 시험 자원만 저장·정리
+make cluster-autoscaler-test-cleanup
 ```
+
+이전 시험 자원이 남으면 자동 시험은 중단한다. 수동 증감은 CA를 중지하고
+증거 저장·시험 자원 정리 후 수행하며 원래 CA replica 수를 복원한다.
+동일 클라이언트의 증감/정리는 파일 잠금으로 보호하고, 다른 클라이언트나
+운영자의 동시 변경은 금지한다.
 
 ## 제한적 삭제
 
