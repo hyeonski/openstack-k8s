@@ -220,6 +220,15 @@ create_cluster() {
   if kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
       get cluster "${WORKLOAD_CLUSTER_NAME}" >/dev/null 2>&1; then
     cluster_exists="yes"
+    # Reapplying this bootstrap manifest resets MD replicas to one.
+    local installed_ca
+    installed_ca="$(kubectl --kubeconfig "${management_kubeconfig}" \
+        -n "${CLUSTER_AUTOSCALER_NAMESPACE}" get deployment cluster-autoscaler \
+        --ignore-not-found -o name)" || die "cannot inspect Cluster Autoscaler before cluster reapply"
+    if [[ -n "${installed_ca}" || -f "${STATE_DIR}/worker-control.json" || \
+          -f "${STATE_DIR}/worker-operation.json" ]]; then
+      die "existing autoscaled cluster: create would reset worker replicas; use prepare/status or an explicit worker mode"
+    fi
   fi
 
   local external_network_id
@@ -324,6 +333,9 @@ scale_workers() {
   desired="$(kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
     get machinedeployment "${machine_deployment}" -o jsonpath='{.spec.replicas}')"
   [[ "${desired}" =~ ^[1-3]$ ]] || die "existing desired replicas outside 1:3: ${desired}"
+  if [[ -n "${WORKER_CONTROL_EXPECTED_FROM:-}" && "${desired}" != "${WORKER_CONTROL_EXPECTED_FROM}" ]]; then
+    die "worker desired replicas changed while suspending CA: expected ${WORKER_CONTROL_EXPECTED_FROM}, found ${desired}"
+  fi
   started="$(date +%s)"
   printf 'status=in_progress\nfrom=%s\nto=%s\nstarted_epoch=%s\n' \
     "${desired}" "${target}" "${started}" >"${run_dir}/timing.txt"
@@ -348,17 +360,26 @@ destroy_cluster() {
 }
 
 case "${action}" in
-  create) create_cluster ;;
+  create) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" create ;;
+  create-unlocked)
+    [[ -n "${WORKER_CONTROL_LOCK_FD:-}" && -e "/dev/fd/${WORKER_CONTROL_LOCK_FD}" ]] ||
+      die "create-unlocked requires the worker control runner"
+    create_cluster
+    ;;
   status) python3 "${PROJECT_ROOT}/scripts/workload_state.py" "${2:-1}" ;;
   verify) verify_cluster "${2:-1}" ;;
   prepare) prepare_cluster ;;
-  probe) probe_cluster ;;
+  probe) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" probe ;;
   capi-ready)
     require_management
     wait_for_control_plane_available
     ;;
   scale) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" manual "${2:-2}" ;;
-  scale-unlocked) scale_workers "${2:-2}" ;;
+  scale-unlocked)
+    [[ -n "${WORKER_CONTROL_LOCK_FD:-}" && -e "/dev/fd/${WORKER_CONTROL_LOCK_FD}" ]] ||
+      die "scale-unlocked requires the worker control runner"
+    scale_workers "${2:-2}"
+    ;;
   diagnostics)
     require_management
     if [[ -f "${workload_kubeconfig}" ]]; then
@@ -366,6 +387,11 @@ case "${action}" in
     fi
     capture_failure_diagnostics "manual"
     ;;
-  destroy) destroy_cluster "$@" ;;
+  destroy) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" destroy "${2:-}" "${3:-}" ;;
+  destroy-unlocked)
+    [[ -n "${WORKER_CONTROL_LOCK_FD:-}" && -e "/dev/fd/${WORKER_CONTROL_LOCK_FD}" ]] ||
+      die "destroy-unlocked requires the worker control runner"
+    destroy_cluster "$@"
+    ;;
   *) die "usage: $0 {create|prepare|status [workers]|verify [workers]|probe|capi-ready|scale|diagnostics|destroy CONFIRM CONFIRM_CLUSTER}" ;;
 esac

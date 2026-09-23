@@ -295,14 +295,19 @@ CONTROLLER_CHECK
 }
 
 case "${action}" in
-  install) install_autoscaler ;;
-  verify) verify_autoscaler ;;
-  test)
-    verify_autoscaler
-    python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py"
+  install) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" install ;;
+  install-unlocked)
+    [[ -n "${WORKER_CONTROL_LOCK_FD:-}" && -e "/dev/fd/${WORKER_CONTROL_LOCK_FD}" ]] ||
+      die "install-unlocked requires the worker control runner"
+    install_autoscaler
     ;;
+  verify) verify_autoscaler ;;
+  test) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" test ;;
   test-cleanup) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" cleanup ;;
+  mode) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" mode "${2:?auto or fixed}" ;;
+  control-status) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" status ;;
+  control-recover) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" recover ;;
   ipam-check) check_orphan_calico_ipam "${2:?node}" "${3:?evidence directory}" ;;
   diagnostics) capture_failure "manual" ;;
-  *) die "usage: $0 {install|verify|test|test-cleanup|diagnostics}" ;;
+  *) die "usage: $0 {install|verify|test|test-cleanup|mode auto|mode fixed|control-status|control-recover|diagnostics}" ;;
 esac

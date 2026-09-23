@@ -23,6 +23,7 @@ export ENV
 	workload-cluster-diagnostics workload-cluster-destroy \
 	cluster-autoscaler-install cluster-autoscaler-verify \
 	cluster-autoscaler-test cluster-autoscaler-test-cleanup cluster-autoscaler-diagnostics \
+	cluster-autoscaler-mode cluster-autoscaler-control-status cluster-autoscaler-control-recover \
 	status lint
 
 help:
@@ -101,6 +102,9 @@ help:
 	@echo "  cluster-autoscaler-verify      Verify image, arguments, access and min/max"
 	@echo "  cluster-autoscaler-test        Run automatic 1-2-3-2-1-2-1 requests test"
 	@echo "  cluster-autoscaler-test-cleanup Preserve evidence, remove owned test resources"
+	@echo "  cluster-autoscaler-mode        Set MODE=auto or MODE=fixed for worker control"
+	@echo "  cluster-autoscaler-control-status Show recorded and actual worker control state"
+	@echo "  cluster-autoscaler-control-recover Reconcile an interrupted worker operation"
 	@echo "  cluster-autoscaler-diagnostics Preserve redacted M3 failure evidence"
 	@echo
 	@echo "Development:"
@@ -289,6 +293,15 @@ cluster-autoscaler-test:
 
 cluster-autoscaler-test-cleanup:
 	@scripts/cluster-autoscaler.sh test-cleanup
+
+cluster-autoscaler-mode:
+	@scripts/cluster-autoscaler.sh mode "$(MODE)"
+
+cluster-autoscaler-control-status:
+	@scripts/cluster-autoscaler.sh control-status
+
+cluster-autoscaler-control-recover:
+	@scripts/cluster-autoscaler.sh control-recover
 
 cluster-autoscaler-diagnostics:
 	@scripts/cluster-autoscaler.sh diagnostics

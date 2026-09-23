@@ -7,6 +7,8 @@
 
 기술 결정은 [`docs/adr/`](docs/adr/README.md), 실제 검증 기준선은
 [`docs/gcp-validation-baseline.md`](docs/gcp-validation-baseline.md)에 기록한다.
+worker 수동·자동 제어 모드와 중단 후 복원 절차는
+[`docs/worker-control.md`](docs/worker-control.md)에 정리했다.
 
 ## 아키텍처
 
@@ -254,8 +256,8 @@ make cluster-autoscaler-test-cleanup
 
 이전 시험 자원이 남으면 자동 시험은 중단한다. 수동 증감은 CA를 중지하고
 증거 저장·시험 자원 정리 후 수행하며 원래 CA replica 수를 복원한다.
-동일 클라이언트의 증감/정리는 파일 잠금으로 보호하고, 다른 클라이언트나
-운영자의 동시 변경은 금지한다.
+동일 클라이언트의 증감·정리·모드 전환과 클러스터 생성·삭제·probe는 파일 잠금으로
+보호한다. 다른 클라이언트나 운영자의 동시 변경은 금지한다.
 
 ## 제한적 삭제
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Bounded requests/replica driven CA 1→2→3→2→1→2→1 acceptance test."""
 from __future__ import annotations
-import fcntl
 import json
 import os
 import datetime as dt
@@ -12,6 +11,7 @@ import time
 import uuid
 from workload_state import Client, ROOT, artifact_dir, command, condition, evaluate, items, now, provider, save
 from test_resources import OWNER, RUN, cleanup, delete_owned, probe, residues
+from worker_control import WorkerControl
 spec = importlib.util.spec_from_file_location('cpu_selection', ROOT / 'scripts/select-autoscaler-cpu.py')
 cpu = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cpu)
@@ -296,9 +296,13 @@ def run(client, path):
                               'identities': identities(final), 'http_continuity': 'not tested'})
 
 
-def run_manual(target):
+def run_manual(target, control):
     import signal
-    with subprocess.Popen([ROOT / 'scripts/workload-cluster.sh', 'scale-unlocked', target], start_new_session=True) as proc:
+    journal = control.read(control.journal_path)
+    environment = {**os.environ, 'WORKER_CONTROL_LOCK_FD': str(control.lock.fileno()),
+                   'WORKER_CONTROL_EXPECTED_FROM': str(journal['from'])}
+    with subprocess.Popen([ROOT / 'scripts/workload-cluster.sh', 'scale-unlocked', target],
+                          start_new_session=True, pass_fds=(control.lock.fileno(),), env=environment) as proc:
         try:
             status = proc.wait()
         except BaseException:
@@ -314,26 +318,100 @@ def run_manual(target):
             raise RuntimeError(f'manual scaling failed ({status}); inspect CA restoration artifacts')
 
 
+def prepare_transport(action):
+    # The management/workload API tunnels must exist before WorkerControl's
+    # first read; the shell wrappers otherwise establish them too late.
+    subprocess.run([ROOT / 'scripts/gcp-management-cluster.sh', 'tunnel'],
+                   check=True, timeout=180)
+    if action in ('install', 'manual', 'test', 'cleanup', 'mode', 'probe'):
+        subprocess.run([ROOT / 'scripts/gcp-workload-api-tunnel.sh', 'ensure'],
+                       check=True, timeout=180)
+
+
 def main():
     import signal
     def interrupted(signum, _frame):
         raise InterruptedError(f'interrupted by signal {signum}')
     signal.signal(signal.SIGTERM, interrupted)
     client = Client()
-    path = artifact_dir('autoscaler-cycle')
-    print('evidence=' + str(path), flush=True)
-    lockpath = client.state / 'worker-operation.lock'
-    lockpath.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    with lockpath.open('w') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    action = sys.argv[1] if len(sys.argv) > 1 else 'test'
+    with WorkerControl(client) as control:
+        prepare_transport(action)
+        if action in ('create', 'destroy', 'probe'):
+            control.recover()
+            if action == 'create' and control.read(control.state_path):
+                current = client.k('m', 'get', 'cluster', client.cluster, '-n', client.ns,
+                                   '--ignore-not-found', '-o', 'json')
+                current_object = json.loads(current) if current.strip() else None
+                if current_object:
+                    raise RuntimeError('worker control state exists; create cannot safely reapply the bootstrap worker count')
+                control.state_path.unlink()
+            environment = {**os.environ, 'WORKER_CONTROL_LOCK_FD': str(control.lock.fileno())}
+            if action == 'probe':
+                argv = [sys.executable, ROOT / 'scripts/test_resources.py', 'probe']
+            else:
+                argv = [ROOT / 'scripts/workload-cluster.sh', action + '-unlocked', *sys.argv[2:]]
+            with subprocess.Popen(argv, pass_fds=(control.lock.fileno(),), env=environment) as proc:
+                if proc.wait():
+                    raise RuntimeError(action + ' operation failed')
+            if action == 'destroy':
+                control.state_path.unlink(missing_ok=True)
+            return
+        if action == 'status':
+            observed = control.observe()
+            print(json.dumps({'record': control.read(control.state_path),
+                              'operation': control.read(control.journal_path),
+                              'actual': {'identity': control.identity(observed), 'workers': observed['workers'],
+                                         'worker_stable': control.stable_workers(observed),
+                                         'ca_replicas': observed['ca_replicas'],
+                                         'ca_available': observed['ca'].get('status', {}).get('availableReplicas', 0)}}, indent=2))
+            return
+        if action == 'recover':
+            control.recover()
+            print('worker control recovery complete')
+            return
+        if action == 'mode':
+            if len(sys.argv) != 3:
+                raise ValueError('usage: autoscaler_cycle.py mode {auto|fixed}')
+            control.switch_mode(sys.argv[2])
+            print('worker mode=' + sys.argv[2])
+            return
+        if action == 'install':
+            existing = client.k('m', 'get', 'deployment', 'cluster-autoscaler', '-n',
+                                os.environ['CLUSTER_AUTOSCALER_NAMESPACE'], '--ignore-not-found', '-o', 'json')
+            existing_object = json.loads(existing) if existing.strip() else None
+            control.preflight_install(bool(existing_object and existing_object.get('kind') == 'Deployment'))
+            environment = {**os.environ, 'WORKER_CONTROL_LOCK_FD': str(control.lock.fileno())}
+            with subprocess.Popen([ROOT / 'scripts/cluster-autoscaler.sh', 'install-unlocked'],
+                                  pass_fds=(control.lock.fileno(),), env=environment) as proc:
+                if proc.wait():
+                    raise RuntimeError('Cluster Autoscaler installation failed')
+            observed = control.observe()
+            control.require_mode_state('auto', observed)
+            control.record_mode('auto', observed)
+            return
+        path = artifact_dir('autoscaler-cycle')
+        print('evidence=' + str(path), flush=True)
         try:
-            if len(sys.argv) > 1 and sys.argv[1] == 'manual':
-                run_manual(sys.argv[2])
-            elif len(sys.argv) > 1 and sys.argv[1] == 'cleanup':
+            if action == 'manual':
+                if len(sys.argv) != 3 or sys.argv[2] not in ('1', '2', '3'):
+                    raise ValueError('manual worker target must be 1, 2 or 3')
+                control.begin_manual(sys.argv[2])
+                run_manual(sys.argv[2], control)
+                control.finish_manual()
+            elif action == 'cleanup':
+                control.preflight()
                 client.deadline = time.monotonic() + 300
                 cleanup(client, path)
-            else:
+            elif action == 'test':
+                control.preflight('auto')
+                with subprocess.Popen([ROOT / 'scripts/cluster-autoscaler.sh', 'verify'],
+                                      pass_fds=(control.lock.fileno(),)) as proc:
+                    if proc.wait():
+                        raise RuntimeError('Cluster Autoscaler verification failed before automatic test')
                 run(client, path)
+            else:
+                raise ValueError('unknown worker operation: ' + action)
         except BaseException as exc:
             client.deadline = None
             save(path / 'result.json', {'state': 'failed', 'time': now(), 'reason': str(exc), 'cleanup': 'not attempted; owned test resources preserved'})
