@@ -7,6 +7,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 set -a
 source "${PROJECT_ROOT}/scripts/lib/common.sh"
 set +a
+export COMPUTE_NODE_NAMES="${COMPUTE_NAMES[*]}"
 
 action="${1:-}"
 [[ "${CLUSTER_AUTOSCALER_NODE_GROUP_MIN_SIZE}:${CLUSTER_AUTOSCALER_NODE_GROUP_MAX_SIZE}" == "1:3" ]] ||
@@ -303,6 +304,8 @@ case "${action}" in
     ;;
   verify) verify_autoscaler ;;
   test) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" test ;;
+  test-status|test-cancel|test-reconcile|test-resume)
+    python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" "${action}" ;;
   test-cleanup) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" cleanup ;;
   mode) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" mode "${2:?auto or fixed}" ;;
   control-status) python3 "${PROJECT_ROOT}/scripts/autoscaler_cycle.py" status ;;

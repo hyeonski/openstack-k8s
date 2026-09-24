@@ -114,6 +114,14 @@ spec:
     metadata:
       labels: {app: osk8s-cluster-state}
     spec:
+      # The cluster-wide collector has a local export queue. Keep it on the
+      # fixed control plane so it cannot block autoscaling workers via emptyDir.
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
       serviceAccountName: collector
       containers:
         - name: collector

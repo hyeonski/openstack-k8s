@@ -8,6 +8,12 @@ run_dir="${1:?pass an autoscaler-cycle evidence directory}"
 [[ -d "${run_dir}" ]] || die "missing run directory: ${run_dir}"
 run_id="$(basename "${run_dir}")"
 [[ "${run_id}" == autoscaler-cycle-* ]] || die "refusing non-autoscaler evidence"
+# Lifecycle attempts have local ordinal names; preserve their globally unique
+# parent run in the remote key so separate experiments cannot collide.
+parent_run="$(basename "$(dirname "${run_dir}")")"
+if [[ "${parent_run}" == autoscaler-run-* ]]; then
+  run_id="${parent_run}/${run_id}"
+fi
 manifest="${run_dir}/observability-manifest.json"
 [[ -f "${manifest}" ]] || die "run manifest missing; build it first"
 require_command gcloud

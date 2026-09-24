@@ -7,8 +7,12 @@
 
 기술 결정은 [`docs/adr/`](docs/adr/README.md), 실제 검증 기준선은
 [`docs/gcp-validation-baseline.md`](docs/gcp-validation-baseline.md)에 기록한다.
+
+제품 실험을 위한 기반 작업의 우선순위와 진행 상태는
+[`docs/product/infrastructure-priorities.md`](docs/product/infrastructure-priorities.md)에서 관리한다.
 worker 수동·자동 제어 모드와 중단 후 복원 절차는
 [`docs/worker-control.md`](docs/worker-control.md)에 정리했다.
+실행 취소·재개·정리 및 시간 상한은 [`docs/run-lifecycle.md`](docs/run-lifecycle.md)를 따른다.
 
 ## 아키텍처
 

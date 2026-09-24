@@ -23,6 +23,7 @@ export ENV
 	workload-cluster-diagnostics workload-cluster-destroy \
 	cluster-autoscaler-install cluster-autoscaler-verify \
 	cluster-autoscaler-test cluster-autoscaler-test-cleanup cluster-autoscaler-diagnostics \
+	cluster-autoscaler-test-status cluster-autoscaler-test-cancel cluster-autoscaler-test-reconcile cluster-autoscaler-test-resume \
 	cluster-autoscaler-mode cluster-autoscaler-control-status cluster-autoscaler-control-recover \
 	observability-gcp-status observability-gcp-setup observability-gcp-dedupe \
 	observability-hosts-install observability-workload-guests-start \
@@ -31,6 +32,7 @@ export ENV
 	status lint
 
 help:
+	@echo "  cluster-autoscaler-test-{status,cancel,reconcile,resume}  Experiment lifecycle (mutations require RUN_ID)"
 	@echo "OpenStack/Kubernetes testbed automation"
 	@echo
 	@echo "Usage: make <target>"
@@ -334,6 +336,9 @@ cluster-autoscaler-verify:
 
 cluster-autoscaler-test:
 	@scripts/cluster-autoscaler.sh test
+
+cluster-autoscaler-test-status cluster-autoscaler-test-cancel cluster-autoscaler-test-reconcile cluster-autoscaler-test-resume:
+	@scripts/cluster-autoscaler.sh $(patsubst cluster-autoscaler-%,%,$@)
 
 cluster-autoscaler-test-cleanup:
 	@scripts/cluster-autoscaler.sh test-cleanup

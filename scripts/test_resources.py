@@ -54,24 +54,45 @@ def residues(client):
     return result
 
 
-def cleanup(client, path):
+def cleanup(client, path, run_id=None):
     client.deadline = time.monotonic() + 300
     old = residues(client)
+    if run_id:
+        old = [(p, o) for p, o in old if o['metadata'].get('labels', {}).get(RUN) == run_id]
     save(path / 'resources-before.json', [{'plane': p, 'object': o} for p, o in old])
     # Save events and Pod logs before any deletion; a failed evidence read aborts cleanup.
     for plane in ('m', 'w'):
         save(path / (plane + '-events.json'), client.get(plane, 'events', '-A'))
     for plane, obj in old:
-        if obj['kind'] == 'Pod' and obj.get('status', {}).get('containerStatuses'):
-            save(path / (plane + '-' + obj['metadata']['uid'] + '.log'), client.k(
-                plane, 'logs', obj['metadata']['name'], '-n', obj['metadata']['namespace'], '--all-containers', '--tail=1000'))
+        if obj['kind'] != 'Pod':
+            continue
+        status = obj.get('status', {})
+        containers = status.get('initContainerStatuses', []) + status.get('containerStatuses', []) + status.get('ephemeralContainerStatuses', [])
+        missing = []
+        for container in containers:
+            state = container.get('state', {})
+            previous = not ('running' in state or 'terminated' in state) and 'terminated' in container.get('lastState', {})
+            if not ('running' in state or 'terminated' in state or previous):
+                missing.append({'container': container['name'], 'state': state, 'reason': 'container has not started; no log exists yet'})
+                continue
+            args = ['--previous'] if previous else []
+            save(path / (plane + '-' + obj['metadata']['uid'] + '-' + container['name'] + '.log'), client.k(
+                plane, 'logs', obj['metadata']['name'], '-n', obj['metadata']['namespace'],
+                '-c', container['name'], '--tail=1000', *args))
+        if missing or not containers:
+            save(path / (plane + '-' + obj['metadata']['uid'] + '-logs-unavailable.json'),
+                 {'pod_uid': obj['metadata']['uid'], 'containers': missing,
+                  'reason': 'containers not started' if containers else 'container status not reported yet'})
     # Controllers first; child Pods are removed through their controller's ownership.
     for plane, obj in old:
         if obj['kind'] == 'Deployment' or not obj['metadata'].get('ownerReferences'):
             delete_owned(client, plane, obj)
     deadline = time.monotonic() + 180
     while time.monotonic() < deadline:
-        if not residues(client):
+        remaining = residues(client)
+        if run_id:
+            remaining = [(p, o) for p, o in remaining if o['metadata'].get('labels', {}).get(RUN) == run_id]
+        if not remaining:
             save(path / 'cleanup.json', {'status': 'deleted', 'uids': [o['metadata']['uid'] for _, o in old]})
             client.deadline = None
             return
@@ -79,8 +100,8 @@ def cleanup(client, path):
     raise TimeoutError('test resource cleanup timeout; evidence preserved')
 
 
-def probe(client, path, run_id):
-    labels = {OWNER: client.cluster, RUN: run_id}
+def probe(client, path, run_id, owner_id=None):
+    labels = {OWNER: client.cluster, RUN: owner_id or run_id}
     cluster = client.get('m', 'cluster', client.cluster, '-n', client.ns)
     endpoint = cluster['spec']['controlPlaneEndpoint']
     tests = [('m', client.ns, 'api', None, ['nc', '-z', '-w', '15', endpoint['host'], str(endpoint['port'])])]

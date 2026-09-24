@@ -205,13 +205,6 @@ resource "google_compute_instance" "hosts" {
     }
   }
 
-  dynamic "confidential_instance_config" {
-    for_each = each.key == "controller" ? [true] : []
-    content {
-      enable_confidential_compute = false
-    }
-  }
-
   dynamic "reservation_affinity" {
     for_each = each.key == "controller" ? [true] : []
     content {
@@ -242,7 +235,9 @@ resource "google_compute_instance" "hosts" {
     prevent_destroy = true
     # Provider import exposes existing labels through effective_labels but
     # leaves labels empty. GCP remains the source of truth during adoption.
-    ignore_changes = [labels]
+    # observability/gcp-setup.sh owns the telemetry identity attachment. A
+    # foundation plan must not detach it after observability is installed.
+    ignore_changes = [labels, service_account]
   }
 }
 

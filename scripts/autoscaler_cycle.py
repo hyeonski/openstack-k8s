@@ -190,6 +190,8 @@ def stage(client, path, target, name, request, before=None, direction=None, star
     save(path / 'started.json', {'time': started, 'target_workers': target, 'replicas': target if name else 0,
                                 'request_millicpu': request, 'timeout_seconds': timeout, 'stable_seconds': stable})
     while time.monotonic() < client.deadline:
+        if getattr(client, 'run_check', None):
+            client.run_check()
         poll = path / f'{index:04d}'
         s = client.snapshot(poll / 'snapshot.json')
         evidence, errors = decision_evidence(client, poll, started)
@@ -248,14 +250,15 @@ def stage(client, path, target, name, request, before=None, direction=None, star
     raise TimeoutError('automatic transition timed out; evidence=' + str(path))
 
 
-def run(client, path):
+def run(client, path, owner_id=None):
     if residues(client):
         raise RuntimeError('previous owned test resources exist; inspect evidence then run make cluster-autoscaler-test-cleanup')
     before = stage(client, path / '00-baseline', 1, None, 0)
-    probe(client, path / '00-probes', uuid.uuid4().hex[:12])
+    probe_args = {'owner_id': owner_id} if owner_id else {}
+    probe(client, path / '00-probes', uuid.uuid4().hex[:12], **probe_args)
     request, selection = choose_request(before)
     save(path / 'cpu-selection.json', selection)
-    run_id = uuid.uuid4().hex[:12]
+    run_id = owner_id or uuid.uuid4().hex[:12]
     name = 'ca-cycle-' + run_id
     ns = os.environ['CLUSTER_AUTOSCALER_TEST_NAMESPACE']
     save(path / 'ownership.json', {'run': run_id, 'deployment': name, 'namespace': ns})
@@ -279,7 +282,7 @@ def run(client, path):
             save(stage_path / 'replica-change.json', {'time': now(), 'patch': patch, 'cpu_requests_unchanged': request})
             client.k('w', 'patch', 'deployment', name, '-n', ns, '--type=json', '-p', json.dumps(patch))
         after = stage(client, stage_path, target, name, request, before, direction, started=transition_started)
-        probe(client, stage_path / 'probes', uuid.uuid4().hex[:12])
+        probe(client, stage_path / 'probes', uuid.uuid4().hex[:12], **probe_args)
         for row in identities(after):
             if row['machine_uid'] not in {r['machine_uid'] for r in identities(before)}:
                 check_dir = stage_path / row['node']
@@ -291,7 +294,7 @@ def run(client, path):
     if residues(client):
         raise RuntimeError('owned test Pods remain after final cleanup')
     final = stage(client, path / '07-final-clean', 1, None, 0, before)
-    probe(client, path / '07-final-probes', uuid.uuid4().hex[:12])
+    probe(client, path / '07-final-probes', uuid.uuid4().hex[:12], **probe_args)
     save(path / 'result.json', {'state': 'passed', 'time': now(), 'sequence': [1, 2, 3, 2, 1, 2, 1],
                               'identities': identities(final), 'http_continuity': 'not tested'})
 
@@ -323,20 +326,36 @@ def prepare_transport(action):
     # first read; the shell wrappers otherwise establish them too late.
     subprocess.run([ROOT / 'scripts/gcp-management-cluster.sh', 'tunnel'],
                    check=True, timeout=180)
-    if action in ('install', 'manual', 'test', 'cleanup', 'mode', 'probe'):
+    if action in ('install', 'manual', 'test', 'cleanup', 'mode', 'probe', 'test-resume', 'test-reconcile'):
         subprocess.run([ROOT / 'scripts/gcp-workload-api-tunnel.sh', 'ensure'],
                        check=True, timeout=180)
 
 
 def main():
-    import signal
-    def interrupted(signum, _frame):
-        raise InterruptedError(f'interrupted by signal {signum}')
-    signal.signal(signal.SIGTERM, interrupted)
+    from run_lifecycle import RunLifecycle, install_signal_handlers, local_action
+    install_signal_handlers()
     client = Client()
     action = sys.argv[1] if len(sys.argv) > 1 else 'test'
+    if action in ('test-status', 'test-cancel'):
+        local_action(client, action, os.environ.get('RUN_ID', ''))
+        return
     with WorkerControl(client) as control:
-        prepare_transport(action)
+        lifecycle = RunLifecycle(client, control)
+        if action in ('test', 'manual', 'mode', 'install', 'create', 'destroy', 'probe'):
+            lifecycle.require_idle()
+        try:
+            prepare_transport(action)
+        except BaseException as exc:
+            if action == 'cleanup' and lifecycle.active():
+                failure = {'state': 'cleanup_failed', 'phase': 'transport', 'time': now(), 'reason': str(exc)}
+                lifecycle.update('cleanup_failed', reason=str(exc))
+                save(lifecycle.path / ('cleanup-transport-' + uuid.uuid4().hex[:8] + '.json'), failure)
+                save(lifecycle.path / 'result.json', failure)
+            raise
+        if action in ('test', 'test-resume', 'test-reconcile') or (
+                action == 'cleanup' and (lifecycle.active() or os.environ.get('RUN_ID'))):
+            lifecycle.execute(action)
+            return
         if action in ('create', 'destroy', 'probe'):
             control.recover()
             if action == 'create' and control.read(control.state_path):

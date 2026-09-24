@@ -182,6 +182,7 @@ class WorkerControlTests(unittest.TestCase):
         events = []
         with patch('autoscaler_cycle.Client'), patch('autoscaler_cycle.WorkerControl') as worker_control, \
                 patch('autoscaler_cycle.prepare_transport', side_effect=lambda _: events.append('transport')), \
+                patch('run_lifecycle.RunLifecycle'), \
                 patch('autoscaler_cycle.sys.argv', ['autoscaler_cycle.py', 'recover']), \
                 patch('signal.signal'), patch('builtins.print'):
             control = worker_control.return_value

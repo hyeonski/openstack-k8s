@@ -5,6 +5,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import tempfile
 from pathlib import Path
 import signal
 import subprocess
@@ -39,8 +40,21 @@ def save(path, value):
     text = value if isinstance(value, str) else json.dumps(value, indent=2) + '\n'
     # Reuse the repository's redaction contract for all durable evidence.
     text = command(['python3', ROOT / 'scripts/redact-output.py'], data=text)
-    path.write_text(text)
-    path.chmod(0o600)
+    fd, temporary = tempfile.mkstemp(prefix='.' + path.name + '.', dir=path.parent)
+    try:
+        with os.fdopen(fd, 'w') as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def artifact_dir(prefix):
@@ -56,8 +70,11 @@ class Client:
         self.ns = os.environ['WORKLOAD_NAMESPACE']
         self.state = ROOT / '.state' / os.environ['ENVIRONMENT_NAME']
         self.deadline = None
+        self.run_check = None
 
     def remaining(self, limit):
+        if self.run_check:
+            limit = min(limit, self.run_check())
         if self.deadline is None:
             return limit
         remaining = self.deadline - time.monotonic()

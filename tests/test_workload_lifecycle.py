@@ -217,6 +217,38 @@ class CycleTests(unittest.TestCase):
 
 
 class OwnershipTests(unittest.TestCase):
+    def test_cleanup_records_unstarted_container_without_requesting_impossible_logs(self):
+        pod = {'kind': 'Pod', 'metadata': {'name': 'infra-probe-x', 'namespace': 'default', 'uid': 'uid'},
+               'status': {'containerStatuses': [{'name': 'load', 'state': {'waiting': {'reason': 'ContainerCreating'}}}]}}
+        with patch.dict(os.environ, ENV), tempfile.TemporaryDirectory() as tmp:
+            client = state.Client()
+            with patch.object(resources, 'residues', side_effect=[[('w', pod)], []]), \
+                    patch.object(client, 'get', return_value={}), patch.object(client, 'k') as logs, \
+                    patch.object(resources, 'delete_owned') as delete:
+                resources.cleanup(client, Path(tmp))
+                logs.assert_not_called()
+                delete.assert_called_once_with(client, 'w', pod)
+                evidence = json.loads((Path(tmp) / 'w-uid-logs-unavailable.json').read_text())
+                self.assertEqual(evidence['containers'][0]['state']['waiting']['reason'], 'ContainerCreating')
+
+    def test_cleanup_mixed_containers_preserves_available_logs(self):
+        pod = {'kind': 'Pod', 'metadata': {'name': 'infra-probe-x', 'namespace': 'default', 'uid': 'uid'},
+               'status': {'containerStatuses': [
+                   {'name': 'running', 'state': {'running': {}}},
+                   {'name': 'pending', 'state': {'waiting': {'reason': 'ContainerCreating'}}},
+                   {'name': 'crashed', 'state': {'waiting': {'reason': 'CrashLoopBackOff'}}, 'lastState': {'terminated': {}}}]}}
+        with patch.dict(os.environ, ENV), tempfile.TemporaryDirectory() as tmp:
+            client = state.Client()
+            with patch.object(resources, 'residues', side_effect=[[('w', pod)], []]), \
+                    patch.object(client, 'get', return_value={}), patch.object(client, 'k', return_value='log') as logs, \
+                    patch.object(resources, 'delete_owned'):
+                resources.cleanup(client, Path(tmp))
+                calls = [call.args for call in logs.call_args_list]
+                self.assertEqual(len(calls), 2)
+                self.assertIn('running', calls[0])
+                self.assertIn('--previous', calls[1])
+                self.assertTrue((Path(tmp) / 'w-uid-running.log').exists())
+
     def test_delete_has_uid_precondition(self):
         with patch.dict(os.environ, ENV):
             client = state.Client()
