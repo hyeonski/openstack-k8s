@@ -281,7 +281,11 @@ case "${action}" in
       die "kind cluster not found on ${runtime_host}: ${MANAGEMENT_CLUSTER_NAME}"
     [[ -f "${kubeconfig}" ]] || fetch_kubeconfig
     start_tunnel
-    kubectl --kubeconfig "${kubeconfig}" get --raw=/readyz >/dev/null
+    if ! kubectl --kubeconfig "${kubeconfig}" get --raw=/readyz >/dev/null 2>&1; then
+      log "Refreshing management kubeconfig from the running kind cluster"
+      fetch_kubeconfig
+      kubectl --kubeconfig "${kubeconfig}" get --raw=/readyz >/dev/null
+    fi
     ;;
   create)
     "${PROJECT_ROOT}/scripts/gcp-iac.sh" controller-management

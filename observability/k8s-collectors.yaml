@@ -1,0 +1,144 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: osk8s-observability
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: collector
+  namespace: osk8s-observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: osk8s-observability-reader
+rules:
+  - apiGroups: [""]
+    resources: [nodes, nodes/stats, pods, namespaces, services, endpoints, persistentvolumes, persistentvolumeclaims, replicationcontrollers, resourcequotas]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, daemonsets, statefulsets, replicasets]
+    verbs: [get, list, watch]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [get, list, watch]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, list, watch]
+  - apiGroups: [events.k8s.io]
+    resources: [events]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: osk8s-observability-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: osk8s-observability-reader
+subjects:
+  - kind: ServiceAccount
+    name: collector
+    namespace: osk8s-observability
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-agent
+  namespace: osk8s-observability
+spec:
+  selector:
+    matchLabels: {app: osk8s-node-agent}
+  template:
+    metadata:
+      labels: {app: osk8s-node-agent}
+    spec:
+      serviceAccountName: collector
+      tolerations:
+        - {operator: Exists}
+      containers:
+        - name: collector
+          image: otel/opentelemetry-collector-contrib:0.140.0
+          imagePullPolicy: IfNotPresent
+          args: ["--config=/etc/otel/config.yaml"]
+          env:
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef: {fieldPath: spec.nodeName}
+            - name: K8S_NODE_IP
+              valueFrom:
+                fieldRef: {fieldPath: status.hostIP}
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            runAsUser: 0
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              add: [DAC_READ_SEARCH, SYS_PTRACE]
+          livenessProbe:
+            httpGet: {path: /, port: 13133}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          volumeMounts:
+            - {name: config, mountPath: /etc/otel, readOnly: true}
+            - {name: certs, mountPath: /etc/otel-certs, readOnly: true}
+            - {name: host, mountPath: /hostfs, readOnly: true}
+            - {name: podlogs, mountPath: /var/log/pods, readOnly: true}
+            - {name: state, mountPath: /var/lib/otelcol}
+      volumes:
+        - name: config
+          configMap: {name: node-agent-config}
+        - name: certs
+          secret: {secretName: gateway-client-tls}
+        - name: host
+          hostPath: {path: /, type: Directory}
+        - name: podlogs
+          hostPath: {path: /var/log/pods, type: Directory}
+        - name: state
+          hostPath: {path: /var/lib/osk8s-otel, type: DirectoryOrCreate}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-state
+  namespace: osk8s-observability
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: osk8s-cluster-state}
+  template:
+    metadata:
+      labels: {app: osk8s-cluster-state}
+    spec:
+      serviceAccountName: collector
+      containers:
+        - name: collector
+          image: otel/opentelemetry-collector-contrib:0.140.0
+          imagePullPolicy: IfNotPresent
+          args: ["--config=/etc/otel/config.yaml"]
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            runAsUser: 0
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+          livenessProbe:
+            httpGet: {path: /, port: 13133}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          volumeMounts:
+            - {name: config, mountPath: /etc/otel, readOnly: true}
+            - {name: certs, mountPath: /etc/otel-certs, readOnly: true}
+            - {name: state, mountPath: /var/lib/otelcol}
+      volumes:
+        - name: config
+          configMap: {name: cluster-state-config}
+        - name: certs
+          secret: {secretName: gateway-client-tls}
+        - name: state
+          emptyDir: {sizeLimit: 512Mi}

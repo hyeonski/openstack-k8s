@@ -16,9 +16,8 @@ locals {
         enable-osconfig = "TRUE"
       }
       labels = {
-        env                   = var.environment_name
-        goog-ops-agent-policy = "v2-template-1-7-0"
-        role                  = "controller"
+        env  = var.environment_name
+        role = "controller"
       }
     }
     compute01 = {

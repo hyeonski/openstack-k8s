@@ -13,12 +13,12 @@ while IFS= read -r file; do
   if ! bash -n "${file}"; then
     status=1
   fi
-done < <(find "${PROJECT_ROOT}/scripts" -type f -name '*.sh' -print | sort)
+done < <(find "${PROJECT_ROOT}/scripts" "${PROJECT_ROOT}/observability" -type f -name '*.sh' -print | sort)
 
 if command -v shellcheck >/dev/null 2>&1; then
   while IFS= read -r file; do
     shellcheck --severity=warning -x "${file}" || status=1
-  done < <(find "${PROJECT_ROOT}/scripts" -type f -name '*.sh' -print | sort)
+  done < <(find "${PROJECT_ROOT}/scripts" "${PROJECT_ROOT}/observability" -type f -name '*.sh' -print | sort)
 else
   echo "WARN: shellcheck not installed; syntax checks only" >&2
 fi
@@ -42,6 +42,7 @@ if rg -n -i --glob '!lint.sh' "${forbidden_pattern}" \
 fi
 
 python3 -m py_compile "${PROJECT_ROOT}"/scripts/*.py
+python3 -m py_compile "${PROJECT_ROOT}"/observability/*.py
 python3 -m unittest discover -s "${PROJECT_ROOT}/tests" -p 'test_*.py'
 
 echo "Static shell checks passed."

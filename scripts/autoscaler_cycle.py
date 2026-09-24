@@ -421,6 +421,13 @@ def main():
             except BaseException as diagnostic_error:
                 save(path / 'diagnostics-error.txt', str(diagnostic_error))
             raise
+        finally:
+            # Keep the run/time/Machine/Node/Nova relation even on a failed stage.
+            if action == 'test':
+                try:
+                    command([sys.executable, ROOT / 'observability/build-run-manifest.py', path], timeout=30)
+                except BaseException as manifest_error:
+                    print('WARN: observability manifest unavailable: ' + str(manifest_error), file=sys.stderr)
 
 
 if __name__ == '__main__':

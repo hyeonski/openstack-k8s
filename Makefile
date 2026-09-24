@@ -24,6 +24,10 @@ export ENV
 	cluster-autoscaler-install cluster-autoscaler-verify \
 	cluster-autoscaler-test cluster-autoscaler-test-cleanup cluster-autoscaler-diagnostics \
 	cluster-autoscaler-mode cluster-autoscaler-control-status cluster-autoscaler-control-recover \
+	observability-gcp-status observability-gcp-setup observability-gcp-dedupe \
+	observability-hosts-install observability-workload-guests-start \
+	observability-hosts-status observability-clusters-install observability-clusters-status \
+	observability-verify observability-publish-run \
 	status lint
 
 help:
@@ -107,6 +111,16 @@ help:
 	@echo "  cluster-autoscaler-control-recover Reconcile an interrupted worker operation"
 	@echo "  cluster-autoscaler-diagnostics Preserve redacted M3 failure evidence"
 	@echo
+	@echo "Observability (1-4):"
+	@echo "  observability-gcp-status       Inspect independent telemetry storage and identity"
+	@echo "  observability-gcp-setup        Create storage/identity while hosts are stopped (CONFIRM=$(ENV))"
+	@echo "  observability-gcp-dedupe       Exclude dedicated telemetry logs from _Default (CONFIRM=$(ENV))"
+	@echo "  observability-workload-guests-start Start current CAPI VMs left SHUTOFF after GCE boot"
+	@echo "  observability-hosts-install   Install GCE host collectors and Nova inventory timer"
+	@echo "  observability-clusters-install Install collectors in management and workload clusters"
+	@echo "  observability-verify          Query recent GCP metrics/logs for missing data"
+	@echo "  observability-publish-run     Publish RUN_DIR correlation manifest to GCS"
+	@echo
 	@echo "Development:"
 	@echo "  lint                    Static checks that do not mutate the host"
 
@@ -180,6 +194,36 @@ gcp-sync-inputs: inventory
 
 gcp-controller-management-prepare:
 	@scripts/gcp-iac.sh controller-management
+
+observability-gcp-status:
+	@observability/gcp-setup.sh status
+
+observability-gcp-setup:
+	@observability/gcp-setup.sh apply "$(CONFIRM)"
+
+observability-gcp-dedupe:
+	@observability/gcp-setup.sh dedupe "$(CONFIRM)"
+
+observability-hosts-install:
+	@observability/deploy-hosts.sh install
+
+observability-workload-guests-start:
+	@observability/start-workload-guests.sh
+
+observability-hosts-status:
+	@observability/deploy-hosts.sh status
+
+observability-clusters-install:
+	@observability/deploy-clusters.sh install
+
+observability-clusters-status:
+	@observability/deploy-clusters.sh status
+
+observability-verify:
+	@bash -c 'source config/environments/cloud-gcp-amd64.env; observability/verify-live.py --project "$$GCP_PROJECT_ID" --region "$$GCP_REGION"'
+
+observability-publish-run:
+	@observability/publish-run.sh "$(RUN_DIR)"
 
 secrets-check:
 	@scripts/secrets-check.sh
