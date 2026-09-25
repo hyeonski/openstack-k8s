@@ -1,7 +1,7 @@
 # 기반작업 1-4: 상시 모니터링·로그 수집 아키텍처 제안
 
 - 작성일: 2026-09-23
-- 상태: [구현 디렉터리](../../observability/README.md)의 GCP 저장소·수집기를 배포하고 [정상 구간 실측](../../observability/live-validation-2026-09-24.md)을 확인했다. 증감·장애 구간 수용 시험과 Grafana 대시보드는 남아 있다.
+- 상태: [구현 디렉터리](../../observability/README.md)의 GCP 기반 수집·조회는 [1순위 종합 검증](../foundation-priority1-final-validation-2026-09-24.md)에서 최종 구성의 정상 30분·전체 증감·Pod 실패 후 추적·수집기 및 gateway 중단과 복귀를 통과했다. CAPI/CA 내부 reconcile 메트릭, Grafana 대시보드와 후속 장애 탐지·복구 모듈은 별도 범위다. 아래의 아키텍처 확장안 전체가 구현됐다는 의미는 아니다.
 - 범위: [인프라 작업 우선순위](infrastructure-priorities.md)의 1-4 및 이를 이용하는 2-6. 졸업작품에서 구현할 장애 탐지·복구 모듈의 입력과 검증 증거를 마련하고, 그 기반 위에 구축할 PRD 제품의 실험 유효성 판정에도 사용한다. 고객 애플리케이션의 HTTP 성능 계측과 HPA는 각각 별도 선행 작업과 연결한다.
 - 현재 환경: GCP controller 1대, compute 2대, controller 안의 management kind, compute 위의 Nova VM으로 구성된 workload Kubernetes. GCP 호스트는 기동 후 10시간 STOP된다.
 

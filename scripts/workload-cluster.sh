@@ -19,7 +19,6 @@ calico_manifest="${DOWNLOAD_DIR}/calico-${CALICO_VERSION}.yaml"
 calico_url="https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml"
 machine_deployment="${WORKLOAD_CLUSTER_NAME}-md-0"
 autoscaler_replicas_before_manual_scaling=""
-manual_scaling_run_dir=""
 
 require_kubectl_timeout() {
   local name="$1"
@@ -281,7 +280,9 @@ quiesce_autoscaler_for_manual_scaling() {
       -n "${CLUSTER_AUTOSCALER_NAMESPACE}" get deployment \
       cluster-autoscaler -o jsonpath='{.spec.replicas}')"
     printf '%s\n' "${autoscaler_replicas_before_manual_scaling}" >"${run_dir}/autoscaler-original-replicas.txt"
-    trap 'resume_autoscaler_after_manual_scaling || { warn "failed to restore Cluster Autoscaler; see ${manual_scaling_run_dir}"; exit 1; }' EXIT
+    # The Python owner restores CA only after checking journal identity and MD
+    # convergence. Failure/signal leaves CA stopped for explicit recovery.
+    trap 'warn "CA control remains with worker journal; use cluster-autoscaler-control-recover"' EXIT
     trap 'exit 130' INT
     trap 'exit 143' TERM
     log "Suspending Cluster Autoscaler during manual worker scaling"
@@ -302,24 +303,6 @@ quiesce_autoscaler_for_manual_scaling() {
   python3 "${PROJECT_ROOT}/scripts/test_resources.py" cleanup
 }
 
-resume_autoscaler_after_manual_scaling() {
-  trap - EXIT
-  [[ -n "${autoscaler_replicas_before_manual_scaling}" ]] || return 0
-
-  local replicas="${autoscaler_replicas_before_manual_scaling}"
-  log "Restoring Cluster Autoscaler to ${replicas} replica(s)"
-  kubectl --kubeconfig "${management_kubeconfig}" \
-    -n "${CLUSTER_AUTOSCALER_NAMESPACE}" scale deployment \
-    cluster-autoscaler --replicas="${replicas}" >/dev/null || return 1
-  if [[ "${replicas}" != "0" ]]; then
-    kubectl --kubeconfig "${management_kubeconfig}" \
-      -n "${CLUSTER_AUTOSCALER_NAMESPACE}" rollout status \
-      deployment/cluster-autoscaler --timeout=5m || return 1
-  fi
-  autoscaler_replicas_before_manual_scaling=""
-  printf 'restored=%s\n' "${replicas}" >"${manual_scaling_run_dir}/autoscaler-restored.txt"
-}
-
 scale_workers() {
   local target="${1:-2}" desired run_dir started
   [[ "${target}" =~ ^[1-3]$ ]] || die "WORKERS must be within 1:3"
@@ -327,8 +310,6 @@ scale_workers() {
   ensure_workload_api_access
   run_dir="$(current_or_new_run)/manual-$(utc_timestamp)-$$"
   mkdir_private "${run_dir}"
-  # EXIT runs after the function's local variables have left scope on failure.
-  manual_scaling_run_dir="${run_dir}"
   quiesce_autoscaler_for_manual_scaling
   desired="$(kubectl --kubeconfig "${management_kubeconfig}" -n "${WORKLOAD_NAMESPACE}" \
     get machinedeployment "${machine_deployment}" -o jsonpath='{.spec.replicas}')"
@@ -344,7 +325,7 @@ scale_workers() {
   verify_cluster "${target}"
   probe_cluster
   printf 'status=passed\nfinished_epoch=%s\n' "$(date +%s)" >>"${run_dir}/timing.txt"
-  resume_autoscaler_after_manual_scaling
+  trap - EXIT
 }
 
 destroy_cluster() {

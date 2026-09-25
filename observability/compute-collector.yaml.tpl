@@ -30,7 +30,13 @@ receivers:
     include: [/hostfs/var/log/osk8s-observability/*.jsonl]
     start_at: beginning
     operators:
-      - {type: json_parser, parse_to: body}
+      - type: json_parser
+        parse_to: body
+        # Preserve source time when local JSONL is replayed after an outage.
+        timestamp:
+          parse_from: body.time
+          layout_type: gotime
+          layout: '2006-01-02T15:04:05.999999999Z07:00'
     storage: file_storage
     retry_on_failure: {enabled: true}
 processors:
@@ -70,7 +76,8 @@ exporters:
         - {prefix: k8s.}
         - {prefix: host.}
         - {prefix: container.}
-    sending_queue: {enabled: true, queue_size: 1000, storage: file_storage}
+    # GMP requires sample order during persistent queue replay.
+    sending_queue: {enabled: true, num_consumers: 1, queue_size: 1000, storage: file_storage}
   googlecloud:
     project: "$${env:GCP_PROJECT_ID}"
     log:

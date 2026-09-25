@@ -86,6 +86,21 @@ class WorkerControlTests(unittest.TestCase):
             self.assertEqual(self.client.ca['spec']['replicas'], 1)
             self.assertIsNone(control.read(control.journal_path))
 
+    def test_success_restores_auto_only_after_target_convergence(self):
+        with WorkerControl(self.client) as control:
+            control.begin_manual('3')
+            self.client.ca['spec']['replicas'] = 0
+            self.client.ca['status'] = {'replicas': 0, 'availableReplicas': 0}
+            self.client.md['spec']['replicas'] = 3
+            with self.assertRaisesRegex(RuntimeError, 'not converged'):
+                control.finish_manual()
+            self.assertEqual(self.client.ca['spec']['replicas'], 0)
+            self.assertIsNotNone(control.read(control.journal_path))
+            self.client.md['status'].update(replicas=3, readyReplicas=3, availableReplicas=3)
+            control.finish_manual()
+            self.assertEqual(self.client.ca['spec']['replicas'], 1)
+            self.assertIsNone(control.read(control.journal_path))
+
     def test_interrupted_mode_change_finishes_from_live_state(self):
         with WorkerControl(self.client) as control:
             mode, observed = control.preflight()

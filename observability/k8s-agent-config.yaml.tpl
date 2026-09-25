@@ -52,7 +52,10 @@ exporters:
       ca_file: /etc/otel-certs/ca.crt
       cert_file: /etc/otel-certs/agent.crt
       key_file: /etc/otel-certs/agent.key
-    sending_queue: {enabled: true, queue_size: 1000, storage: file_storage}
+    # Include gateway startup and gRPC reconnect backoff in the retry budget.
+    retry_on_failure: {enabled: true, max_elapsed_time: 10m}
+    # Preserve per-source sample order when replaying a gateway outage.
+    sending_queue: {enabled: true, num_consumers: 1, queue_size: 1000, storage: file_storage}
 service:
   extensions: [health_check, file_storage]
   pipelines:

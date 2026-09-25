@@ -1,6 +1,6 @@
 # 기반작업 1-4: 상시 관측 구현
 
-이 디렉터리는 [1-4 아키텍처](../docs/product/monitoring-logging-architecture.md)의 배포 입력이다. **2026-09-24 GCP 배포와 정상 구간의 실측 수집을 확인했다.** 정확한 결과와 남은 수용 시험은 [라이브 검증 기록](live-validation-2026-09-24.md)에 있다. 증감·장애 구간 수용과 Grafana 화면은 아직 완료하지 않았다.
+이 디렉터리는 [1-4 아키텍처](../docs/product/monitoring-logging-architecture.md)의 배포 입력이다. **2026-09-24 최종 구성의 정상 30분·전체 증감·Pod 실패 후 추적·수집기 및 gateway 중단과 복귀 시험을 통과했다.** 범위·예외·원본 증거는 [1순위 종합 검증](../docs/foundation-priority1-final-validation-2026-09-24.md)에 있다. [최초 라이브 기록](live-validation-2026-09-24.md)은 당시 상태를 보존한다.
 
 ## 배치와 데이터 계약
 
@@ -26,6 +26,8 @@ Cloud Monitoring의 `prometheus.googleapis.com/*` 시계열을 PromQL·Metrics E
 
 졸업작품 자동 복구 모듈은 이 GCP 저장소를 조회해 조치하지 않는다. Kubernetes/OpenStack의 현재 상태와 서비스 능동 검사로 판단하고, GCP는 재현·감사·비교 근거를 보존한다. GCP 전송 또는 controller 장애로 workload 로그가 밀리면 로컬 큐와 `missing_data`로 드러나야 한다. controller가 중단된 동안 Nova guest→GCP 경로도 멈춘다. GCE compute 수집기는 각자 GCP에 전송한다.
 
+지표의 큐 재전송 순서를 지키기 위해 Kubernetes OTLP와 호스트 GMP exporter는 consumer 1개를 사용한다. gateway는 guest 지표를 다시 batch로 합치지 않고 agent의 수집 묶음을 그대로 전달해 동일 시계열의 여러 시점이 한 API 요청에 들어가지 않게 한다. OTLP는 gateway 기동·재연결을 포함해 최대 10분 재시도하며 큐 용량은 1,000 batches다. 호스트 heartbeat·Nova JSONL은 원래 `time`을 로그 timestamp로 보존한다. 무기한 또는 포화 상태의 무손실 전송을 보장하지 않는다. 수용 시험에서는 대상별 공백 판정과 함께 수집기 전송 실패·수신 거부·큐 상태 및 영구 드롭 로그를 확인한다.
+
 ## GCP에 적용할 변경
 
 `gcp-setup.sh apply cloud-gcp-amd64`의 변경 내용은 다음과 같다. 세 GCE 호스트가 모두 중지된 상태인지 먼저 검사한다.
@@ -44,6 +46,8 @@ Cloud Monitoring의 `prometheus.googleapis.com/*` 시계열을 PromQL·Metrics E
 
 최초 설치 때는 멈춘 호스트에서 GCP 리소스를 구성한다. 이후 기존 10시간 자동 STOP 정책을 유지하면서 호스트를 켜고, OpenStack이 `SHUTOFF`로 남겨둔 현재 CAPI VM만 시작한 뒤 설치·검증한다. `make gcp-openstack-recover`는 Keystone·Placement·Nova를 확인하지만 guest VM을 시작하지 않는다.
 
+호스트·클러스터 설치와 검증에는 같은 `ENV_OVERRIDE_FILE`을 사용한다. 클러스터 설치는 선택한 프로필의 CA와 controller gateway에 설치된 CA의 SHA-256을 대조하고, 다르면 Kubernetes 설정을 변경하기 전에 중단한다. 이때 같은 프로필로 `observability-hosts-install`을 먼저 수행한다. `make observability-verify`는 해당 환경의 호스트 클러스터 이름을 자동 전달한다. Python 검증기를 직접 호출할 때에는 `--host-cluster <ENVIRONMENT_NAME>-hosts`를 지정한다.
+
 ```bash
 make observability-gcp-status
 make observability-gcp-setup CONFIRM=cloud-gcp-amd64
@@ -58,7 +62,11 @@ make observability-verify
 make observability-gcp-dedupe CONFIRM=cloud-gcp-amd64
 ```
 
-조회는 [Metrics Explorer](https://console.cloud.google.com/monitoring/metrics-explorer?project=openstack-k8s)에서 PromQL로 `system_*`·`k8s_*` 시계열을, [Logs Explorer](https://console.cloud.google.com/logs/query?project=openstack-k8s)에서 전용 bucket과 `log_id("osk8s-otel")`를 사용한다. `observability/verify-live.py --start <UTC> --end <UTC>`는 세 호스트와 두 클러스터의 지표, Node Ready·Pod phase·Deployment 가용성, heartbeat·Nova·Kolla·Pod·Event 로그를 조회한다. 최근 시계열이 5분 이상 오래됐거나 필수 자료가 없으면 `missing_data`다. 실행별 manifest는 해당 구간과 UID 필터에 사용한다.
+조회는 [Metrics Explorer](https://console.cloud.google.com/monitoring/metrics-explorer?project=openstack-k8s)에서 PromQL로 `system_*`·`k8s_*` 시계열을, [Logs Explorer](https://console.cloud.google.com/logs/query?project=openstack-k8s)에서 전용 bucket과 `log_id("osk8s-otel")`를 사용한다. `observability/verify-live.py --start <UTC> --end <UTC>`는 세 호스트와 두 클러스터의 지표, Node Ready·Pod phase·Deployment 가용성, heartbeat·Nova·Kolla·Pod·Event 로그를 조회한다. 노드 수집 Pod의 경량 heartbeat 컨테이너는 60초마다 식별자만 로그에 남겨 filelog→gateway→Cloud Logging 경로를 검사한다. 대상별 시계열과 호스트·노드별 heartbeat·Nova 조회 상태를 검사하며, 조회 구간 양끝과 중간에 기본 300초보다 긴 공백이 있으면 `missing_data`다. 다른 대상의 최근 표본으로 누락을 가리지 않는다. Events·앱 로그의 존재는 별도로 표시하며, 조용한 스트림 자체를 수집 장애로 판단하지 않는다.
+
+`--max-gap-seconds`로 허용 공백을 명시할 수 있다. `--expected-targets <JSON>`은 `targets` 배열의 `cluster`, `instance`, 선택적인 `start_utc`·`end_utc`로 한 번도 보고하지 못한 노드까지 검사한다. 증감 실행의 과거 구간은 `--manifest <schema v2 manifest>`로 삭제된 worker의 관측 수명을 지정한다. 기대 대상 목록 없이 하는 조회는 관측된 대상과 고정 호스트·클러스터의 검사이므로 전체 동적 노드의 완전한 수집을 보장하지 않는다.
+
+manifest v2는 단계 전체 snapshot의 Machine·Node·Pod UID와 최초/최종 관측 시각, 짧게 존재한 probe Pod를 보존한다. 기존 manifest는 불변으로 유지하고 새 실행부터 v2를 생성한다.
 
 자동 증감 실행 후에는 `make observability-publish-run RUN_DIR=/absolute/path/to/autoscaler-cycle-...`로 **허용된 manifest·result만** GCS에 보낸다. 과거 자료를 인덱싱하려면 `observability/build-run-manifest.py <run-dir>`를 한 번 실행한다. 이미 생성된 manifest는 덮어쓰지 않는다.
 
@@ -69,6 +77,6 @@ make observability-gcp-dedupe CONFIRM=cloud-gcp-amd64
 3. 장애: worker NotReady 또는 Pod 반복 실패를 통제된 조건으로 주입해 장애 전·중·후 지표/로그와 서비스 회복 시각을 확인한다. Ingress 경로와 능동 검사는 기반작업 9번이 준비된 뒤 시험한다.
 4. collector/전송 장애: controller 또는 수집기 중단 시 host와 guest의 자료 누락·복귀, 디스크 큐 포화 여부를 별도 실패로 기록한다.
 
-현재 **미검증**: 최종 구성에서 끊김 없는 정상 30분, 새 worker 생성·삭제 중 과거 UID 조회, 장애 주입과 복구, collector/전송 중단 시 큐·누락·복귀, CAPI/CA 내부 Prometheus endpoint, Grafana 대시보드. Ingress 경로의 능동 검사는 기반작업 9번 이후에 시험한다. CA/CAPI의 Pod 상태·Events·로그는 수집하지만 controller 내부 reconcile 메트릭 scrape는 아직 없다. 기존 controller Ops Agent는 중복 수집을 피하려고 비활성화했고 정책 label도 제거했다.
+현재 **미검증·후속 범위**: worker NotReady 자동 복구, 고객 서비스의 HTTP 연속성·성능·격리, CAPI/CA 내부 Prometheus endpoint, Grafana 대시보드. Ingress 경로의 능동 검사는 기반작업 9번 이후에 시험한다. CA/CAPI의 Pod 상태·Events·로그는 수집하지만 controller 내부 reconcile 메트릭 scrape는 아직 없다. Pod 반복 실패 시험은 장애 관측과 삭제 후 추적의 근거이며 고객 서비스 자동 복구 완료의 근거는 아니다. 기존 controller Ops Agent는 중복 수집을 피하려고 비활성화했고 정책 label도 제거했다.
 
 보존: Cloud Logging 30일, Cloud Monitoring Managed Prometheus는 서비스 정책에 따름, GCS 증거는 자동 삭제 없음, 호스트 JSONL은 일 단위 회전 7개를 유지한다. GCS 고객 자료 보존은 PRD 제품의 정책을 정할 때 별도로 확정한다. [OTel 수신](https://docs.cloud.google.com/stackdriver/docs/otlp/overview), [GMP exporter](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter), [Cloud Logging bucket](https://docs.cloud.google.com/logging/docs/buckets).

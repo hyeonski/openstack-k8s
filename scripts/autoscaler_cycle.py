@@ -309,16 +309,16 @@ def run_manual(target, control):
         try:
             status = proc.wait()
         except BaseException:
-            # Give the shell EXIT trap time to restore CA before bounding termination.
+            # Leave CA suspended and the journal intact for checked recovery.
             os.killpg(proc.pid, signal.SIGTERM)
             try:
-                proc.wait(timeout=330)
+                proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 os.killpg(proc.pid, signal.SIGKILL)
                 proc.wait()
             raise
         if status:
-            raise RuntimeError(f'manual scaling failed ({status}); inspect CA restoration artifacts')
+            raise RuntimeError(f'manual scaling failed ({status}); CA remains suspended; use control-recover')
 
 
 def prepare_transport(action):

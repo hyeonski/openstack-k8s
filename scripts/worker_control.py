@@ -9,6 +9,7 @@ import tempfile
 import time
 
 from workload_state import Client, now
+import workload_state
 
 
 class WorkerControl:
@@ -27,9 +28,12 @@ class WorkerControl:
         except BaseException:
             self.lock.close()
             raise
+        self.previous_command_lock = workload_state.COMMAND_LOCK_FD
+        workload_state.COMMAND_LOCK_FD = self.lock.fileno()
         return self
 
     def __exit__(self, *_):
+        workload_state.COMMAND_LOCK_FD = self.previous_command_lock
         self.lock.close()
 
     def read(self, path):
@@ -236,5 +240,10 @@ class WorkerControl:
         self.require_identity(journal, observed)
         if observed['workers'] != journal['target'] or not self.stable_workers(observed):
             raise RuntimeError('manual worker target has not converged; operation journal preserved')
+        if observed['ca_replicas'] != 0:
+            raise RuntimeError('CA changed during manual scaling; operation journal preserved')
+        if journal['ca_before']:
+            self.scale_ca(journal['ca_before'])
+        observed = self.observe()
         self.require_mode_state(journal['mode'], observed)
         self.clear_journal()

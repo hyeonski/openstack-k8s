@@ -222,7 +222,7 @@ observability-clusters-status:
 	@observability/deploy-clusters.sh status
 
 observability-verify:
-	@bash -c 'source config/environments/cloud-gcp-amd64.env; observability/verify-live.py --project "$$GCP_PROJECT_ID" --region "$$GCP_REGION"'
+	@bash -c 'source scripts/lib/common.sh; observability/verify-live.py --project "$$GCP_PROJECT_ID" --region "$$GCP_REGION" --host-cluster "$${ENVIRONMENT_NAME}-hosts"'
 
 observability-publish-run:
 	@observability/publish-run.sh "$(RUN_DIR)"

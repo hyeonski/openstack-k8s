@@ -1,5 +1,7 @@
 # 환경 준비 분리와 worker 1~3 자동 증감 검증
 
+이 문서는 2026-09-11 당시의 기록이다. 이후 제어 복구·관측·수명주기를 포함한 시험은 [1순위 종합 검증](foundation-priority1-final-validation-2026-09-24.md)에 기록한다.
+
 - 작성일: 2026-09-11
 - 설계: [ADR-0016](adr/0016-separate-observation-and-enable-worker-scale-in.md)
 - 과거 실환경 결과: [2026-08-24 기준선](gcp-validation-baseline.md). 당시 자동 시험은 **1→2 증설만** 통과했다.

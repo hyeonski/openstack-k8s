@@ -59,6 +59,26 @@ spec:
       tolerations:
         - {operator: Exists}
       containers:
+        # Exercise the Pod-filelog -> gateway -> Logging path even when apps are quiet.
+        - name: log-heartbeat
+          image: busybox:1.37.0
+          command: [sh, -ceu]
+          args:
+            - 'while true; do printf ''{"kind":"collector_path_heartbeat","node":"%s"}\n'' "$K8S_NODE_NAME"; sleep 60; done'
+          env:
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef: {fieldPath: spec.nodeName}
+          resources:
+            requests: {cpu: 1m, memory: 4Mi}
+            limits: {cpu: 10m, memory: 8Mi}
+          securityContext:
+            runAsUser: 65534
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
         - name: collector
           image: otel/opentelemetry-collector-contrib:0.140.0
           imagePullPolicy: IfNotPresent

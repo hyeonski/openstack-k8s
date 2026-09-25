@@ -7,4 +7,5 @@ Wants=network-online.target
 Type=oneshot
 Environment=OS_CLIENT_CONFIG_FILE=/etc/kolla/clouds.yaml
 Environment=OSK8S_ENV=cloud-gcp-amd64
+EnvironmentFile=/etc/osk8s-observability/environment
 ExecStart=/bin/sh -c '/opt/kolla-venv/bin/python3 /opt/openstack-k8s/observability/openstack-inventory.py >>/var/log/osk8s-observability/openstack.jsonl'

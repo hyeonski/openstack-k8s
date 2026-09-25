@@ -289,7 +289,7 @@ class OwnershipTests(unittest.TestCase):
                         resources.probe(client, Path('/tmp/offline'), 'run')
                         self.assertGreaterEqual(actions.index('delete'), 4)
 
-    def test_manual_scaling_restores_ca_on_success_and_failure(self):
+    def test_manual_shell_leaves_ca_stopped_for_checked_owner_restore(self):
         source = (ROOT / 'scripts/workload-cluster.sh').read_text().split('case "${action}" in')[0]
         source = source.replace('PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"', 'PROJECT_ROOT=' + str(ROOT))
         for original, result in ((0, 0), (0, 1), (1, 0), (1, 1)):
@@ -318,13 +318,8 @@ scale_workers 1
                 self.assertEqual(proc.returncode, result, proc.stderr)
                 calls = (Path(tmp) / 'calls').read_text()
                 self.assertIn('scale deployment cluster-autoscaler --replicas=0', calls)
-                self.assertIn(f'scale deployment cluster-autoscaler --replicas={original}', calls)
-                if original == 0:
-                    self.assertNotIn('scale deployment cluster-autoscaler --replicas=1', calls)
-                restored = list(Path(tmp).glob('manual-*/autoscaler-restored.txt'))
-                self.assertEqual(len(restored), 1, f'original={original} result={result}: {proc.stderr}')
-                self.assertEqual(restored[0].read_text().strip(), f'restored={original}')
-                self.assertEqual(restored[0].stat().st_mode & 0o777, 0o600)
+                self.assertNotIn('scale deployment cluster-autoscaler --replicas=1', calls)
+                self.assertEqual(list(Path(tmp).glob('manual-*/autoscaler-restored.txt')), [])
                 self.assertIn('scale machinedeployment osk8s-workload-md-0 --replicas=1', calls)
 
 

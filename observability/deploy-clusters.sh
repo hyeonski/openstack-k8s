@@ -9,6 +9,14 @@ management_kubeconfig="${STATE_DIR}/kubeconfigs/management.yaml"
 workload_kubeconfig="${STATE_DIR}/kubeconfigs/${WORKLOAD_CLUSTER_NAME}.yaml"
 cert_dir="${SECRET_DIR}/observability"
 
+verify_gateway_ca() {
+  local expected actual
+  expected="$(openssl dgst -sha256 "${cert_dir}/ca.crt" | awk '{print $NF}')"
+  actual="$(run_on "${CONTROLLER_NAME}" sudo sha256sum /etc/osk8s-observability/ca.crt | awk '{print $1}')"
+  [[ "${expected}" == "${actual}" ]] ||
+    die "gateway CA differs from selected profile; deploy observability-hosts-install with the same ENV_OVERRIDE_FILE first"
+}
+
 refresh_workload_kubeconfig() {
   local temporary="${workload_kubeconfig}.download"
   [[ -x "${STATE_DIR}/bin/clusterctl" ]] || die "clusterctl is missing"
@@ -63,6 +71,7 @@ case "${action}" in
     require_command kubectl
     ensure_state_dirs
     "${ROOT}/observability/deploy-hosts.sh" certs
+    verify_gateway_ca
     ensure_management_api_access
     refresh_workload_kubeconfig
     ensure_workload_api_access

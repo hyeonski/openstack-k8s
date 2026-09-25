@@ -13,6 +13,8 @@
 worker 수동·자동 제어 모드와 중단 후 복원 절차는
 [`docs/worker-control.md`](docs/worker-control.md)에 정리했다.
 실행 취소·재개·정리 및 시간 상한은 [`docs/run-lifecycle.md`](docs/run-lifecycle.md)를 따른다.
+1순위 기반 작업의 수정과 종합 수용 시험은
+[`docs/foundation-priority1-final-validation-2026-09-24.md`](docs/foundation-priority1-final-validation-2026-09-24.md)에 기록한다.
 
 ## 아키텍처
 

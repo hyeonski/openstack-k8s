@@ -9,10 +9,26 @@ import tempfile
 from pathlib import Path
 import signal
 import subprocess
+import sys
 import time
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def inherited_command_lock():
+    value = os.environ.get('WORKER_CONTROL_LOCK_FD')
+    if value is None:
+        return None
+    try:
+        fd = int(value)
+        os.fstat(fd)
+        return fd
+    except (ValueError, OSError):
+        return None
+
+
+COMMAND_LOCK_FD = inherited_command_lock()
 
 
 def now():
@@ -20,6 +36,8 @@ def now():
 
 
 def command(args, *, data=None, timeout=60):
+    if COMMAND_LOCK_FD is not None:
+        return guarded_command(args, data=data, timeout=timeout)
     # Kill the process group too (gcloud/SSH grandchildren must not outlive a deadline).
     with subprocess.Popen([str(a) for a in args], stdin=subprocess.PIPE,
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -33,6 +51,37 @@ def command(args, *, data=None, timeout=60):
         if proc.returncode:
             raise RuntimeError(f"command failed ({proc.returncode}): {args[0]}: {err.strip()}")
         return out
+
+
+def guarded_command(args, *, data, timeout):
+    read_fd, write_fd = os.pipe()
+    try:
+        argv = [sys.executable, str(ROOT / 'scripts/command_guard.py'),
+                '--parent-fd', str(read_fd), '--lock-fd', str(COMMAND_LOCK_FD),
+                '--timeout', str(timeout), '--', *map(str, args)]
+        with subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, text=True, start_new_session=True,
+                              pass_fds=(read_fd, COMMAND_LOCK_FD)) as proc:
+            os.close(read_fd)
+            read_fd = None
+            try:
+                out, err = proc.communicate(data, timeout=timeout + 5)
+            except BaseException:
+                # The supervisor owns termination and releases the lock only after reaping.
+                os.close(write_fd)
+                write_fd = None
+                proc.terminate()
+                proc.wait(timeout=5)
+                raise
+            if proc.returncode == 124:
+                raise subprocess.TimeoutExpired(args, timeout)
+            if proc.returncode:
+                raise RuntimeError(f'command failed ({proc.returncode}): {args[0]}: {err.strip()}')
+            return out
+    finally:
+        for fd in (read_fd, write_fd):
+            if fd is not None:
+                os.close(fd)
 
 
 def save(path, value):

@@ -33,7 +33,13 @@ receivers:
     include: [/hostfs/var/log/osk8s-observability/*.jsonl]
     start_at: beginning
     operators:
-      - {type: json_parser, parse_to: body}
+      - type: json_parser
+        parse_to: body
+        # Preserve source time when local JSONL is replayed after an outage.
+        timestamp:
+          parse_from: body.time
+          layout_type: gotime
+          layout: '2006-01-02T15:04:05.999999999Z07:00'
     storage: file_storage
     retry_on_failure:
       enabled: true
@@ -86,6 +92,8 @@ exporters:
         - {prefix: container.}
     sending_queue:
       enabled: true
+      # GMP rejects older samples after a newer batch has arrived.
+      num_consumers: 1
       queue_size: 1000
       storage: file_storage
   googlecloud:
@@ -112,7 +120,9 @@ service:
       exporters: [googlemanagedprometheus]
     metrics/guest:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
+      # Agents already batch each scrape. Rebatching a replay can put multiple
+      # points for one series in a GMP request, which the API rejects.
+      processors: [memory_limiter]
       exporters: [googlemanagedprometheus]
     logs/host:
       receivers: [filelog/system, filelog/kolla, filelog/observability]

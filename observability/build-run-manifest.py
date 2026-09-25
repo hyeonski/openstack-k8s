@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import tempfile
 from pathlib import Path
 
 
@@ -11,7 +13,8 @@ def read(path: Path) -> dict:
     if not path.exists():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else {}
     except (OSError, ValueError):
         return {}
 
@@ -59,46 +62,71 @@ def owned_pods(snapshot: dict, run_owner: str) -> list[dict]:
     return rows
 
 
+def merge_observation(index, key, row, timestamp):
+    if not key:
+        return
+    previous = index.get(key, {})
+    merged = {**previous, **{k: v for k, v in row.items() if v is not None and v != ""}}
+    times = [t for t in (previous.get("first_seen_utc"), previous.get("last_seen_utc"), timestamp) if t]
+    node_time = row.get("node_first_seen_utc") or timestamp
+    if row.get("node") and node_time:
+        merged["node_first_seen_utc"] = min(previous.get("node_first_seen_utc") or node_time, node_time)
+    if times:
+        merged.update(first_seen_utc=min(times), last_seen_utc=max(times))
+    index[key] = merged
+
+
 def build(path: Path) -> dict:
     ownership = read(path / "ownership.json")
+    # Baseline probes can exist before the load Deployment ownership file.
+    owner = ownership.get("run") or read(path.parent / "run.json").get("owner_id")
     result = read(path / "result.json")
-    stages = []
-    all_resources: dict[str, dict] = {}
-    all_pods: dict[str, dict] = {}
+    stages, all_resources, all_pods = [], {}, {}
     for stage in sorted(p for p in path.iterdir() if p.is_dir() and (p / "started.json").exists()):
         started = read(stage / "started.json")
         passed = read(stage / "passed.json")
         timed_out = read(stage / "timeout.json")
         snapshots = sorted(stage.glob("[0-9][0-9][0-9][0-9]/snapshot.json"))
-        last = read(snapshots[-1]) if snapshots else {}
-        current = [normalize(row) for row in (passed.get("identities") or identities(last))]
-        pods = owned_pods(last, ownership.get("run", ""))
-        for pod in pods:
-            if pod["pod_uid"]:
-                all_pods[pod["pod_uid"]] = pod
-        for row in current:
-            key = row.get("machine_uid") or row.get("machine")
-            if key:
-                all_resources[key] = row
-        for removed in passed.get("removed", []):
-            row = normalize(removed)
-            key = row.get("machine_uid") or row.get("machine")
-            if key:
-                all_resources[key] = row
-        errors = {}
+        resources, pods, errors, last = {}, {}, {}, {}
         for snapshot in snapshots:
-            errors.update(read(snapshot).get("errors", {}))
+            last = read(snapshot)
+            timestamp = last.get("time")
+            errors.update(last.get("errors", {}))
+            for row in identities(last):
+                merge_observation(resources, row.get("machine_uid"), row, timestamp)
+            for row in owned_pods(last, owner):
+                merge_observation(pods, row.get("pod_uid"), row, timestamp)
+        for row in passed.get("identities", []):
+            row = normalize(row)
+            merge_observation(resources, row.get("machine_uid"), row, passed.get("time"))
+        for removed in passed.get("removed", []):
+            row = {**normalize(removed), "retired_at_utc": passed.get("time")}
+            merge_observation(resources, row.get("machine_uid"), row, None)
+        for key, row in resources.items():
+            merge_observation(all_resources, key, row, row.get("first_seen_utc"))
+            merge_observation(all_resources, key, row, row.get("last_seen_utc"))
+        for key, row in pods.items():
+            merge_observation(all_pods, key, row, row.get("first_seen_utc"))
+            merge_observation(all_pods, key, row, row.get("last_seen_utc"))
         stages.append({"name": stage.name, "start_utc": started.get("time"),
                        "end_utc": passed.get("time") or timed_out.get("time") or last.get("time"),
                        "target_workers": started.get("target_workers"),
                        "state": "passed" if passed else "timeout" if timed_out else "incomplete",
-                       "snapshot_count": len(snapshots),
-                       "query_errors": sorted(errors), "resources": current, "pods": pods})
-    return {"schema_version": 1, "run_id": path.name,
-            "workload_owner_id": ownership.get("run"),
+                       "snapshot_count": len(snapshots), "query_errors": sorted(errors),
+                       "resources": list(resources.values()), "pods": list(pods.values())})
+    # Include short-lived probes, which may be created and deleted between polls.
+    for source in sorted(path.rglob("*.json")):
+        if source.name in ("observability-manifest.json", "requested-deployment.json"):
+            continue
+        obj = read(source)
+        if obj.get("kind") != "Pod":
+            continue
+        timestamp = obj.get("metadata", {}).get("creationTimestamp")
+        for row in owned_pods({"pods": {"items": [obj]}}, owner):
+            merge_observation(all_pods, row.get("pod_uid"), row, timestamp)
+    return {"schema_version": 2, "run_id": path.name, "workload_owner_id": owner,
             "start_utc": stages[0]["start_utc"] if stages else None,
-            "end_utc": result.get("time"),
-            "state": result.get("state", "incomplete"),
+            "end_utc": result.get("time"), "state": result.get("state", "incomplete"),
             "stages": stages,
             "resources": sorted(all_resources.values(), key=lambda x: x.get("machine_uid") or ""),
             "pods": sorted(all_pods.values(), key=lambda x: x.get("pod_uid") or ""),
@@ -115,8 +143,21 @@ def main() -> None:
     destination = path / "observability-manifest.json"
     if destination.exists():
         parser.error("manifest already exists; existing evidence is immutable")
-    destination.write_text(json.dumps(build(path), indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    destination.chmod(0o600)
+    fd, temporary = tempfile.mkstemp(prefix=".manifest-", dir=path)
+    try:
+        with os.fdopen(fd, "w") as stream:
+            json.dump(build(path), stream, indent=2, sort_keys=True)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.link(temporary, destination)  # atomic, and fails if another writer published
+        directory = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        os.unlink(temporary)
     print(destination)
 
 

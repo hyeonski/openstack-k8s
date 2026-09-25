@@ -1,5 +1,7 @@
 # 기반작업 1-4 라이브 배포·검증 — 2026-09-24
 
+이 문서는 최초 배포 당시의 기록이다. 이후 수정과 확대된 수용 시험은 [기반작업 1순위 종합 검증](../docs/foundation-priority1-final-validation-2026-09-24.md)에 별도로 기록한다.
+
 ## 적용 결과
 
 - GCP 프로젝트 `openstack-k8s`, 서울 리전. `osk8s-telemetry` 서비스 계정에 Logging writer·Monitoring metric writer, 증거 bucket의 object creator 권한을 부여하고 GCE 3대에 연결했다.
