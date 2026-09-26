@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -293,7 +294,12 @@ class S4Run:
                       'environment_run_id': prep['environment_run_id'], 'created': utc_now(),
                       'evidence': str(evidence), 'target': target, 'original_workers': originals,
                       'probe_name': 'new-worker-probe-' + uuid.uuid4().hex[:8],
-                      'mhc_uid': verified['mhc_uid'], 'host_deadline_epoch': budget}
+                      'mhc_uid': verified['mhc_uid'], 'host_deadline_epoch': budget,
+                      'source_sha256': {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
+                                        for path in (ROOT / 'scripts/graduation_s4_run.py',
+                                                     ROOT / 'scripts/graduation_s4.py',
+                                                     ROOT / 'kubernetes/graduation-s4/http-service.yaml',
+                                                     self.preparation.mhc_manifest)}}
             self.write(record, 'baseline-ready')
             try:
                 with WorkerControl(self.client) as control:

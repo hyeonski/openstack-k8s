@@ -31,7 +31,8 @@ export ENV
 	observability-verify observability-publish-run \
 	graduation-env-status graduation-env-ensure graduation-env-reconcile graduation-env-down \
 	graduation-s4-prepare graduation-s4-verify graduation-s4-cleanup graduation-s4-status \
-	graduation-s4-run graduation-s4-observe graduation-s4-run-status \
+	graduation-s4-run graduation-s4-e2e graduation-s4-inject graduation-s4-observe \
+	graduation-s4-analyze graduation-s4-run-status graduation-s4-workflow-status \
 	status lint
 
 help:
@@ -135,9 +136,13 @@ help:
 	@echo "  graduation-s4-verify   Recheck MHC scope, Pod placement and HTTP responses"
 	@echo "  graduation-s4-cleanup  Remove owned S4 resources and restore worker control"
 	@echo "  graduation-s4-status   Show locally recorded S4 preparation state"
-	@echo "  graduation-s4-run      Stop one exact Nova worker VM and observe service/capacity recovery"
+	@echo "  graduation-s4-run      Prepare, inject, analyze and clean S4 on an already Ready environment"
+	@echo "  graduation-s4-e2e      Ensure existing environment, run S4, then stop only owned GCP hosts"
+	@echo "  graduation-s4-inject   Low-level exact Nova worker stop and service/capacity observation"
 	@echo "  graduation-s4-observe  Continue observation after interruption without stopping a VM again"
+	@echo "  graduation-s4-analyze  Rebuild JSON/CSV/report table from immutable S4 run evidence"
 	@echo "  graduation-s4-run-status Show locally recorded S4 experiment state"
+	@echo "  graduation-s4-workflow-status Show the composite S4 workflow state"
 	@echo
 	@echo "Development:"
 	@echo "  lint                    Static checks that do not mutate the host"
@@ -399,13 +404,25 @@ graduation-s4-status:
 	@bash scripts/graduation-s4.sh status
 
 graduation-s4-run:
+	@bash scripts/graduation-s4-workflow.sh scenario
+
+graduation-s4-e2e:
+	@bash scripts/graduation-s4-workflow.sh e2e
+
+graduation-s4-inject:
 	@bash scripts/graduation-s4-run.sh run
 
 graduation-s4-observe:
 	@bash scripts/graduation-s4-run.sh observe
 
+graduation-s4-analyze:
+	@bash scripts/graduation-s4-analyze.sh
+
 graduation-s4-run-status:
 	@bash scripts/graduation-s4-run.sh status
+
+graduation-s4-workflow-status:
+	@bash scripts/graduation-s4-workflow.sh status
 
 status:
 	@scripts/status.sh

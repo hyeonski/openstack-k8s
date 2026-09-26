@@ -28,12 +28,12 @@ make graduation-env-down
 | 마지막 HTTP 실패 표본 | 02:58:15.193 | 요청별 원본 |
 | 첫 정상 HTTP 응답 | 02:58:16.503 | 요청별 원본 |
 | MHC의 기존 Machine 삭제 시작 | 02:59:45 | Machine deletionTimestamp와 `UnhealthyNode` 조건 |
-| 목표 worker 용량 첫 충족 표본 | 03:01:16.653 | 2대 Ready, 기존 Machine/Node/Nova 제거, 새 VM ACTIVE |
+| 목표 worker·신규 worker HTTP 검사 첫 충족 표본 | 03:01:31.320 | 2대 Ready, 기존 Machine/Node/Nova 제거, 새 VM ACTIVE, 새 worker 검사 Pod Ready |
 | 안정화까지 충족한 최종 표본 | 03:02:14.447 | MHC 2/2, MachineDeployment 2/2, 신규 worker의 HTTP 검사 Pod Ready |
 
 중단 명령 이후 수집한 HTTP 요청 **226회 중 29회가 실패**했고 197회가 성공했다. 첫 실패 표본에서 첫 정상 응답 표본까지 **71.515초**였다. 이는 요청 간격과 최대 5초 API 타임아웃을 포함한 *관측 구간*이며 실제 서비스 중단의 정확한 시작·종료 시각은 아니다. 초기 실패에는 API Service proxy의 응답 타임아웃과 `no endpoints available`이 모두 포함된다. Service proxy는 workload API 터널을 거치므로 일반 사용자 ingress의 지연/가용성으로 환산할 수 없다. HTTP 성공은 이후 30초 이상 연속으로 확인했다.
 
-MHC는 Node `Ready=Unknown`이 2분 넘게 지속됐다는 이유로 원래 Machine을 삭제했다. 대체 Machine UID `98aa95c2-bd1b-4221-ad7c-5211d07a70f4`, 새 Nova VM `dc99ee16-7ab7-4a23-be18-6d453512fe14`가 생성됐다. 두 worker의 Machine·Node가 Ready, MHC 2/2, MachineDeployment 2/2/2, 새 Nova VM ACTIVE였다. 원래 Machine·Node·OpenStackMachine·Nova VM은 최종 목록에서 사라졌으며, 새 worker에 별도 검사 Pod를 실행해 클러스터 내부 HTTP 서비스를 읽었다. `SHUTOFF` 확인부터 목표 용량의 **첫 충족 표본까지 188.904초**, 안정화 확인까지 **246.697초**였다. HTTP 복구와 worker 용량 복구는 각각 독립 판정했다.
+MHC는 Node `Ready=Unknown`이 2분 넘게 지속됐다는 이유로 원래 Machine을 삭제했다. 대체 Machine UID `98aa95c2-bd1b-4221-ad7c-5211d07a70f4`, 새 Nova VM `dc99ee16-7ab7-4a23-be18-6d453512fe14`가 생성됐다. 두 worker의 Machine·Node가 Ready, MHC 2/2, MachineDeployment 2/2/2, 새 Nova VM ACTIVE였다. 원래 Machine·Node·OpenStackMachine·Nova VM은 최종 목록에서 사라졌으며, 새 worker에 별도 검사 Pod를 실행해 클러스터 내부 HTTP 서비스를 읽었다. `SHUTOFF` 확인부터 목표 용량과 검사 Pod의 **첫 충족 표본까지 203.570초**, 안정화 확인까지 **246.697초**였다. HTTP 복구와 worker 용량 복구는 각각 독립 판정했다.
 
 ## 원본과 해석상 주의
 
