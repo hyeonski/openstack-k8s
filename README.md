@@ -10,6 +10,8 @@
 
 제품 실험을 위한 기반 작업의 우선순위와 진행 상태는
 [`docs/product/infrastructure-priorities.md`](docs/product/infrastructure-priorities.md)에서 관리한다.
+졸업작품의 장애 시나리오와 복구·검증 기준은 제품 PRD와 별도로
+[`docs/graduation/failure-scenarios.md`](docs/graduation/failure-scenarios.md)에 정리했다.
 worker 수동·자동 제어 모드와 중단 후 복원 절차는
 [`docs/worker-control.md`](docs/worker-control.md)에 정리했다.
 실행 취소·재개·정리 및 시간 상한은 [`docs/run-lifecycle.md`](docs/run-lifecycle.md)를 따른다.
