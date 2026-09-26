@@ -34,6 +34,7 @@ export ENV
 	graduation-s4-run graduation-s4-e2e graduation-s4-inject graduation-s4-observe \
 	graduation-s4-analyze graduation-s4-run-status graduation-s4-workflow-status graduation-s4-resume \
 	graduation-s1-prepare graduation-s1-verify graduation-s1-baseline graduation-s1-cleanup graduation-s1-status \
+	graduation-s1-contention graduation-s1-contention-cleanup graduation-s1-contention-status \
 	status lint
 
 help:
@@ -148,6 +149,8 @@ help:
 	@echo "  graduation-s1-prepare Fix two workers and create the S1 CPU HTTP service"
 	@echo "  graduation-s1-verify Recheck the S1 service and Pod-to-Nova identity"
 	@echo "  graduation-s1-baseline Run a direct Service baseline from the workload control plane"
+	@echo "  graduation-s1-contention Run S1 same-compute CPU contention and manual Pod relocation"
+	@echo "  graduation-s1-contention-cleanup Remove a leftover S1 competitor VM and load Job"
 	@echo "  graduation-s1-cleanup Remove S1 resources and restore worker control"
 	@echo "  graduation-s1-status Show the local S1 preparation record"
 	@echo
@@ -448,6 +451,15 @@ graduation-s1-cleanup:
 
 graduation-s1-status:
 	@bash scripts/graduation-s1.sh status
+
+graduation-s1-contention:
+	@bash scripts/graduation-s1-contention.sh run --rate "$(or $(RATE),5)" --rounds "$(or $(ROUNDS),100000)" --seconds "$(or $(SECONDS),780)"
+
+graduation-s1-contention-cleanup:
+	@bash scripts/graduation-s1-contention.sh cleanup
+
+graduation-s1-contention-status:
+	@bash scripts/graduation-s1-contention.sh status
 
 status:
 	@scripts/status.sh

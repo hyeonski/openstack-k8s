@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 sys.path.insert(0, str(ROOT / 'kubernetes/graduation-s1'))
 from app import Handler
 from graduation_s1 import S1, analyze_rows, host_cpu_pressure, host_cpu_utilization, pod_cpu_delta
+from graduation_s1_contention import load_job, stress_user_data, summarize_window
 from loadgen import run
 
 
@@ -59,6 +60,22 @@ class S1ServiceTests(unittest.TestCase):
 
 
 class S1AnalysisTests(unittest.TestCase):
+    def test_contention_windows_and_bounded_guest_stress(self):
+        start = dt.datetime(2026, 9, 26, tzinfo=dt.timezone.utc).timestamp()
+        rows = [{'time': dt.datetime.fromtimestamp(start + offset, dt.timezone.utc).isoformat(),
+                 'index': offset, 'ok': offset != 2, 'latency_ms': 10 + offset}
+                for offset in range(4)]
+        window = summarize_window(rows, start + 1, start + 4)
+        self.assertEqual((window['requests'], window['successes'], window['failures']),
+                         (3, 2, 1))
+        self.assertEqual(window['latency_ms']['p95'], 12.9)
+        self.assertFalse(window['duplicate_indexes'])
+        job = load_job('sample', 'control-plane', 5, 100000, 780)
+        self.assertEqual(job['spec']['template']['spec']['nodeName'], 'control-plane')
+        self.assertEqual(job['metadata']['labels']['openstack-k8s.dev/experiment'],
+                         'graduation-s1')
+        self.assertIn('timeout 1200s', stress_user_data())
+
     def test_pod_cpu_counters_must_exist_and_remain_monotonic(self):
         before = {'usage_usec': 100, 'user_usec': 80, 'system_usec': 20,
                   'nr_periods': 10, 'nr_throttled': 0, 'throttled_usec': 0}
