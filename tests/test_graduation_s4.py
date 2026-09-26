@@ -71,6 +71,8 @@ class S4PartialCleanupTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.state = Path(self.temporary.name)
         self.preparation = S4Preparation(SimpleNamespace(state=self.state, cluster='workload', ns='ns'))
+        self.preparation.client.get = lambda _plane, resource, *_args: {
+            'metadata': {'uid': 'cluster' if resource == 'cluster' else 'md'}}
         self.worker = {'mode': 'fixed', 'workers': 2}
         self.commands = []
         self.objects = {
@@ -128,6 +130,30 @@ class S4PartialCleanupTests(unittest.TestCase):
             self.preparation.cleanup()
         self.assertFalse(any(call[1][0] == 'delete' for call in self.commands))
         self.assertEqual(json.loads(self.preparation.record_path.read_text())['phase'], 'cleanup-failed')
+
+    def test_unstable_worker_still_removes_owned_resources_before_waiting_for_recovery(self):
+        self.preparation.preflight = lambda: (_ for _ in ()).throw(
+            RuntimeError('worker MachineDeployment is not stable'))
+        with self.assertRaisesRegex(RuntimeError, 'worker MachineDeployment is not stable'):
+            self.preparation.cleanup()
+        self.assertTrue(any(call[0] == 'm' and call[1][0] == 'delete' for call in self.commands))
+        self.assertTrue(any(call[0] == 'w' and call[1][0] == 'delete' for call in self.commands))
+        self.assertEqual(json.loads(self.preparation.record_path.read_text())['phase'], 'cleanup-failed')
+        self.assertFalse(any(call[0] == 'worker' for call in self.commands))
+
+        self.preparation.preflight = lambda: (self.worker['mode'], {
+            'cluster_uid': 'cluster', 'md_uid': 'md', 'workers': self.worker['workers']})
+        with patch('graduation_s4.command', side_effect=self.worker_command),\
+                patch('graduation_s4.WorkerControl.stable_workers', return_value=True):
+            result = self.preparation.cleanup()
+        self.assertEqual(result['phase'], 'restored')
+        self.assertEqual((self.worker['mode'], self.worker['workers']), ('auto', 1))
+
+    def test_changed_cluster_identity_refuses_cleanup_before_deletion(self):
+        self.preparation.client.get = lambda *_args: {'metadata': {'uid': 'replacement'}}
+        with self.assertRaisesRegex(RuntimeError, 'cluster identity changed'):
+            self.preparation.cleanup()
+        self.assertEqual(self.commands, [])
 
 
 if __name__ == '__main__':

@@ -314,8 +314,10 @@ class S4Preparation:
         environment = self.environment_record()
         if record['environment_run_id'] != environment['run_id']:
             raise RuntimeError('S4 fixture belongs to another environment run')
-        mode, observed = self.preflight()
-        if observed['cluster_uid'] != record['cluster_uid'] or observed['md_uid'] != record['md_uid']:
+        cluster = self.client.get('m', 'cluster', self.client.cluster, '-n', self.client.ns)
+        md = self.client.get('m', 'machinedeployment', self.md_name, '-n', self.client.ns)
+        if cluster['metadata']['uid'] != record['cluster_uid'] or\
+                md['metadata']['uid'] != record['md_uid']:
             raise RuntimeError('S4 fixture cluster identity changed; refusing cleanup')
         try:
             mhc = self.object('m', 'machinehealthcheck', MHC_NAME, self.client.ns)
@@ -358,6 +360,10 @@ class S4Preparation:
                 self.k('w', 'delete', '-f', self.app_manifest, '--ignore-not-found=true',
                        '--wait=true', '--timeout=5m', timeout=330)
             self.record(record, 'resources-removed')
+            # An interrupted worker scale can leave the MD temporarily unstable.
+            # Remove only verified S4 resources first; reconcile worker control
+            # after it converges, retaining the cleanup-failed record otherwise.
+            mode, observed = self.preflight()
             original_workers = record['original_workers']
             if observed['workers'] != original_workers:
                 command([ROOT / 'scripts/workload-cluster.sh', 'scale', str(original_workers)], timeout=4200)
