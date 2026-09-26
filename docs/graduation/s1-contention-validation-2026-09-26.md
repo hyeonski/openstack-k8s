@@ -18,12 +18,22 @@
 
 서비스 compute의 구간 평균 CPU 사용률은 정상 **12.421%**에서 경합 **99.780%**로, CPU PSI `some` 비율은 **0.651%**에서 **23.787%**로 올랐다. 목적지 compute의 경합 구간 CPU 사용률은 **16.932%**, CPU PSI는 **0.910%**였다. 경합 전후 서비스 Pod cgroup CPU 카운터는 정상 증가했고 throttling 횟수·시간 증가가 없었다. 따라서 서비스 자체 CPU 제한보다 동일 compute의 별도 VM 작업이 성능 악화의 유력 원인이다. 이는 함께 관측한 배치·서비스 지연·호스트 압박을 바탕으로 한 추론이다.
 
-Deployment의 `nodeSelector` 변경 후 새 Pod UID `f7978a19-c42a-4a12-87eb-119eb6d11886`가 목적지 worker에서 Ready가 됐다. 기존 Pod UID `bbf6dba8-06f5-46a7-9425-e0b2fae8e2ec`와 이미지 ID, 목적지 Nova·compute를 기록했다. 단일 복제본과 요청률은 유지했고, 경쟁 VM은 이동 후 관측 동안 실행 상태였다. `summary.json`은 사전 정의한 지표 품질·서비스 영향·회복·호스트 압박 조건을 모두 만족해 `passed`로 판정했다.
+Deployment의 `nodeSelector` 변경 후 새 Pod UID `f7978a19-c42a-4a12-87eb-119eb6d11886`가 목적지 worker에서 Ready가 됐다. 기존 Pod UID `bbf6dba8-06f5-46a7-9425-e0b2fae8e2ec`와 이미지 ID, 목적지 Nova·compute를 기록했다. 단일 복제본과 요청률은 유지했다. `summary.json`은 당시의 지표 품질·서비스 영향·회복·호스트 압박 조건을 모두 만족해 `passed`로 판정했다.
 
-## 첫 시도와 정리
+이 실측은 재배치 이후 경쟁 VM의 Nova 상태와 요청 Job 완료 뒤 호스트 압박을 통과 조건으로 추가하기 전에 수행했다. 저장된 호스트 지표는 이동 후 120초 동안의 압박을 보여주지만, 현재 코드의 `contender-after.json`과 Job 완료 뒤 30초 압박 측정은 없다. 따라서 당시의 `passed`는 현재 추가된 두 조건의 실환경 검증 결과를 뜻하지 않는다.
+
+## 초기 실측의 첫 시도와 정리
 
 첫 시도 `s1c-01de9044f1d9`는 경쟁 VM의 CPU 작업이 실제로 호스트 압박을 만들었지만, 게스트의 `nohup` 출력이 Nova 콘솔이 아닌 파일로 재지정되어 시작 확인 신호를 수집하지 못했다. 안전 검사에서 재배치를 진행하지 않고 `failed`로 종료했으며, 전용 VM·flavor·Job을 삭제했다. 신호 경로를 수정한 뒤 별도 실행 ID로 다시 측정했다. 첫 시도의 요청을 최종 결과와 합치지 않았다.
 
-최종 실행 후 Nova 목록에서 전용 VM·flavor가 각각 0개이고 S1 Job이 0개임을 확인했다. 이동한 HTTP Pod가 종료 직전에도 Ready임을 확인한 뒤 S1 namespace를 삭제하고 worker 제어를 실험 전 `auto`·1대로 복원했다. 환경 실행이 기동한 GCP `osk8s-controller`, `osk8s-compute01`, `osk8s-compute02`는 모두 `TERMINATED`로 확인했다. 최종 코드에서 `make lint`의 150개 테스트와 셸 정적 검사가 통과했다.
+최종 실행 후 Nova 목록에서 전용 VM·flavor가 각각 0개이고 S1 Job이 0개임을 확인했다. 이동한 HTTP Pod가 종료 직전에도 Ready임을 확인한 뒤 S1 namespace를 삭제하고 worker 제어를 실험 전 `auto`·1대로 복원했다. 환경 실행이 기동한 GCP `osk8s-controller`, `osk8s-compute01`, `osk8s-compute02`는 모두 `TERMINATED`로 확인했다. 당시 코드에서 `make lint`의 150개 테스트와 셸 정적 검사가 통과했다.
 
-한 번의 성공 실행으로 이 구성에서 경합 재현과 **수동** 재배치 효과를 확인했다. 자동 감지·목적지 선택·조치 중복 방지는 아직 구현하지 않았다. 다른 부하 강도나 compute 배치에서 재현되는지, 같은 compute 내 재시작과 비교해 호스트 변경 효과가 얼마나 독립적인지는 후속 실험이 필요하다.
+## 보강한 판정의 재측정
+
+실행 ID `s1c-5226eabf8dae`로 같은 설정(5 RPS, 연산 100,000회, 780초)을 다시 측정했다. 원본은 `artifacts/cloud-gcp-amd64-greenfield/graduation-s1-contention-20260926T110906Z-4eac2092/`에 보관한다. 정상·경합·재배치 후 60초 구간의 p95는 각각 **90.222ms, 167.182ms, 87.232ms**였다. 경합 p95는 정상의 **1.85배**, 재배치 후 p95는 정상의 **0.97배**다. 전체 **3,900/3,900 요청이 성공**했고 원본 인덱스 0~3,899의 누락·중복이 없으며, 원본에서 재계산한 세 p95가 `summary.json`과 일치한다.
+
+원래 서비스 compute `osk8s-compute02`의 CPU 사용률은 정상 **14.923%**, 경합 **99.738%**, 이동 후 **99.970%**, Job 완료 뒤 30초 **99.964%**였다. 같은 구간의 CPU PSI `some` 비율은 각각 **0.649%, 24.554%, 9.282%, 8.615%**였다. Job 완료 뒤 `contender-after.json`의 경쟁 VM은 같은 compute에서 `ACTIVE`였고, 이동 전후 HTTP 이미지 ID가 같으며 Pod throttling 증가는 없었다. 새 통과 항목 `competitor_active_on_source`, `source_contention_persisted`, `source_contention_at_completion`, `image_unchanged`가 모두 참으로 기록되어 최종 `summary.json`이 `passed`다.
+
+환경 기동 첫 시도에서 workload control-plane VM이 복구 직후 `SHUTOFF`로 바뀌어 준비 검사가 시간 초과됐다. Nova 이벤트의 `stop`을 확인한 뒤 기존 게스트 복구 스크립트로 VM을 다시 기동하고 환경 기록을 reconcile했다. 두 번째 준비 검사에서 control-plane과 worker가 Ready였으며, 그 뒤 S1 fixture를 준비해 위 실험을 시작했다. 시험 뒤 전용 Nova VM·flavor와 S1 Job이 각각 0개였고, S1 namespace를 제거해 worker 제어를 원래 `auto`·1대로 복원했다. 환경 실행이 기동한 GCP 호스트 3대는 모두 `TERMINATED`로 확인했다. 수정 코드에서 `make lint`의 153개 테스트와 셸 정적 검사가 통과했다.
+
+초기 실측과 보강 판정 재측정에서 이 구성의 경합 재현과 **수동** 재배치 효과를 확인했다. 자동 감지·목적지 선택·조치 중복 방지는 아직 구현하지 않았다. 다른 부하 강도나 compute 배치에서 재현되는지, 같은 compute 내 재시작과 비교해 호스트 변경 효과가 얼마나 독립적인지는 후속 실험이 필요하다.

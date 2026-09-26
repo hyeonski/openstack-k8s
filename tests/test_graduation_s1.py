@@ -16,7 +16,8 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 sys.path.insert(0, str(ROOT / 'kubernetes/graduation-s1'))
 from app import Handler
 from graduation_s1 import S1, analyze_rows, host_cpu_pressure, host_cpu_utilization, pod_cpu_delta
-from graduation_s1_contention import load_job, stress_user_data, summarize_window
+from graduation_s1_contention import (S1Contention, load_job, recovery_controls,
+                                      stress_user_data, summarize_window)
 from loadgen import run
 
 
@@ -60,6 +61,37 @@ class S1ServiceTests(unittest.TestCase):
 
 
 class S1AnalysisTests(unittest.TestCase):
+    def test_recovery_requires_same_image_and_persistent_source_contention(self):
+        record = {'service_compute_host': 'compute02', 'server_id': 'server-1',
+                  'service_before': {'image_id': 'image-1'}}
+        moved = {'image_id': 'image-1'}
+        metrics = {'baseline': {'compute02': {'cpu_pressure_some': .005}},
+                   'relocated': {'compute02': {'cpu_utilization': .98,
+                                              'cpu_pressure_some': .08}},
+                   'completion': {'compute02': {'cpu_utilization': .98,
+                                               'cpu_pressure_some': .08}}}
+        contender = {'id': 'server-1', 'status': 'ACTIVE',
+                     'OS-EXT-SRV-ATTR:host': 'compute02'}
+        self.assertTrue(all(recovery_controls(record, moved, metrics, contender).values()))
+        metrics['relocated']['compute02'] = {'cpu_utilization': .05,
+                                              'cpu_pressure_some': .001}
+        self.assertFalse(recovery_controls(record, moved, metrics, contender)[
+            'source_contention_persisted'])
+        metrics['relocated']['compute02'] = {'cpu_utilization': .98,
+                                              'cpu_pressure_some': .08}
+        metrics['completion']['compute02'] = {'cpu_utilization': .05,
+                                               'cpu_pressure_some': .001}
+        self.assertFalse(recovery_controls(record, moved, metrics, contender)[
+            'source_contention_at_completion'])
+        metrics['completion']['compute02'] = {'cpu_utilization': .98,
+                                               'cpu_pressure_some': .08}
+        moved['image_id'] = 'image-2'
+        self.assertFalse(recovery_controls(record, moved, metrics, contender)['image_unchanged'])
+        moved['image_id'] = 'image-1'
+        contender['status'] = 'SHUTOFF'
+        self.assertFalse(recovery_controls(record, moved, metrics, contender)[
+            'competitor_active_on_source'])
+
     def test_contention_windows_and_bounded_guest_stress(self):
         start = dt.datetime(2026, 9, 26, tzinfo=dt.timezone.utc).timestamp()
         rows = [{'time': dt.datetime.fromtimestamp(start + offset, dt.timezone.utc).isoformat(),
@@ -74,7 +106,10 @@ class S1AnalysisTests(unittest.TestCase):
         self.assertEqual(job['spec']['template']['spec']['nodeName'], 'control-plane')
         self.assertEqual(job['metadata']['labels']['openstack-k8s.dev/experiment'],
                          'graduation-s1')
-        self.assertIn('timeout 1200s', stress_user_data())
+        self.assertIn('time.sleep(1200)', stress_user_data(780))
+        self.assertIn('timeout 1230s', stress_user_data(780))
+        self.assertIn('time.sleep(2160)', stress_user_data(1800))
+        self.assertIn('timeout 2190s', stress_user_data(1800))
 
     def test_pod_cpu_counters_must_exist_and_remain_monotonic(self):
         before = {'usage_usec': 100, 'user_usec': 80, 'system_usec': 20,
@@ -111,6 +146,82 @@ class S1AnalysisTests(unittest.TestCase):
 
 
 class S1LifecycleTests(unittest.TestCase):
+    def test_interrupted_contention_cleanup_saves_job_before_removal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            s1 = Mock()
+            s1.lock_path = Path(directory) / 's1.lock'
+            s1.client.state = Path(directory)
+            s1.environment.return_value = {'run_id': 'env-1'}
+            s1.obj.return_value = {'metadata': {'uid': 'job-uid',
+                'labels': {'openstack-k8s.dev/experiment': 'graduation-s1'}}}
+            s1.client.get.return_value = {'items': [{'metadata': {'name': 'probe'}}]}
+            events = []
+            def kubectl(*args, **_kwargs):
+                if 'logs' in args:
+                    events.append('logs')
+                    return '{"index":0,"ok":true}\n'
+                if args[0] == 'delete':
+                    events.append('delete')
+                return ''
+            s1.k.side_effect = kubectl
+            runner = S1Contention(s1)
+            record = {'evidence': directory, 'phase': 'failed',
+                      'environment_run_id': 'env-1', 'job_name': 'job',
+                      'job_uid': 'job-uid'}
+            runner.read = Mock(return_value=record)
+            runner.write = Mock(side_effect=lambda saved, phase, **values:
+                                saved.update(values, phase=phase))
+            def remove(_record):
+                events.append('contender')
+                raise RuntimeError('Nova unavailable')
+            runner.remove_competitor = Mock(side_effect=remove)
+            with self.assertRaisesRegex(RuntimeError, 'Nova unavailable'):
+                runner.cleanup()
+            self.assertEqual(events, ['logs', 'delete', 'contender'])
+            self.assertEqual((Path(directory) / 'http.jsonl').read_text(),
+                             '{"index":0,"ok":true}\n')
+            self.assertTrue(record['failure_evidence']['http_log_saved'])
+            self.assertEqual(record['phase'], 'cleanup-failed')
+
+    def test_failed_contention_saves_http_before_deleting_job(self):
+        with tempfile.TemporaryDirectory() as directory:
+            s1 = Mock()
+            s1.client.state = Path(directory)
+            s1.obj.return_value = {'metadata': {'uid': 'job-uid',
+                'labels': {'openstack-k8s.dev/experiment': 'graduation-s1'}}}
+            s1.client.get.return_value = {'items': [{'metadata': {'name': 'probe'}}]}
+            s1.host_stat.return_value = {'time': '2026-09-26T00:00:00+00:00'}
+            s1.cpu_stat.return_value = {'usage_usec': 1}
+            events = []
+            def kubectl(*args, **_kwargs):
+                if 'logs' in args:
+                    events.append('logs')
+                    return '{"index":0,"ok":true}\n'
+                if args[0] == 'delete':
+                    events.append('delete')
+                return ''
+            s1.k.side_effect = kubectl
+            runner = S1Contention(s1)
+            runner.wait_probe_samples = Mock()
+            runner.create_competitor = Mock(side_effect=RuntimeError('stress did not start'))
+            def write(record, phase, **values):
+                record.update(values, phase=phase)
+            runner.write = Mock(side_effect=write)
+            record = {'evidence': directory, 'rate': 5, 'rounds': 100000,
+                      'seconds': 780, 'service_compute_host': 'compute02',
+                      'target_compute_host': 'compute01',
+                      'service_before': {'pod': 'http-pod'}}
+            with patch('graduation_s1_contention.time.sleep'):
+                with self.assertRaisesRegex(RuntimeError, 'stress did not start'):
+                    runner.run_locked(record, 'control-plane')
+            self.assertEqual(events, ['logs', 'delete'])
+            self.assertEqual((Path(directory) / 'http.jsonl').read_text(),
+                             '{"index":0,"ok":true}\n')
+            captured = json.loads((Path(directory) / 'failure-evidence.json').read_text())
+            self.assertTrue(captured['http_log_saved'])
+            self.assertEqual(captured['http_log_lines'], 1)
+            self.assertEqual(record['phase'], 'failed')
+
     def test_baseline_holds_preparation_lock(self):
         with tempfile.TemporaryDirectory() as directory:
             s1 = S1(SimpleNamespace(state=Path(directory), cluster='cluster'))

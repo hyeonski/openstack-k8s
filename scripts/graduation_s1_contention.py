@@ -47,8 +47,30 @@ def summarize_window(rows, start, end):
                            'p99': percentile(success, .99)}}
 
 
-def stress_user_data():
-    return '''#!/bin/bash
+def recovery_controls(record, moved, host_metrics, contender):
+    source = record['service_compute_host']
+    baseline_pressure = host_metrics['baseline'][source]['cpu_pressure_some']
+    pressure_floor = max(.02, baseline_pressure * 2)
+    post = host_metrics['relocated'][source]
+    completion = host_metrics['completion'][source]
+    return {
+        'image_unchanged': moved['image_id'] == record['service_before']['image_id'],
+        'competitor_active_on_source': (
+            str(contender.get('id', '')).lower() == record['server_id'].lower()
+            and contender.get('status') == 'ACTIVE'
+            and contender.get('OS-EXT-SRV-ATTR:host') == source),
+        'source_contention_persisted': (
+            post['cpu_utilization'] >= .7 and
+            post['cpu_pressure_some'] >= pressure_floor),
+        'source_contention_at_completion': (
+            completion['cpu_utilization'] >= .7 and
+            completion['cpu_pressure_some'] >= pressure_floor),
+    }
+
+
+def stress_user_data(seconds=780):
+    duration = max(1200, seconds + 360)
+    return f'''#!/bin/bash
 set -euo pipefail
 cat >/opt/s1-cpu-stress.py <<'PY'
 import hashlib
@@ -64,13 +86,13 @@ if __name__ == '__main__':
     for process in processes:
         process.start()
     print('S1_CPU_STRESS_STARTED', flush=True)
-    time.sleep(1200)
+    time.sleep({duration})
     for process in processes:
         process.terminate()
     for process in processes:
         process.join()
 PY
-nohup /usr/bin/timeout 1200s /usr/bin/python3 -u /opt/s1-cpu-stress.py \
+nohup /usr/bin/timeout {duration + 30}s /usr/bin/python3 -u /opt/s1-cpu-stress.py \
   >/var/log/s1-cpu-stress.log 2>&1 </dev/null &
 stress_pid=$!
 sleep 2
@@ -164,7 +186,8 @@ class S1Contention:
                                  '--flavor', record['flavor_id'], '--image',
                                  os.environ['UBUNTU_IMAGE_NAME'], '--network',
                                  os.environ['TENANT_NETWORK_NAME'], '--user-data', '@user-data',
-                                 server_name, timeout=900, user_data=stress_user_data())
+                                 server_name, timeout=900,
+                                 user_data=stress_user_data(record['seconds']))
         self.write(record, 'server-created', server_id=result['id'])
         observed = self.server(record['server_id'])
         if observed.get('status') != 'ACTIVE' or observed.get('OS-EXT-SRV-ATTR:host') != host:
@@ -212,6 +235,39 @@ class S1Contention:
                 pass
             time.sleep(5)
         raise RuntimeError('S1 contention Job did not produce ten initial HTTP samples')
+
+    def capture_failed_job(self, record):
+        """Save available request and Pod evidence before removing a failed Job."""
+        evidence = Path(record['evidence'])
+        result = {'time': utc_now(), 'job_name': record['job_name'],
+                  'http_log_saved': False, 'errors': []}
+        try:
+            job = self.s1.obj('job', record['job_name'])
+            if not job:
+                result['errors'].append('Job no longer exists')
+            elif job['metadata'].get('labels', {}).get(LABEL) != NAMESPACE or\
+                    (record.get('job_uid') and job['metadata']['uid'] != record['job_uid']):
+                result['errors'].append('Job ownership/UID changed; evidence query skipped')
+            else:
+                atomic_json(evidence / 'job-on-failure.json', job)
+                try:
+                    pods = self.client.get('w', 'pods', '-n', NAMESPACE,
+                                           '-l', 'job-name=' + record['job_name'])['items']
+                    atomic_json(evidence / 'probe-pods-on-failure.json', pods)
+                except Exception as exc:
+                    result['errors'].append(f'Pod query: {type(exc).__name__}: {exc}')
+                try:
+                    raw = self.s1.k('-n', NAMESPACE, 'logs', 'job/' + record['job_name'],
+                                    timeout=120)
+                    (evidence / 'http.jsonl').write_text(raw)
+                    result['http_log_saved'] = True
+                    result['http_log_lines'] = len(raw.splitlines())
+                except Exception as exc:
+                    result['errors'].append(f'HTTP log query: {type(exc).__name__}: {exc}')
+        except Exception as exc:
+            result['errors'].append(f'Job query: {type(exc).__name__}: {exc}')
+        atomic_json(evidence / 'failure-evidence.json', result)
+        return result
 
     def run(self, rate=5, rounds=100000, seconds=780):
         if not 0 < rate <= 50 or not 10000 <= rounds <= 1000000 or not 600 <= seconds <= 1800:
@@ -356,6 +412,11 @@ class S1Contention:
             self.s1.k('-n', NAMESPACE, 'wait', '--for=condition=complete',
                       'job/' + job_name, f'--timeout={record["seconds"] + 180}s',
                       timeout=record['seconds'] + 210)
+            completion_start = host_sample('completion-start')
+            time.sleep(30)
+            completion_end = host_sample('completion-end')
+            contender_after = self.server(record['server_id'])
+            atomic_json(evidence / 'contender-after.json', contender_after)
             probe_pods = self.client.get('w', 'pods', '-n', NAMESPACE,
                                          '-l', 'job-name=' + job_name)['items']
             if len(probe_pods) != 1 or probe_pods[0]['spec'].get('nodeName') != probe_node or\
@@ -379,7 +440,8 @@ class S1Contention:
                 for host in hosts} for phase, start, end in (
                     ('baseline', host_start, before_host),
                     ('contention', stress_start_host, during_host),
-                    ('relocated', relocated_host, after_host))}
+                    ('relocated', relocated_host, after_host),
+                    ('completion', completion_start, completion_end))}
             baseline_p95 = windows['baseline']['latency_ms']['p95']
             stressed_p95 = windows['contention']['latency_ms']['p95']
             relocated_p95 = windows['relocated']['latency_ms']['p95']
@@ -401,10 +463,12 @@ class S1Contention:
             host_contention = (stressed_pressure >= max(.02, baseline_pressure * 2)
                                and host_metrics['contention'][source_host]['cpu_utilization'] >= .7)
             pod_throttling_observed = delta.get('nr_throttled', 0) > 0
+            controls = recovery_controls(record, moved, host_metrics, contender_after)
             summary = {'time': utc_now(), 'run_id': record['run_id'], 'windows': windows,
                        'pod_cpu_delta_before_relocation': delta, 'pod_cpu_errors': cpu_errors,
                        'host_metrics': host_metrics,
                        'host_contention_confirmed': host_contention,
+                       **controls,
                        'pod_throttling_observed': pod_throttling_observed,
                        'service_before': record['service_before'], 'service_after': moved,
                        'service_compute_host': record['service_compute_host'],
@@ -412,7 +476,8 @@ class S1Contention:
                        'latency_impact_over_1_5x': bool(impact),
                        'latency_recovery_within_1_2x': bool(recovery),
                        'state': 'passed' if quality and impact and recovery and
-                       host_contention and not pod_throttling_observed else 'needs_review'}
+                       host_contention and all(controls.values()) and
+                       not pod_throttling_observed else 'needs_review'}
             atomic_json(evidence / 'summary.json', summary)
             self.write(record, 'measured', summary_state=summary['state'])
             return summary
@@ -422,6 +487,11 @@ class S1Contention:
             raise
         finally:
             cleanup_errors = []
+            if primary_error:
+                try:
+                    record['failure_evidence'] = self.capture_failed_job(record)
+                except Exception as exc:
+                    record['evidence_capture_error'] = f'{type(exc).__name__}: {exc}'
             if record.get('job_name'):
                 try:
                     obj = self.s1.obj('job', job_name)
@@ -454,13 +524,24 @@ class S1Contention:
                 return record
             if record['environment_run_id'] != self.s1.environment()['run_id']:
                 raise RuntimeError('S1 contention belongs to another environment run')
-            self.remove_competitor(record)
+            cleanup_errors = []
             if record.get('job_name'):
-                obj = self.s1.obj('job', record['job_name'])
-                if obj and obj['metadata'].get('labels', {}).get(LABEL) == NAMESPACE and\
-                        (not record.get('job_uid') or obj['metadata']['uid'] == record['job_uid']):
-                    self.s1.k('delete', 'job', record['job_name'], '-n', NAMESPACE,
-                              '--wait=true', '--timeout=3m', timeout=210)
+                try:
+                    obj = self.s1.obj('job', record['job_name'])
+                    if obj and obj['metadata'].get('labels', {}).get(LABEL) == NAMESPACE and\
+                            (not record.get('job_uid') or obj['metadata']['uid'] == record['job_uid']):
+                        record['failure_evidence'] = self.capture_failed_job(record)
+                        self.s1.k('delete', 'job', record['job_name'], '-n', NAMESPACE,
+                                  '--wait=true', '--timeout=3m', timeout=210)
+                except Exception as exc:
+                    cleanup_errors.append(f'Job: {type(exc).__name__}: {exc}')
+            try:
+                self.remove_competitor(record)
+            except Exception as exc:
+                cleanup_errors.append(f'contender: {type(exc).__name__}: {exc}')
+            if cleanup_errors:
+                self.write(record, 'cleanup-failed', cleanup_errors=cleanup_errors)
+                raise RuntimeError('; '.join(cleanup_errors))
             self.write(record, 'completed')
             return record
 
