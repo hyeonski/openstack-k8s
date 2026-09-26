@@ -32,7 +32,7 @@ export ENV
 	graduation-env-status graduation-env-ensure graduation-env-reconcile graduation-env-down \
 	graduation-s4-prepare graduation-s4-verify graduation-s4-cleanup graduation-s4-status \
 	graduation-s4-run graduation-s4-e2e graduation-s4-inject graduation-s4-observe \
-	graduation-s4-analyze graduation-s4-run-status graduation-s4-workflow-status \
+	graduation-s4-analyze graduation-s4-run-status graduation-s4-workflow-status graduation-s4-resume \
 	status lint
 
 help:
@@ -143,6 +143,7 @@ help:
 	@echo "  graduation-s4-analyze  Rebuild JSON/CSV/report table from immutable S4 run evidence"
 	@echo "  graduation-s4-run-status Show locally recorded S4 experiment state"
 	@echo "  graduation-s4-workflow-status Show the composite S4 workflow state"
+	@echo "  graduation-s4-resume Resume an interrupted S4 workflow without another VM stop"
 	@echo
 	@echo "Development:"
 	@echo "  lint                    Static checks that do not mutate the host"
@@ -423,6 +424,9 @@ graduation-s4-run-status:
 
 graduation-s4-workflow-status:
 	@bash scripts/graduation-s4-workflow.sh status
+
+graduation-s4-resume:
+	@bash scripts/graduation-s4-workflow.sh resume
 
 status:
 	@scripts/status.sh

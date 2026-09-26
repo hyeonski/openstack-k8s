@@ -233,6 +233,18 @@ class Environment:
                 data = {'version': 1, 'run_id': 'env-' + uuid.uuid4().hex[:12],
                         'profile': profile, 'initial_hosts': initial,
                         'start_attempted': [], 'started_hosts': [], 'created': utc_now()}
+            if previous and previous.get('phase') == 'ready' and\
+                    all(host['status'] == 'RUNNING' for host in initial.values()):
+                try:
+                    ready = self.cluster_ready()
+                except (RuntimeError, ValueError, KeyError, subprocess.TimeoutExpired):
+                    ready = None
+                if ready:
+                    if any(data['ready'][key] != ready[key] for key in ('cluster_uid', 'md_uid')):
+                        raise RuntimeError('Kubernetes cluster identity changed since environment preparation')
+                    self.record(data, 'ready', observed_hosts=initial, ready=ready,
+                                final_hosts=initial)
+                    return data
             self.record(data, 'inspecting', observed_hosts=initial)
             try:
                 for name, status in statuses.items():

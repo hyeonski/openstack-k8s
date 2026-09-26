@@ -83,6 +83,9 @@ class ReadyEnvironment(Environment):
     def wait_cluster(self, seconds=900):
         return {'worker_desired': 2, 'cluster_uid': 'cluster', 'md_uid': 'md'}
 
+    def cluster_ready(self):
+        return self.wait_cluster()
+
 
 class EnvironmentTests(unittest.TestCase):
     def test_missing_cluster_input_fails_before_starting_hosts(self):
@@ -185,6 +188,49 @@ class EnvironmentTests(unittest.TestCase):
             self.assertEqual(first['run_id'], second['run_id'])
             self.assertEqual(second['started_hosts'], ['compute1'])
             self.assertEqual(commands.starts(), ['compute1'])
+            self.assertEqual(sum(Path(call[0]).name == 'gcp-openstack-recover.sh'
+                                 for call in commands.calls), 1)
+            self.assertEqual(sum(Path(call[0]).name == 'start-workload-guests.sh'
+                                 for call in commands.calls), 1)
+
+    def test_unhealthy_ready_record_runs_recovery_checks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            commands = FakeCommands({'controller': 'RUNNING', 'compute1': 'RUNNING',
+                                     'compute2': 'RUNNING'})
+
+            class UnhealthyOnce(ReadyEnvironment):
+                def __init__(self, *args):
+                    super().__init__(*args)
+                    self.reads = 0
+
+                def cluster_ready(self):
+                    self.reads += 1
+                    return None if self.reads == 1 else super().cluster_ready()
+
+            environment = ReadyEnvironment(config(root), commands)
+            first = environment.ensure()
+            recovered = UnhealthyOnce(config(root), commands).ensure()
+            self.assertEqual(first['run_id'], recovered['run_id'])
+            self.assertEqual(sum(Path(call[0]).name == 'gcp-openstack-recover.sh'
+                                 for call in commands.calls), 2)
+
+    def test_ready_fast_path_rejects_cluster_identity_change(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            commands = FakeCommands({'controller': 'RUNNING', 'compute1': 'RUNNING',
+                                     'compute2': 'RUNNING'})
+            environment = ReadyEnvironment(config(root), commands)
+            environment.ensure()
+
+            class ChangedCluster(ReadyEnvironment):
+                def cluster_ready(self):
+                    return {'worker_desired': 2, 'cluster_uid': 'replacement', 'md_uid': 'md'}
+
+            before = len(commands.calls)
+            with self.assertRaisesRegex(RuntimeError, 'cluster identity changed'):
+                ChangedCluster(config(root), commands).ensure()
+            self.assertEqual(len(commands.calls) - before, 3)  # exact host reads only
 
     def test_down_stops_only_hosts_started_by_run(self):
         with tempfile.TemporaryDirectory() as directory:

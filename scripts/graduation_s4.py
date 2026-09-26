@@ -295,7 +295,7 @@ class S4Preparation:
 
     def cleanup(self):
         record = self.read()
-        if not record or record.get('phase') not in ('prepared', 'cleanup-failed'):
+        if not record or record.get('phase') not in ('prepared', 'resources-removed', 'cleanup-failed'):
             raise RuntimeError('no prepared S4 fixture to clean up')
         environment = self.environment_record()
         if record['environment_run_id'] != environment['run_id']:
