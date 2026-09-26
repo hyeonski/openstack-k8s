@@ -145,14 +145,20 @@ class S4Preparation:
             ('w', 'service', HTTP_NAME, NAMESPACE),
         ):
             obj = self.object(plane, resource, name, namespace)
-            if obj and not owned(obj):
-                raise RuntimeError(f'{resource}/{name} exists without S4 ownership label')
+            if obj:
+                raise RuntimeError(f'{resource}/{name} already exists; inspect or clean up the previous S4 fixture')
         checks = self.client.get('m', 'machinehealthchecks', '-n', self.client.ns).get('items', [])
         other = [item['metadata']['name'] for item in checks if
                  item['metadata']['name'] != MHC_NAME and
                  item.get('spec', {}).get('clusterName') == self.client.cluster]
         if other:
             raise RuntimeError(f'existing MachineHealthChecks require overlap review: {other}')
+
+    def owned_uid(self, plane, resource, name, namespace=None):
+        obj = self.object(plane, resource, name, namespace)
+        if not obj or not owned(obj) or not obj['metadata'].get('uid'):
+            raise RuntimeError(f'{resource}/{name} was not created with S4 ownership')
+        return obj['metadata']['uid']
 
     def ensure_two_fixed_workers(self):
         mode, observed = self.preflight()
@@ -246,18 +252,13 @@ class S4Preparation:
             result = self.verify()
             print(json.dumps(result, indent=2))
             return result
-        mode, observed = self.preflight()
         if previous:
-            if previous.get('environment_run_id') != environment['run_id'] or\
-                    previous.get('cluster_uid') != observed['cluster_uid'] or\
-                    previous.get('md_uid') != observed['md_uid']:
-                raise RuntimeError('S4 preparation record belongs to another environment or cluster')
-            record = previous
-        else:
-            record = {'version': 1, 'created': utc_now(),
-                      'environment_run_id': environment['run_id'],
-                      'cluster_uid': observed['cluster_uid'], 'md_uid': observed['md_uid'],
-                      'original_mode': mode, 'original_workers': observed['workers']}
+            raise RuntimeError('unfinished S4 preparation exists; clean it up before preparing again')
+        mode, observed = self.preflight()
+        record = {'version': 1, 'created': utc_now(),
+                  'environment_run_id': environment['run_id'],
+                  'cluster_uid': observed['cluster_uid'], 'md_uid': observed['md_uid'],
+                  'original_mode': mode, 'original_workers': observed['workers']}
         try:
             self.render_and_validate()
             self.require_unowned_absent()
@@ -267,10 +268,20 @@ class S4Preparation:
             machines = self.client.get('m', 'machines', '-n', self.client.ns,
                                        '-l', 'cluster.x-k8s.io/cluster-name=' + self.client.cluster)['items']
             worker_machines(machines, self.client.cluster, self.md_name)
+            self.record(record, 'mhc-applying', mhc_apply_intent=True)
             self.k('m', 'apply', '-f', self.mhc_manifest)
+            self.record(record, 'mhc-applied',
+                        mhc_uid=self.owned_uid('m', 'machinehealthcheck', MHC_NAME, self.client.ns))
             workers, mhc = self.wait_mhc()
             self.record(record, 'mhc-ready', mhc_uid=mhc['metadata']['uid'])
+            self.record(record, 'app-applying', app_apply_intent=True)
             self.k('w', 'apply', '-f', self.app_manifest)
+            self.record(record, 'app-applied', resource_uids={
+                'namespace': self.owned_uid('w', 'namespace', NAMESPACE),
+                'configmap': self.owned_uid('w', 'configmap', 'http-content', NAMESPACE),
+                'deployment': self.owned_uid('w', 'deployment', HTTP_NAME, NAMESPACE),
+                'service': self.owned_uid('w', 'service', HTTP_NAME, NAMESPACE),
+            })
             self.k('w', '-n', NAMESPACE, 'rollout', 'status', 'deployment/' + HTTP_NAME,
                    '--timeout=10m', timeout=660)
             target, deployment, service, samples = self.verify_http(workers)
@@ -295,8 +306,11 @@ class S4Preparation:
 
     def cleanup(self):
         record = self.read()
-        if not record or record.get('phase') not in ('prepared', 'resources-removed', 'cleanup-failed'):
-            raise RuntimeError('no prepared S4 fixture to clean up')
+        if not record or record.get('version') != 1 or record.get('phase') not in (
+                'validated', 'workers-ready', 'mhc-applying', 'mhc-applied', 'mhc-ready',
+                'app-applying', 'app-applied', 'prepared', 'failed',
+                'resources-removed', 'cleanup-failed'):
+            raise RuntimeError('no recorded S4 fixture to clean up')
         environment = self.environment_record()
         if record['environment_run_id'] != environment['run_id']:
             raise RuntimeError('S4 fixture belongs to another environment run')
@@ -306,17 +320,26 @@ class S4Preparation:
         try:
             mhc = self.object('m', 'machinehealthcheck', MHC_NAME, self.client.ns)
             if mhc:
-                if not owned(mhc) or mhc['metadata']['uid'] != record.get('mhc_uid'):
+                uid = record.get('mhc_uid')
+                if not owned(mhc) or not (record.get('mhc_apply_intent') or uid) or\
+                        (uid and mhc['metadata']['uid'] != uid):
                     raise RuntimeError('S4 MHC ownership/UID changed; refusing cleanup')
-                self.k('m', 'delete', 'machinehealthcheck', MHC_NAME, '-n', self.client.ns,
-                       '--wait=true', '--timeout=3m', timeout=210)
-            for resource, key in (('deployment', 'deployment_uid'), ('service', 'service_uid')):
-                obj = self.object('w', resource, HTTP_NAME, NAMESPACE)
-                if obj and (not owned(obj) or obj['metadata']['uid'] != record['result'][key]):
-                    raise RuntimeError(f'S4 {resource} ownership/UID changed; refusing cleanup')
+            resource_uids = record.get('resource_uids', {})
+            for resource, name in (('configmap', 'http-content'), ('deployment', HTTP_NAME),
+                                   ('service', HTTP_NAME)):
+                obj = self.object('w', resource, name, NAMESPACE)
+                if obj:
+                    uid = resource_uids.get(resource) or record.get('result', {}).get(resource + '_uid')
+                    if not owned(obj) or not (record.get('app_apply_intent') or uid or
+                                              record.get('result')) or\
+                            (uid and obj['metadata']['uid'] != uid):
+                        raise RuntimeError(f'S4 {resource}/{name} ownership/UID changed; refusing cleanup')
             namespace = self.object('w', 'namespace', NAMESPACE)
-            if namespace and not owned(namespace):
-                raise RuntimeError('S4 namespace ownership changed; refusing cleanup')
+            if namespace:
+                uid = resource_uids.get('namespace')
+                if not owned(namespace) or not (record.get('app_apply_intent') or record.get('result')) or\
+                        (uid and namespace['metadata']['uid'] != uid):
+                    raise RuntimeError('S4 namespace ownership/UID changed; refusing cleanup')
             if namespace:
                 # This dedicated namespace is created by the manifest. Refuse to
                 # remove it if another workload was added after preparation.
@@ -328,6 +351,10 @@ class S4Preparation:
                                item['kind'] == 'ConfigMap' and item['metadata']['name'] == 'kube-root-ca.crt')]
                 if foreign:
                     raise RuntimeError(f'S4 namespace contains foreign resources: {foreign}')
+            if mhc:
+                self.k('m', 'delete', 'machinehealthcheck', MHC_NAME, '-n', self.client.ns,
+                       '--wait=true', '--timeout=3m', timeout=210)
+            if namespace:
                 self.k('w', 'delete', '-f', self.app_manifest, '--ignore-not-found=true',
                        '--wait=true', '--timeout=5m', timeout=330)
             self.record(record, 'resources-removed')

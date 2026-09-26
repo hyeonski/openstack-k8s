@@ -62,7 +62,10 @@ class Workflow:
         fixture = self.fixture()
         if not fixture or fixture.get('environment_run_id') != environment_run_id:
             return False
-        if fixture.get('phase') not in ('prepared', 'resources-removed', 'cleanup-failed'):
+        if fixture.get('phase') not in ('validated', 'workers-ready', 'mhc-applying',
+                                        'mhc-applied', 'mhc-ready', 'app-applying',
+                                        'app-applied', 'prepared', 'failed',
+                                        'resources-removed', 'cleanup-failed'):
             return False
         experiment = self.experiment()
         if experiment and experiment.get('environment_run_id') == environment_run_id:
@@ -127,7 +130,7 @@ class Workflow:
             data = self.read()
             if not data or data.get('phase') in ('completed', 'completed_with_gap'):
                 raise RuntimeError('no unfinished S4 workflow to resume')
-            if data.get('phase') not in ('injecting', 'analyzing', 'cleaning',
+            if data.get('phase') not in ('injecting', 'observing', 'analyzing', 'cleaning',
                                          'stopping-environment', 'failed') or\
                     not data.get('environment_run_id'):
                 raise RuntimeError('S4 workflow has no recorded fault; inspect preparation first')

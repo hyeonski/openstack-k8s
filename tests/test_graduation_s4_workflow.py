@@ -132,6 +132,27 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.steps[-2:], ['graduation-s4-cleanup', 'graduation-env-down'])
         self.assertEqual(json.loads(self.environment.read_text())['phase'], 'stopped')
 
+    def test_partial_preparation_failure_cleans_fixture_and_owned_environment(self):
+        self.write_environment('stopped')
+        self.steps = []
+
+        def fails(target, timeout):
+            if target[-1] == 'graduation-s4-prepare':
+                self.steps.append(target[-1])
+                atomic_json(self.fixture, {'environment_run_id': 'env-1', 'phase': 'failed',
+                                           'original_mode': 'auto', 'original_workers': 1,
+                                           'mhc_apply_intent': True, 'app_apply_intent': True})
+                raise RuntimeError('HTTP rollout timed out after partial preparation')
+            return self.fake_steps(target, timeout)
+
+        workflow = Workflow(FakeClient(self.state), runner=fails)
+        with self.assertRaisesRegex(RuntimeError, 'HTTP rollout timed out'):
+            workflow.run(include_environment=True)
+        self.assertEqual(self.steps, ['graduation-env-ensure', 'graduation-s4-prepare',
+                                      'graduation-s4-cleanup', 'graduation-env-down'])
+        self.assertEqual(json.loads(self.fixture.read_text())['phase'], 'restored')
+        self.assertEqual(json.loads(self.environment.read_text())['phase'], 'stopped')
+
     def test_resume_observes_same_fault_and_marks_gap(self):
         self.seed_interrupted()
         workflow = Workflow(FakeClient(self.state), runner=self.fake_steps)
@@ -144,6 +165,18 @@ class WorkflowTests(unittest.TestCase):
                                       'graduation-env-down'])
         self.assertEqual(result['phase'], 'completed_with_gap')
         self.assertEqual(result['analysis_state'], 'incomplete')
+
+    def test_resume_after_interruption_while_observing_never_reinjects(self):
+        self.seed_interrupted(experiment_phase='observing', workflow_phase='observing')
+        workflow = Workflow(FakeClient(self.state), runner=self.fake_steps)
+        incomplete = self.fake_analysis(None)
+        incomplete['state'] = 'incomplete'
+        incomplete['observation_quality']['resumed_with_gap'] = True
+        with patch('graduation_s4_workflow.analyze', return_value=incomplete):
+            result = workflow.resume()
+        self.assertEqual(self.steps, ['graduation-s4-observe', 'graduation-s4-cleanup',
+                                      'graduation-env-down'])
+        self.assertEqual(result['phase'], 'completed_with_gap')
 
     def test_resume_completed_fault_skips_observation_and_finished_cleanup(self):
         self.seed_interrupted(experiment_phase='completed', workflow_phase='cleaning')
