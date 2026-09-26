@@ -33,6 +33,7 @@ export ENV
 	graduation-s4-prepare graduation-s4-verify graduation-s4-cleanup graduation-s4-status \
 	graduation-s4-run graduation-s4-e2e graduation-s4-inject graduation-s4-observe \
 	graduation-s4-analyze graduation-s4-run-status graduation-s4-workflow-status graduation-s4-resume \
+	graduation-s1-prepare graduation-s1-verify graduation-s1-baseline graduation-s1-cleanup graduation-s1-status \
 	status lint
 
 help:
@@ -144,6 +145,11 @@ help:
 	@echo "  graduation-s4-run-status Show locally recorded S4 experiment state"
 	@echo "  graduation-s4-workflow-status Show the composite S4 workflow state"
 	@echo "  graduation-s4-resume Resume an interrupted S4 workflow without another VM stop"
+	@echo "  graduation-s1-prepare Fix two workers and create the S1 CPU HTTP service"
+	@echo "  graduation-s1-verify Recheck the S1 service and Pod-to-Nova identity"
+	@echo "  graduation-s1-baseline Run a direct Service baseline from the workload control plane"
+	@echo "  graduation-s1-cleanup Remove S1 resources and restore worker control"
+	@echo "  graduation-s1-status Show the local S1 preparation record"
 	@echo
 	@echo "Development:"
 	@echo "  lint                    Static checks that do not mutate the host"
@@ -427,6 +433,21 @@ graduation-s4-workflow-status:
 
 graduation-s4-resume:
 	@bash scripts/graduation-s4-workflow.sh resume
+
+graduation-s1-prepare:
+	@bash scripts/graduation-s1.sh prepare
+
+graduation-s1-verify:
+	@bash scripts/graduation-s1.sh verify
+
+graduation-s1-baseline:
+	@bash scripts/graduation-s1.sh baseline --rate "$(or $(RATE),5)" --rounds "$(or $(ROUNDS),100000)" --warmup "$(or $(WARMUP),60)" --measure "$(or $(MEASURE),300)"
+
+graduation-s1-cleanup:
+	@bash scripts/graduation-s1.sh cleanup
+
+graduation-s1-status:
+	@bash scripts/graduation-s1.sh status
 
 status:
 	@scripts/status.sh

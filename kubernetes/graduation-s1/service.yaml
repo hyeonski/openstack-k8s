@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: graduation-s1
+  labels:
+    openstack-k8s.dev/experiment: graduation-s1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http
+  namespace: graduation-s1
+  labels:
+    openstack-k8s.dev/experiment: graduation-s1
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: graduation-s1-http
+  template:
+    metadata:
+      labels:
+        app: graduation-s1-http
+        openstack-k8s.dev/experiment: graduation-s1
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: DoesNotExist
+      containers:
+      - name: http
+        image: python:3.12-alpine
+        imagePullPolicy: IfNotPresent
+        command: ["python", "-B", "/app/app.py"]
+        ports:
+        - name: http
+          containerPort: 8080
+        resources:
+          requests: {cpu: 250m, memory: 64Mi}
+          limits: {memory: 256Mi}
+        readinessProbe:
+          httpGet: {path: /healthz, port: http}
+          periodSeconds: 3
+        livenessProbe:
+          httpGet: {path: /healthz, port: http}
+          periodSeconds: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {drop: ["ALL"]}
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+        volumeMounts:
+        - {name: app, mountPath: /app, readOnly: true}
+      volumes:
+      - name: app
+        configMap: {name: s1-code}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: http
+  namespace: graduation-s1
+  labels:
+    openstack-k8s.dev/experiment: graduation-s1
+spec:
+  selector: {app: graduation-s1-http}
+  ports:
+  - {name: http, port: 8080, targetPort: http}
