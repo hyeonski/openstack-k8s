@@ -29,6 +29,8 @@ export ENV
 	observability-hosts-install observability-workload-guests-start \
 	observability-hosts-status observability-clusters-install observability-clusters-status \
 	observability-verify observability-publish-run \
+	graduation-env-status graduation-env-ensure graduation-env-reconcile graduation-env-down \
+	graduation-s4-prepare graduation-s4-verify graduation-s4-cleanup graduation-s4-status \
 	status lint
 
 help:
@@ -122,6 +124,16 @@ help:
 	@echo "  observability-clusters-install Install collectors in management and workload clusters"
 	@echo "  observability-verify          Query recent GCP metrics/logs for missing data"
 	@echo "  observability-publish-run     Publish RUN_DIR correlation manifest to GCS"
+	@echo
+	@echo "Graduation experiments:"
+	@echo "  graduation-env-status   Inspect exact existing GCP hosts and last environment record"
+	@echo "  graduation-env-ensure   Verify the existing testbed; start only stopped hosts and guests"
+	@echo "  graduation-env-reconcile Recheck exact hosts after an interrupted preparation"
+	@echo "  graduation-env-down    Stop only hosts started by this environment run"
+	@echo "  graduation-s4-prepare  Fix two workers; apply worker MHC and HTTP test service"
+	@echo "  graduation-s4-verify   Recheck MHC scope, Pod placement and HTTP responses"
+	@echo "  graduation-s4-cleanup  Remove owned S4 resources and restore worker control"
+	@echo "  graduation-s4-status   Show locally recorded S4 preparation state"
 	@echo
 	@echo "Development:"
 	@echo "  lint                    Static checks that do not mutate the host"
@@ -357,6 +369,30 @@ cluster-autoscaler-diagnostics:
 
 lab-up:
 	@scripts/lab-up.sh "$(CONFIRM)"
+
+graduation-env-status:
+	@bash scripts/graduation-env.sh status
+
+graduation-env-ensure:
+	@bash scripts/graduation-env.sh ensure
+
+graduation-env-reconcile:
+	@bash scripts/graduation-env.sh reconcile
+
+graduation-env-down:
+	@bash scripts/graduation-env.sh down
+
+graduation-s4-prepare:
+	@bash scripts/graduation-s4.sh prepare
+
+graduation-s4-verify:
+	@bash scripts/graduation-s4.sh verify
+
+graduation-s4-cleanup:
+	@bash scripts/graduation-s4.sh cleanup
+
+graduation-s4-status:
+	@bash scripts/graduation-s4.sh status
 
 status:
 	@scripts/status.sh
