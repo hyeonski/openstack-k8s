@@ -22,6 +22,8 @@ LABEL = 'openstack-k8s.dev/experiment'
 SOURCE = ROOT / 'kubernetes/graduation-s1'
 MANIFEST = SOURCE / 'service.yaml'
 IMAGE = 'python:3.12-alpine'
+CPU_COUNTERS = ('usage_usec', 'user_usec', 'system_usec',
+                'nr_periods', 'nr_throttled', 'throttled_usec')
 
 
 def percentile(values, fraction):
@@ -53,6 +55,24 @@ def host_cpu_pressure(before, after):
     if elapsed <= 0 or delta < 0:
         raise RuntimeError('invalid compute host CPU pressure delta')
     return round(delta / (elapsed * 1_000_000), 5)
+
+
+def pod_cpu_delta(before, after):
+    errors = []
+    for label, sample in (('before', before), ('after', after)):
+        if sample.get('error'):
+            errors.append(f'{label}: {sample["error"]}')
+        missing = [key for key in CPU_COUNTERS if type(sample.get(key)) is not int or
+                   sample[key] < 0]
+        if missing:
+            errors.append(f'{label}: missing or invalid CPU counters: {", ".join(missing)}')
+    if errors:
+        return {}, errors
+    delta = {key: after[key] - before[key] for key in CPU_COUNTERS}
+    reset = [key for key, value in delta.items() if value < 0]
+    if reset:
+        return {}, ['CPU counters decreased or reset: ' + ', '.join(reset)]
+    return delta, []
 
 
 def analyze_rows(rows, rate, measure_seconds, warmup_seconds=0):
@@ -164,6 +184,10 @@ class S1:
                 not condition(selected[0], 'Ready'):
             raise RuntimeError('S1 HTTP Pod is not Ready')
         pod = selected[0]
+        container = next((item for item in pod['status'].get('containerStatuses', [])
+                          if item.get('name') == 'http'), None)
+        if not container or not container.get('containerID') or not container.get('imageID'):
+            raise RuntimeError('S1 HTTP container identity is unavailable')
         nodes = self.client.get('w', 'nodes')['items']
         node = next((n for n in nodes if n['metadata']['name'] == pod['spec']['nodeName']), None)
         if not node or not condition(node, 'Ready'):
@@ -177,7 +201,9 @@ class S1:
                 'pod_uid': pod['metadata']['uid'], 'node': pod['spec']['nodeName'],
                 'machine_uid': machine['metadata']['uid'],
                 'nova_id': machine['spec']['providerID'].removeprefix('openstack:///'),
-                'image_id': pod['status'].get('containerStatuses', [{}])[0].get('imageID'),
+                'image_id': container['imageID'],
+                'container_id': container['containerID'],
+                'restart_count': container.get('restartCount', 0),
                 'service_uid': service['metadata']['uid']}
 
     def prepare(self):
@@ -204,8 +230,8 @@ class S1:
                 if observed['workers'] != 2:
                     command([ROOT / 'scripts/workload-cluster.sh', 'scale', '2'], timeout=4200)
                 self.write(record, 'workers-ready')
+                self.write(record, 'app-applying', app_apply_intent=True)
                 self.k('apply', '-f', MANIFEST, timeout=180)
-                self.write(record, 'app-applying')
                 source = {name: (SOURCE / name).read_text() for name in ('app.py', 'loadgen.py')}
                 config = {'apiVersion': 'v1', 'kind': 'ConfigMap',
                           'metadata': {'name': 's1-code', 'namespace': NAMESPACE,
@@ -229,7 +255,17 @@ class S1:
                 not 0 <= warmup <= 600 or not 1 <= measure <= 1800 or\
                 not 0 < timeout <= 30 or not 1 <= max_inflight <= 200:
             raise ValueError('baseline parameters outside safe range')
+        self.client.state.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with self.lock_path.open('a+') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return self._baseline_locked(rate, rounds, warmup, measure, timeout, max_inflight)
+
+    def _baseline_locked(self, rate, rounds, warmup, measure, timeout, max_inflight):
         verification = self.verify()
+        jobs = self.client.get('w', 'jobs', '-n', NAMESPACE,
+                               '-l', LABEL + '=' + NAMESPACE)['items']
+        if jobs:
+            raise RuntimeError('an earlier S1 Job remains; clean it before another baseline')
         nodes = self.client.get('w', 'nodes')['items']
         cp = [n for n in nodes if
               'node-role.kubernetes.io/control-plane' in n['metadata'].get('labels', {})]
@@ -300,11 +336,12 @@ class S1:
                                                               'readOnly': True}]}],
                             'volumes': [{'name': 'app', 'configMap': {'name': 's1-code'}}]}}}}
         atomic_json(evidence / 'job.json', job)
-        self.k('apply', '-f', '-', data=json.dumps(job))
         record['job_name'] = job_name
-        record['job_uid'] = self.obj('job', job_name)['metadata']['uid']
         atomic_json(evidence / 'run.json', record)
         try:
+            self.k('apply', '-f', '-', data=json.dumps(job))
+            record['job_uid'] = self.obj('job', job_name)['metadata']['uid']
+            atomic_json(evidence / 'run.json', record)
             self.k('-n', NAMESPACE, 'wait', '--for=condition=complete', 'job/' + job_name,
                    f'--timeout={warmup + measure + 180}s', timeout=warmup + measure + 210)
             probe_pods = self.client.get('w', 'pods', '-n', NAMESPACE,
@@ -322,9 +359,8 @@ class S1:
             atomic_json(evidence / 'pod-cpu-after.json', after_cpu)
             host_after = {host: self.host_stat(host) for host in hosts}
             atomic_json(evidence / 'compute-cpu-after.json', host_after)
-            summary['pod_cpu_delta'] = {key: after_cpu[key] - value
-                                        for key, value in before_cpu.items()
-                                        if isinstance(value, int) and isinstance(after_cpu.get(key), int)}
+            summary['pod_cpu_delta'], summary['pod_cpu_errors'] = pod_cpu_delta(before_cpu, after_cpu)
+            summary['pod_cpu_valid'] = not summary['pod_cpu_errors']
             summary['compute_cpu_utilization'] = {
                 host: host_cpu_utilization(host_before[host], host_after[host])
                 for host in hosts}
@@ -348,12 +384,15 @@ class S1:
             summary['service_identity_stable'] = (
                 verification['pod_uid'] == final_service['pod_uid'] and
                 verification['nova_id'] == final_service['nova_id'] and
-                verification['image_id'] == final_service['image_id'])
+                verification['image_id'] == final_service['image_id'] and
+                verification['container_id'] == final_service['container_id'] and
+                verification['restart_count'] == final_service['restart_count'])
             summary['infrastructure_errors'] = {'before': before_infra['errors'],
                                                 'after': after_infra['errors']}
             summary['state'] = 'complete' if not summary['missing_or_duplicate_indexes'] and\
                 not summary['failures'] and summary['requests'] >= 20 and\
-                summary['service_identity_stable'] and summary['compute_placement_stable'] and\
+                summary['service_identity_stable'] and summary['pod_cpu_valid'] and\
+                summary['compute_placement_stable'] and\
                 summary['probe_compute_distinct'] and summary['alternate_compute_distinct'] and\
                 not before_infra['errors'] and\
                 not after_infra['errors'] and\
@@ -375,7 +414,7 @@ class S1:
         finally:
             obj = self.obj('job', job_name)
             if obj and obj['metadata'].get('labels', {}).get(LABEL) == NAMESPACE and\
-                    obj['metadata']['uid'] == record['job_uid']:
+                    (not record.get('job_uid') or obj['metadata']['uid'] == record['job_uid']):
                 self.k('delete', 'job', job_name, '-n', NAMESPACE,
                        '--wait=true', '--timeout=3m', timeout=210)
 
@@ -406,16 +445,27 @@ class S1:
         with self.lock_path.open('a+') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             record = self.read()
-            if not record or record.get('phase') not in ('starting', 'workers-ready',
-                                                        'app-applying', 'prepared', 'failed',
-                                                        'cleanup-failed'):
+            if not record or record.get('version') != 1 or record.get('phase') not in (
+                    'starting', 'workers-ready', 'app-applying', 'prepared', 'failed',
+                    'resources-removed', 'cleanup-failed'):
                 raise RuntimeError('no active S1 preparation to clean up')
-            mode, observed = self.require_identity(record)
+            env = self.environment()
+            if record['environment_run_id'] != env['run_id']:
+                raise RuntimeError('S1 record belongs to another environment run')
+            cluster = self.client.get('m', 'cluster', self.client.cluster, '-n', self.client.ns)
+            md = self.client.get('m', 'machinedeployment', self.client.cluster + '-md-0',
+                                 '-n', self.client.ns)
+            if cluster['metadata']['uid'] != record['cluster_uid'] or\
+                    md['metadata']['uid'] != record['md_uid']:
+                raise RuntimeError('S1 cluster identity changed; refusing cleanup')
+            resources_removed = False
             try:
                 namespace = self.obj('namespace', NAMESPACE, None)
                 if namespace:
                     if namespace['metadata'].get('labels', {}).get(LABEL) != NAMESPACE or\
-                            record.get('namespace_uid', namespace['metadata']['uid']) != namespace['metadata']['uid']:
+                            not (record.get('app_apply_intent') or record.get('namespace_uid')) or\
+                            (record.get('namespace_uid') and
+                             record['namespace_uid'] != namespace['metadata']['uid']):
                         raise RuntimeError('S1 namespace ownership/UID changed')
                     resources = self.client.get('w', 'pods,replicasets,deployments,services,configmaps,secrets,persistentvolumeclaims,jobs',
                                                 '-n', NAMESPACE)['items']
@@ -426,9 +476,15 @@ class S1:
                         raise RuntimeError(f'S1 namespace contains foreign resources: {foreign}')
                     for kind, name in (('deployment', 'http'), ('service', 'http'), ('configmap', 's1-code')):
                         obj = self.obj(kind, name)
-                        if obj and record.get('resource_uids', {}).get(kind, obj['metadata']['uid']) != obj['metadata']['uid']:
-                            raise RuntimeError(f'S1 {kind} UID changed')
+                        if obj:
+                            uid = record.get('resource_uids', {}).get(kind)
+                            if not (uid or record.get('app_apply_intent')) or\
+                                    (uid and uid != obj['metadata']['uid']):
+                                raise RuntimeError(f'S1 {kind} ownership/UID changed')
                     self.k('delete', 'namespace', NAMESPACE, '--wait=true', '--timeout=5m', timeout=330)
+                self.write(record, 'resources-removed', resources_removed=True)
+                resources_removed = True
+                mode, observed = self.require_identity(record)
                 if observed['workers'] != record['original_workers']:
                     command([ROOT / 'scripts/workload-cluster.sh', 'scale', str(record['original_workers'])],
                             timeout=4200)
@@ -440,7 +496,10 @@ class S1:
                 self.write(record, 'restored', final_mode=final_mode, final_workers=final['workers'])
                 return record
             except BaseException as exc:
-                self.write(record, 'cleanup-failed', error=f'{type(exc).__name__}: {exc}')
+                self.write(record, 'cleanup-failed',
+                           cleanup_stage='worker-restore' if resources_removed
+                           else 'resource-removal',
+                           error=f'{type(exc).__name__}: {exc}')
                 raise
 
 

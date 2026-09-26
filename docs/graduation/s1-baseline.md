@@ -16,6 +16,8 @@ make graduation-env-down
 
 `graduation-env-ensure`는 기존 테스트베드를 확인하고 필요한 호스트·게스트만 기동한다. S1 준비 단계는 기존 worker 제어 모드·대수를 기록하고, 실험 동안 `fixed`·worker 2대로 설정한다. 정리는 S1 namespace를 제거하고 원래 모드·대수로 복원한다. 환경 종료는 해당 환경 실행이 기동한 GCP 호스트만 중단한다.
 
+준비·측정·정리는 같은 S1 실행 잠금을 사용한다. 기준선 측정은 Job 정리가 끝날 때까지 잠금을 유지하며, 중단된 실행의 Job이 남아 있으면 새 측정을 거부한다. worker가 불안정해도 클러스터 UID와 namespace 소유권을 확인한 뒤 S1 자원을 먼저 제거한다. worker 복원이 실패하면 `cleanup-failed`로 기록하고 수렴 후 `graduation-s1-cleanup`을 다시 실행한다.
+
 ## 서비스와 검사 위치
 
 전용 namespace의 단일 복제본 Deployment가 `GET /work?rounds=N`에 고정 입력의 PBKDF2-SHA256 결과를 반환한다. `GET /healthz`는 가벼운 준비 검사다. `/work`는 10,000~1,000,000회만 허용한다. CPU request는 250m이고 CPU limit은 설정하지 않는다. 이미지 태그, 실제 이미지 ID, 코드 해시, Pod·Node·Machine·Nova 식별자를 실행 증거에 저장한다.
@@ -28,4 +30,4 @@ make graduation-env-down
 
 각 기준선 실행은 `artifacts/<environment>/graduation-s1-baseline-*`에 `run.json`, `job.json`, `probe-pod.json`, `http.jsonl`, `summary.json`, 앞뒤 인프라 snapshot, Nova compute 배치, compute 호스트 CPU·PSI 카운터와 Pod cgroup CPU 카운터를 남긴다. 요약에는 요청 수·누락 또는 중복·오류·성공률·초당 성공 요청·p50/p95/p99 지연·표본 시작 시각 공백·compute CPU 평균 사용률과 CPU pressure `some` 비율이 있다. 호스트 수치는 실행 전후 평균이므로 요청별 순간 피크를 나타내지는 않는다.
 
-`complete`는 측정 요청이 모두 기록되고 오류가 없으며, 같은 Pod·Nova VM·compute 배치와 조회 가능한 인프라가 측정 전후 유지됐고 긴 요청 기록 공백이 없으며 요청 VM과 대체 worker가 서비스와 다른 compute에 있는 경우다. 이 판정은 정상 기준선의 **측정 품질**을 뜻한다. CPU 경합이 발생했다거나 S1 복구 효과를 입증하는 판정은 아니다. 부하 속도와 연산 횟수는 예비 기준선에서 조정하고, 이후 경합·재배치 비교에서는 동일하게 유지한다.
+`complete`는 측정 요청이 모두 기록되고 오류가 없으며, 같은 Pod·컨테이너·Nova VM·compute 배치와 조회 가능한 인프라가 측정 전후 유지됐고 긴 요청 기록 공백이 없으며 요청 VM과 대체 worker가 서비스와 다른 compute에 있는 경우다. Pod CPU 필수 카운터가 전후 모두 있고 감소하지 않아야 한다. 누락·초기화가 감지되면 `pod_cpu_errors`에 원인을 남기고 `needs_review`로 판정한다. 이 판정은 정상 기준선의 **측정 품질**을 뜻한다. CPU 경합이 발생했다거나 S1 복구 효과를 입증하는 판정은 아니다. 부하 속도와 연산 횟수는 예비 기준선에서 조정하고, 이후 경합·재배치 비교에서는 동일하게 유지한다.
