@@ -298,6 +298,9 @@ class S4Run:
                       'source_sha256': {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
                                         for path in (ROOT / 'scripts/graduation_s4_run.py',
                                                      ROOT / 'scripts/graduation_s4.py',
+                                                     ROOT / 'scripts/graduation_s4_analyze.py',
+                                                     ROOT / 'scripts/graduation_s4_workflow.py',
+                                                     ROOT / 'scripts/graduation_env.py',
                                                      ROOT / 'kubernetes/graduation-s4/http-service.yaml',
                                                      self.preparation.mhc_manifest)}}
             self.write(record, 'baseline-ready')

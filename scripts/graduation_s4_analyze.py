@@ -134,6 +134,21 @@ def observation_events(observations, record):
     return times, timeline, errors, final_replacement
 
 
+def confirmed_capacity_result(result, timeline, record):
+    """Check the online monotonic-clock verdict against a recovered snapshot."""
+    if result.get('state') not in ('passed', 'passed_with_observation_gap'):
+        return None
+    if result.get('target') != record['target'] or result.get('capacity', {}).get('state') != 'recovered':
+        raise RuntimeError('S4 online capacity verdict does not match the experiment target')
+    at = result.get('capacity_recovered_at')
+    seconds = difference(at, record['injected_at'])
+    matches = [row for row in timeline if row['time'] == at and row['capacity_state'] == 'recovered']
+    if len(matches) != 1 or seconds is None or result.get('capacity_seconds') is None or\
+            abs(seconds - result['capacity_seconds']) > 0.01:
+        raise RuntimeError('S4 online capacity verdict does not match a recovered snapshot')
+    return at
+
+
 def analyze(evidence):
     evidence = Path(evidence).resolve()
     record = json.loads((evidence / 'run.json').read_text())
@@ -149,6 +164,12 @@ def analyze(evidence):
     if not snapshots:
         raise RuntimeError('no S4 infrastructure observations')
     times, infrastructure, query_errors, replacement = observation_events(snapshots, record)
+    result_file = evidence / 'result.json'
+    result = json.loads(result_file.read_text()) if result_file.exists() else None
+    if result:
+        confirmed = confirmed_capacity_result(result, infrastructure, record)
+        if confirmed:
+            times['capacity_stable_confirmed_at'] = confirmed
     after = [row for row in samples if epoch(row['time']) >= epoch(record['stop_intent_at'])]
     if not after:
         raise RuntimeError('no HTTP samples after stop intent')
@@ -206,6 +227,7 @@ def analyze(evidence):
                'source_sha256': hash_sources([source_http, evidence / 'baseline.json',
                                                evidence / 'stopped-nova.json',
                                                *[path for path, _ in snapshots],
+                                               *([result_file] if result else []),
                                                *([finalization_file] if finalization else [])])}
     output = evidence / 'analysis'
     output.mkdir(exist_ok=True, mode=0o700)
