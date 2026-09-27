@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="450" viewBox="0 0 960 450" role="img" aria-labelledby="title desc">
+  <title id="title">시험 환경의 논리 계층과 S4 실행기</title>
+  <desc id="desc">GCP 시험 호스트 세 대가 OpenStack controller와 compute 두 대를 맡고, Nova VM 위에서 Kubernetes 클러스터가 동작한다. S4 실행기가 OpenStack과 Kubernetes API 및 HTTP 시험 경로를 관측한다.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#42617a"/></marker>
+    <style>
+      text { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; fill: #183247; }
+      .layer { fill: #f7fafc; stroke: #b8cbd8; stroke-width: 2; rx: 12; }
+      .box { fill: #e9f3f8; stroke: #6f9ab5; stroke-width: 2; rx: 9; }
+      .worker { fill: #eaf5eb; stroke: #7aa783; stroke-width: 2; rx: 9; }
+      .runner { fill: #fff4dd; stroke: #bb9859; stroke-width: 2; rx: 12; }
+      .label { font-size: 20px; font-weight: 700; }
+      .text { font-size: 18px; }
+      .small { font-size: 15px; }
+      .edge { fill: none; stroke: #42617a; stroke-width: 2.5; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect class="layer" x="230" y="16" width="710" height="92"/>
+  <text class="label" x="250" y="45">GCP 시험 호스트 3대</text>
+  <rect class="box" x="250" y="57" width="200" height="38"/>
+  <rect class="box" x="485" y="57" width="200" height="38"/>
+  <rect class="box" x="720" y="57" width="200" height="38"/>
+  <text class="text" x="270" y="83">controller</text>
+  <text class="text" x="509" y="83">compute01</text>
+  <text class="text" x="744" y="83">compute02</text>
+
+  <rect class="layer" x="230" y="126" width="710" height="92"/>
+  <text class="label" x="250" y="155">OpenStack 역할</text>
+  <rect class="box" x="250" y="168" width="200" height="37"/>
+  <rect class="box" x="485" y="168" width="200" height="37"/>
+  <rect class="box" x="720" y="168" width="200" height="37"/>
+  <text class="text" x="274" y="193">API · 제어 기능</text>
+  <text class="text" x="540" y="193">compute 1</text>
+  <text class="text" x="775" y="193">compute 2</text>
+  <path class="edge" d="M430 96 L430 166"/>
+  <path class="edge" d="M585 96 L585 166"/>
+  <path class="edge" d="M820 96 L820 166"/>
+
+  <rect class="runner" x="20" y="250" width="185" height="169"/>
+  <text class="label" x="53" y="282">S4 실행기</text>
+  <text class="small" x="39" y="317">대상 관계 확인</text>
+  <text class="small" x="39" y="344">Nova VM 중단</text>
+  <text class="small" x="39" y="371">HTTP·상태 관측</text>
+  <text class="small" x="39" y="398">결과 분석·정리</text>
+
+  <rect class="layer" x="230" y="237" width="710" height="105"/>
+  <text class="label" x="250" y="265">OpenStack Nova VM / Kubernetes Node</text>
+  <rect class="box" x="250" y="277" width="200" height="50"/>
+  <rect class="worker" x="485" y="277" width="200" height="50"/>
+  <rect class="worker" x="720" y="277" width="200" height="50"/>
+  <text class="small" x="267" y="307">workload control plane</text>
+  <text class="text" x="536" y="307">워커 A</text>
+  <text class="text" x="771" y="307">워커 B</text>
+  <path class="edge" d="M705 218 L705 236"/>
+
+  <rect class="layer" x="230" y="361" width="710" height="72"/>
+  <text class="label" x="250" y="389">Kubernetes 시험 서비스</text>
+  <text class="text" x="250" y="418">Service → 단일 Pod → 배치된 워커 Node</text>
+  <path class="edge" d="M205 315 L217 315 L217 186 L248 186"/>
+  <path class="edge" d="M205 386 L246 397"/>
+  <path class="edge" d="M705 342 L705 360"/>
+</svg>

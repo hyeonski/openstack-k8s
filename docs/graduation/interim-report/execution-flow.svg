@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="390" viewBox="0 0 960 390" role="img" aria-labelledby="title desc">
+  <title id="title">대표 장애 시나리오의 공통 실행 흐름</title>
+  <desc id="desc">사전 조건 확인, 장애 주입 또는 탐지, 자원 관계 검증, 대응 관측, 서비스 안정화와 인프라 복원 별도 판정, 기록과 정리 순서다.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#42617a"/></marker>
+    <style>
+      text { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; fill: #183247; }
+      .box { fill: #e9f3f8; stroke: #6f9ab5; stroke-width: 2; rx: 10; }
+      .check { fill: #eaf5eb; stroke: #7aa783; stroke-width: 2; rx: 10; }
+      .end { fill: #fff4dd; stroke: #bb9859; stroke-width: 2; rx: 10; }
+      .main { font-size: 19px; font-weight: 700; }
+      .small { font-size: 15px; }
+      .edge { fill: none; stroke: #42617a; stroke-width: 2.5; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect class="box" x="20" y="20" width="165" height="69"/>
+  <rect class="box" x="210" y="20" width="165" height="69"/>
+  <rect class="box" x="400" y="20" width="165" height="69"/>
+  <rect class="box" x="590" y="20" width="165" height="69"/>
+
+  <text class="main" x="37" y="49">사전 조건 확인</text>
+  <text class="small" x="49" y="73">환경 · 대상</text>
+  <text class="main" x="229" y="49">장애 주입·탐지</text>
+  <text class="small" x="236" y="73">원인·영향 기록</text>
+  <text class="main" x="418" y="49">관계 검증</text>
+  <text class="small" x="418" y="73">Pod → Node → VM</text>
+  <text class="main" x="608" y="49">대응·관측</text>
+  <text class="small" x="609" y="73">기존 제어기 연동</text>
+
+  <path class="edge" d="M185 55 L207 55"/>
+  <path class="edge" d="M375 55 L397 55"/>
+  <path class="edge" d="M565 55 L587 55"/>
+
+  <rect class="check" x="230" y="164" width="230" height="92"/>
+  <rect class="check" x="500" y="164" width="230" height="92"/>
+  <rect class="end" x="365" y="301" width="230" height="70"/>
+  <text class="main" x="254" y="196">서비스 완료 판정</text>
+  <text class="small" x="262" y="226">요청의 안정적 성공</text>
+  <text class="main" x="522" y="196">인프라 완료 판정</text>
+  <text class="small" x="521" y="226">필요 자원 목표 복원</text>
+  <text class="main" x="423" y="331">결과 기록</text>
+  <text class="small" x="420" y="355">분석 · 정리</text>
+  <path class="edge" d="M670 89 L670 125 L345 125 L345 162"/>
+  <path class="edge" d="M675 89 L675 125 L615 125 L615 162"/>
+  <path class="edge" d="M345 256 L455 299"/>
+  <path class="edge" d="M615 256 L505 299"/>
+</svg>
