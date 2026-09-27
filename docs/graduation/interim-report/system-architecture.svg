@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="450" viewBox="0 0 960 450" role="img" aria-labelledby="title desc">
   <title id="title">시험 환경의 논리 계층과 S4 실행기</title>
-  <desc id="desc">GCP 시험 호스트 세 대가 OpenStack controller와 compute 두 대를 맡고, Nova VM 위에서 Kubernetes 클러스터가 동작한다. S4 실행기가 OpenStack과 Kubernetes API 및 HTTP 시험 경로를 관측한다.</desc>
+  <desc id="desc">GCP 시험 호스트 세 대가 OpenStack controller와 compute 두 대를 맡고, controller의 kind 관리 클러스터가 CAPI, CAPO, MHC, Autoscaler를 실행한다. Nova VM 위에서 워크로드 Kubernetes 클러스터가 동작한다. 로컬 작업 컴퓨터의 S4 실행기는 OpenStack API로 장애를 주입하고, 워크로드 API server의 Service proxy를 경유해 HTTP 서비스를 관측한다.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#42617a"/></marker>
     <style>
@@ -25,30 +25,33 @@
   <text class="text" x="744" y="83">compute02</text>
 
   <rect class="layer" x="230" y="126" width="710" height="92"/>
-  <text class="label" x="250" y="155">OpenStack 역할</text>
-  <rect class="box" x="250" y="168" width="200" height="37"/>
+  <text class="label" x="250" y="155">OpenStack + 관리 클러스터</text>
+  <rect class="box" x="250" y="168" width="200" height="45"/>
   <rect class="box" x="485" y="168" width="200" height="37"/>
   <rect class="box" x="720" y="168" width="200" height="37"/>
-  <text class="text" x="274" y="193">API · 제어 기능</text>
+  <text class="small" x="269" y="186">API · CAPI · CAPO</text>
+  <text class="small" x="269" y="204">MHC · Autoscaler</text>
   <text class="text" x="540" y="193">compute 1</text>
   <text class="text" x="775" y="193">compute 2</text>
-  <path class="edge" d="M430 96 L430 166"/>
+  <path class="edge" d="M350 96 L350 124"/>
   <path class="edge" d="M585 96 L585 166"/>
   <path class="edge" d="M820 96 L820 166"/>
 
   <rect class="runner" x="20" y="250" width="185" height="169"/>
-  <text class="label" x="53" y="282">S4 실행기</text>
-  <text class="small" x="39" y="317">대상 관계 확인</text>
-  <text class="small" x="39" y="344">Nova VM 중단</text>
-  <text class="small" x="39" y="371">HTTP·상태 관측</text>
+  <text class="label" x="53" y="278">S4 실행기</text>
+  <text class="small" x="39" y="302">로컬 작업 컴퓨터</text>
+  <text class="small" x="39" y="328">대상 관계 확인</text>
+  <text class="small" x="39" y="351">Nova VM 중단</text>
+  <text class="small" x="39" y="375">HTTP(API proxy) 관측</text>
   <text class="small" x="39" y="398">결과 분석·정리</text>
 
   <rect class="layer" x="230" y="237" width="710" height="105"/>
-  <text class="label" x="250" y="265">OpenStack Nova VM / Kubernetes Node</text>
+  <text class="label" x="250" y="265">워크로드 클러스터: Nova VM / Kubernetes Node</text>
   <rect class="box" x="250" y="277" width="200" height="50"/>
   <rect class="worker" x="485" y="277" width="200" height="50"/>
   <rect class="worker" x="720" y="277" width="200" height="50"/>
-  <text class="small" x="267" y="307">workload control plane</text>
+  <text class="small" x="272" y="297">workload API server</text>
+  <text class="small" x="302" y="317">Service proxy</text>
   <text class="text" x="536" y="307">워커 A</text>
   <text class="text" x="771" y="307">워커 B</text>
   <path class="edge" d="M705 218 L705 236"/>
@@ -57,6 +60,7 @@
   <text class="label" x="250" y="389">Kubernetes 시험 서비스</text>
   <text class="text" x="250" y="418">Service → 단일 Pod → 배치된 워커 Node</text>
   <path class="edge" d="M205 315 L217 315 L217 186 L248 186"/>
-  <path class="edge" d="M205 386 L246 397"/>
+  <path class="edge" d="M205 386 L217 386 L217 307 L248 307"/>
+  <path class="edge" d="M350 327 L350 359"/>
   <path class="edge" d="M705 342 L705 360"/>
 </svg>

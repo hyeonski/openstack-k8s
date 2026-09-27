@@ -12,6 +12,9 @@
 [`docs/product/infrastructure-priorities.md`](docs/product/infrastructure-priorities.md)에서 관리한다.
 졸업작품의 장애 시나리오와 복구·검증 기준은 제품 PRD와 별도로
 [`docs/graduation/failure-scenarios.md`](docs/graduation/failure-scenarios.md)에 정리했다.
+중간보고서의 Markdown 원고와 S4 재측정 근거는 각각
+[`docs/graduation/interim-report/draft.md`](docs/graduation/interim-report/draft.md),
+[`docs/graduation/interim-report/s4-rerun-2026-09-27.md`](docs/graduation/interim-report/s4-rerun-2026-09-27.md)에 있다.
 S1 서비스·부하·정상 기준선의 실행 절차는
 [`docs/graduation/s1-baseline.md`](docs/graduation/s1-baseline.md)에 정리했다.
 실측 검증은 [`docs/graduation/s1-baseline-validation-2026-09-26.md`](docs/graduation/s1-baseline-validation-2026-09-26.md)에 기록했다.

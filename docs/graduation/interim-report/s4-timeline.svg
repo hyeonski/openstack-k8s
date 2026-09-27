@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="470" viewBox="0 0 1200 470" role="img" aria-labelledby="title desc">
+<title id="title">S4 세 회차의 복구 사건 시간선</title>
+<desc id="desc">각 회차의 Nova 중단 요청을 0초로 정렬한 서비스와 인프라 사건 관측 시간선이다. 세 회차 모두 첫 HTTP 실패와 Node Unknown 뒤에 SHUTOFF가 확인됐다. 사건의 시작점이 다른 서비스·용량 시간은 서로 빼서 비교하지 않는다.</desc>
+<style>text{font-family:Apple SD Gothic Neo,Malgun Gothic,sans-serif;fill:#183247}.title{font-size:21px;font-weight:700}.note{font-size:15px;font-weight:700;fill:#a04e2d}.axis{font-size:14px;fill:#536778}.run{font-size:16px;font-weight:700}.lane{font-size:13px;fill:#526878}.mark{font-size:13px;font-weight:700;fill:white}.legend{font-size:14px}.grid{stroke:#dce5eb;stroke-width:1}.base{stroke:#718b9d;stroke-width:2}.stop{stroke:#425466;stroke-width:2;stroke-dasharray:4 4}.blue{fill:#2374a8}.green{fill:#39805a}</style>
+<rect width="1200" height="470" fill="white"/>
+<text x="24" y="32" class="title">S4 복구 사건 시간선 (중단 요청 = 0초)</text>
+<text x="790" y="32" class="note">세 회차 모두 첫 실패 F · Node Unknown N → SHUTOFF V</text>
+<line x1="215.0" y1="60" x2="215.0" y2="370" class="grid"/><text x="215.0" y="53" text-anchor="middle" class="axis">0초</text>
+<line x1="368.0" y1="60" x2="368.0" y2="370" class="grid"/><text x="368.0" y="53" text-anchor="middle" class="axis">60초</text>
+<line x1="521.0" y1="60" x2="521.0" y2="370" class="grid"/><text x="521.0" y="53" text-anchor="middle" class="axis">120초</text>
+<line x1="674.0" y1="60" x2="674.0" y2="370" class="grid"/><text x="674.0" y="53" text-anchor="middle" class="axis">180초</text>
+<line x1="827.0" y1="60" x2="827.0" y2="370" class="grid"/><text x="827.0" y="53" text-anchor="middle" class="axis">240초</text>
+<line x1="980.0" y1="60" x2="980.0" y2="370" class="grid"/><text x="980.0" y="53" text-anchor="middle" class="axis">300초</text>
+<line x1="215" y1="60" x2="215" y2="370" class="stop"/>
+<text x="24" y="116" class="run">1차</text>
+<text x="85" y="113" class="lane">서비스</text>
+<text x="85" y="144" class="lane">인프라</text>
+<line x1="215" y1="108" x2="1082" y2="108" class="base"/>
+<line x1="215" y1="139" x2="1082" y2="139" class="base"/>
+<circle cx="238.8" cy="108" r="10" class="blue"/><text x="238.8" y="112.5" class="mark" text-anchor="middle">F</text>
+<circle cx="346.3" cy="108" r="10" class="blue"/><text x="346.3" y="112.5" class="mark" text-anchor="middle">N</text>
+<circle cx="427.9" cy="108" r="10" class="blue"/><text x="427.9" y="112.5" class="mark" text-anchor="middle">P</text>
+<circle cx="509.7" cy="108" r="10" class="blue"/><text x="509.7" y="112.5" class="mark" text-anchor="middle">H</text>
+<circle cx="403.6" cy="139" r="10" class="green"/><text x="403.6" y="143.5" class="mark" text-anchor="middle">V</text>
+<circle cx="654.9" cy="139" r="10" class="green"/><text x="654.9" y="143.5" class="mark" text-anchor="middle">M</text>
+<circle cx="716.3" cy="139" r="10" class="green"/><text x="716.3" y="143.5" class="mark" text-anchor="middle">C</text>
+<circle cx="855.3" cy="139" r="10" class="green"/><text x="855.3" y="143.5" class="mark" text-anchor="middle">R</text>
+<circle cx="927.3" cy="139" r="10" class="green"/><text x="927.3" y="143.5" class="mark" text-anchor="middle">T</text>
+<circle cx="1033.4" cy="139" r="10" class="green"/><text x="1033.4" y="143.5" class="mark" text-anchor="middle">W</text>
+
+<text x="24" y="221" class="run">2차</text>
+<text x="85" y="218" class="lane">서비스</text>
+<text x="85" y="249" class="lane">인프라</text>
+<line x1="215" y1="213" x2="1082" y2="213" class="base"/>
+<line x1="215" y1="244" x2="1082" y2="244" class="base"/>
+<circle cx="238.1" cy="213" r="10" class="blue"/><text x="238.1" y="217.5" class="mark" text-anchor="middle">F</text>
+<circle cx="361.9" cy="213" r="10" class="blue"/><text x="361.9" y="217.5" class="mark" text-anchor="middle">N</text>
+<circle cx="441.0" cy="213" r="10" class="blue"/><text x="441.0" y="217.5" class="mark" text-anchor="middle">P</text>
+<circle cx="522.2" cy="213" r="10" class="blue"/><text x="522.2" y="217.5" class="mark" text-anchor="middle">H</text>
+<circle cx="390.2" cy="244" r="10" class="green"/><text x="390.2" y="248.5" class="mark" text-anchor="middle">V</text>
+<circle cx="670.5" cy="244" r="10" class="green"/><text x="670.5" y="248.5" class="mark" text-anchor="middle">M</text>
+<circle cx="744.8" cy="244" r="10" class="green"/><text x="744.8" y="248.5" class="mark" text-anchor="middle">C</text>
+<circle cx="886.4" cy="244" r="10" class="green"/><text x="886.4" y="248.5" class="mark" text-anchor="middle">R</text>
+<circle cx="924.1" cy="244" r="10" class="green"/><text x="924.1" y="248.5" class="mark" text-anchor="middle">T</text>
+<circle cx="1032.7" cy="244" r="10" class="green"/><text x="1032.7" y="248.5" class="mark" text-anchor="middle">W</text>
+
+<text x="24" y="326" class="run">3차</text>
+<text x="85" y="323" class="lane">서비스</text>
+<text x="85" y="354" class="lane">인프라</text>
+<line x1="215" y1="318" x2="1082" y2="318" class="base"/>
+<line x1="215" y1="349" x2="1082" y2="349" class="base"/>
+<circle cx="241.0" cy="318" r="10" class="blue"/><text x="241.0" y="322.5" class="mark" text-anchor="middle">F</text>
+<circle cx="362.7" cy="318" r="10" class="blue"/><text x="362.7" y="322.5" class="mark" text-anchor="middle">N</text>
+<circle cx="444.3" cy="318" r="10" class="blue"/><text x="444.3" y="322.5" class="mark" text-anchor="middle">P</text>
+<circle cx="525.1" cy="318" r="10" class="blue"/><text x="525.1" y="322.5" class="mark" text-anchor="middle">H</text>
+<circle cx="392.1" cy="349" r="10" class="green"/><text x="392.1" y="353.5" class="mark" text-anchor="middle">V</text>
+<circle cx="671.2" cy="349" r="10" class="green"/><text x="671.2" y="353.5" class="mark" text-anchor="middle">M</text>
+<circle cx="714.1" cy="349" r="10" class="green"/><text x="714.1" y="353.5" class="mark" text-anchor="middle">C</text>
+<circle cx="860.6" cy="349" r="10" class="green"/><text x="860.6" y="353.5" class="mark" text-anchor="middle">R</text>
+<circle cx="936.3" cy="349" r="10" class="green"/><text x="936.3" y="353.5" class="mark" text-anchor="middle">T</text>
+<circle cx="1048.1" cy="349" r="10" class="green"/><text x="1048.1" y="353.5" class="mark" text-anchor="middle">W</text>
+
+<line x1="20" y1="383" x2="1180" y2="383" class="grid"/>
+<text x="24" y="410" class="legend">서비스: F 첫 HTTP 실패 · N Node Unknown · P 대체 Pod Ready · H HTTP 30초 연속 성공 확인</text>
+<text x="24" y="437" class="legend">인프라: V SHUTOFF · M MHC 삭제 시작 · C 새 Machine 첫 관측 · R 새 Node Ready 첫 관측</text>
+<text x="24" y="459" class="legend">T 새 워커 시험 Pod Ready 첫 관측 · W 워커 안정화 확인 (C·R·T는 실제 발생 시각이 아닌 첫 관측 시각)</text>
+</svg>
