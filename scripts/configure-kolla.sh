@@ -45,6 +45,9 @@ run_on "${CONTROLLER_NAME}" env \
     for compute_spec in ${COMPUTE_INVENTORY_SPECS}; do
       compute_args+=(--compute "${compute_spec}")
     done
+    if [[ -f /etc/kolla/globals.d/graduation.yml ]]; then
+      compute_args+=(--storage-controller)
+    fi
     "${KOLLA_DEPLOY_DIR}/scripts/build-kolla-inventory.py" \
       "${sample}" "${KOLLA_DEPLOY_DIR}/kolla/generated/multinode" \
       "${compute_args[@]}" --user "${TARGET_SSH_USER}"

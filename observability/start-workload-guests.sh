@@ -5,6 +5,16 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${ROOT}/scripts/lib/common.sh"
 
+# A general wake-up must not restart a VM quarantined by the stateful recovery.
+python3 - "${STATE_DIR}/s3-experiment.json" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+if path.exists():
+    record = json.loads(path.read_text())
+    if record.get('phase') != 'cleaned':
+        raise SystemExit('S3 recovery owns guest power state; use its cleanup before guest wake-up')
+PY
+
 ensure_management_api_access
 server_ids=()
 while IFS= read -r server_id; do

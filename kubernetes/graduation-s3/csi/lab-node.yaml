@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: csi-cinder-nodeplugin
+  namespace: kube-system
+spec:
+  template:
+    spec:
+      volumes:
+        - name: secret-cinderplugin
+          secret:
+            secretName: graduation-cinder-config

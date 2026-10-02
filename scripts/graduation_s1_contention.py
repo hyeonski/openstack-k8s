@@ -124,6 +124,9 @@ def load_job(name, node, rate, rounds, seconds):
 
 
 class S1Contention:
+    recovery_seconds = 120
+    recovery_window_offset = 30
+
     def __init__(self, s1=None):
         self.s1 = s1 or S1()
         self.client = self.s1.client
@@ -278,6 +281,10 @@ class S1Contention:
             previous = self.read()
             if previous and previous['phase'] != 'completed':
                 raise RuntimeError('unfinished S1 contention exists; clean it first')
+            for name in ('s1-contention.json', 's1-auto.json'):
+                path = self.client.state / name
+                if path != self.state and path.exists() and json.loads(path.read_text())['phase'] != 'completed':
+                    raise RuntimeError('another S1 experiment is unfinished: ' + name)
             service = self.s1.verify()
             jobs = self.client.get('w', 'jobs', '-n', NAMESPACE,
                                    '-l', LABEL + '=' + NAMESPACE)['items']
@@ -341,6 +348,16 @@ class S1Contention:
                       'probe_compute_host': probe_place['compute_host'],
                       'rate': rate, 'rounds': rounds, 'seconds': seconds,
                       'source_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+            source_files = [Path(__file__), Path(__file__).with_name('graduation_s1.py'),
+                            Path(__file__).with_name('graduation-s1-host-stat.sh')]
+            if self.state.name == 's1-auto.json':
+                source_files.append(Path(__file__).with_name('graduation_s1_auto.py'))
+            (evidence / 'source').mkdir()
+            record['source_files_sha256'] = {}
+            for path in source_files:
+                content = path.read_bytes()
+                (evidence / 'source' / path.name).write_bytes(content)
+                record['source_files_sha256'][path.name] = hashlib.sha256(content).hexdigest()
             self.write(record, 'prepared')
             initial_patch = {'spec': {'template': {'spec': {'nodeSelector': {
                 'kubernetes.io/hostname': source_selector}}}}}
@@ -358,6 +375,26 @@ class S1Contention:
             atomic_json(evidence / 'placement-before.json',
                         {'service': source[2], 'target': target[2], 'probe': probe_place})
             return self.run_locked(record, control[0]['metadata']['name'])
+
+    def observe_contention(self, record, job_name, before_cpu, before_host, stress_start, host_sample):
+        time.sleep(120)
+        return self.s1.cpu_stat(record['service_before']['pod']), host_sample('stress-end')
+
+    def move_service(self, record):
+        patch = {'spec': {'template': {'spec': {'nodeSelector': {
+            'kubernetes.io/hostname': record['target_selector']}}}}}
+        self.write(record, 'relocation-intent', relocation_intent_at=utc_now())
+        self.s1.k('-n', NAMESPACE, 'patch', 'deployment', 'http',
+                  '--type=merge', '-p', json.dumps(patch))
+
+    def recovery_checks(self, record, rows, baseline_p95):
+        return {}
+
+    def observe_recovery(self, record, job_name):
+        time.sleep(self.recovery_seconds)
+
+    def recovery_window_start(self, record):
+        return epoch(record['relocated_at']) + self.recovery_window_offset
 
     def run_locked(self, record, probe_node):
         evidence = Path(record['evidence'])
@@ -387,16 +424,11 @@ class S1Contention:
             self.write(record, 'baseline-sampled', baseline_end_at=baseline_end)
             self.create_competitor(record)
             stress_start_host = host_sample('stress-start')
-            time.sleep(120)
-            during_cpu = self.s1.cpu_stat(record['service_before']['pod'])
-            during_host = host_sample('stress-end')
+            during_cpu, during_host = self.observe_contention(
+                record, job_name, before_cpu, before_host, stress_start_host, host_sample)
             atomic_json(evidence / 'pod-cpu-during.json', during_cpu)
             self.write(record, 'stress-sampled', stress_end_at=utc_now())
-            patch = {'spec': {'template': {'spec': {'nodeSelector': {
-                'kubernetes.io/hostname': record['target_selector']}}}}}
-            self.write(record, 'relocation-intent', relocation_intent_at=utc_now())
-            self.s1.k('-n', NAMESPACE, 'patch', 'deployment', 'http',
-                      '--type=merge', '-p', json.dumps(patch))
+            self.move_service(record)
             self.s1.k('-n', NAMESPACE, 'rollout', 'status', 'deployment/http',
                       '--timeout=5m', timeout=330)
             moved = self.s1.verify()
@@ -407,7 +439,7 @@ class S1Contention:
                 raise RuntimeError('S1 target worker compute placement changed')
             self.write(record, 'relocated', service_after=moved, relocated_at=utc_now())
             relocated_host = host_sample('relocated')
-            time.sleep(120)
+            self.observe_recovery(record, job_name)
             after_host = host_sample('post-relocation')
             self.s1.k('-n', NAMESPACE, 'wait', '--for=condition=complete',
                       'job/' + job_name, f'--timeout={record["seconds"] + 180}s',
@@ -428,11 +460,11 @@ class S1Contention:
             rows = [json.loads(line) for line in raw.splitlines()]
             baseline_end = epoch(record['baseline_end_at'])
             stress_end = epoch(record['stress_end_at'])
-            relocated = epoch(record['relocated_at'])
+            recovery_start = self.recovery_window_start(record)
             windows = {
                 'baseline': summarize_window(rows, baseline_end - 60, baseline_end),
                 'contention': summarize_window(rows, stress_end - 60, stress_end),
-                'relocated': summarize_window(rows, relocated + 30, relocated + 90)}
+                'relocated': summarize_window(rows, recovery_start, recovery_start + 60)}
             delta, cpu_errors = pod_cpu_delta(before_cpu, during_cpu)
             host_metrics = {phase: {host: {
                 'cpu_utilization': host_cpu_utilization(start[host], end[host]),
@@ -464,11 +496,13 @@ class S1Contention:
                                and host_metrics['contention'][source_host]['cpu_utilization'] >= .7)
             pod_throttling_observed = delta.get('nr_throttled', 0) > 0
             controls = recovery_controls(record, moved, host_metrics, contender_after)
+            checks = self.recovery_checks(record, rows, baseline_p95)
             summary = {'time': utc_now(), 'run_id': record['run_id'], 'windows': windows,
                        'pod_cpu_delta_before_relocation': delta, 'pod_cpu_errors': cpu_errors,
                        'host_metrics': host_metrics,
                        'host_contention_confirmed': host_contention,
                        **controls,
+                       'recovery_checks': checks,
                        'pod_throttling_observed': pod_throttling_observed,
                        'service_before': record['service_before'], 'service_after': moved,
                        'service_compute_host': record['service_compute_host'],
@@ -476,7 +510,7 @@ class S1Contention:
                        'latency_impact_over_1_5x': bool(impact),
                        'latency_recovery_within_1_2x': bool(recovery),
                        'state': 'passed' if quality and impact and recovery and
-                       host_contention and all(controls.values()) and
+                       host_contention and all(controls.values()) and all(checks.values()) and
                        not pod_throttling_observed else 'needs_review'}
             atomic_json(evidence / 'summary.json', summary)
             self.write(record, 'measured', summary_state=summary['state'])

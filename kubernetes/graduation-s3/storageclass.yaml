@@ -1,0 +1,12 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: graduation-cinder
+  labels:
+    openstack-k8s.dev/managed-by: graduation-foundation
+provisioner: cinder.csi.openstack.org
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+parameters:
+  fsType: ext4

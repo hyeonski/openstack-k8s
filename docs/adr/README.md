@@ -9,6 +9,7 @@
 | [0014](0014-run-management-capi-on-controller.md) | management kind와 CAPI/CAPO를 controller에서 실행한다 | 채택됨 |
 | [0015](0015-require-layered-gcp-verification.md) | IaC부터 Autoscaler까지 계층별 GCP 검증을 요구한다 | 채택됨 |
 | [0016](0016-separate-observation-and-enable-worker-scale-in.md) | 준비·조회·능동 검사 분리와 worker 1~3 자동 축소, ADR-0015 검증 범위 확장 | 채택됨·실환경 수용 통과 |
+| [0017](0017-increase-recovery-target-compute-capacity.md) | S1 복구 목적지 compute01을 8 vCPU로 증설, ADR-0016의 해당 사양 대체 | 채택됨 |
 
 결정이 바뀌면 기존 ADR을 수정해 과거 결론을 감추지 않고 새 ADR에서 대체 관계와
 전환 조건을 기록한다.

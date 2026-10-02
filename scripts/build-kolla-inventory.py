@@ -31,6 +31,8 @@ def main() -> None:
     )
     parser.add_argument("--compute-ip", help="legacy single compute01 address")
     parser.add_argument("--user", default="ubuntu")
+    parser.add_argument("--storage-controller", action="store_true",
+                        help="use the controller for the explicitly enabled graduation Cinder backend")
     args = parser.parse_args()
 
     content = args.sample.read_text(encoding="utf-8")
@@ -63,7 +65,7 @@ def main() -> None:
         "network": ["controller"],
         "compute": compute_members,
         "monitoring": ["controller"],
-        "storage": [],
+        "storage": ["controller"] if args.storage_controller else [],
         "deployment": ["controller ansible_connection=local"],
     }
     for group, members in managed_groups.items():

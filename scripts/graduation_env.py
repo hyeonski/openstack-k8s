@@ -206,6 +206,11 @@ class Environment:
         with self.lock_path.open('a+') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             previous = json.loads(self.state_path.read_text()) if self.state_path.exists() else None
+            s3_path = self.state_dir / 's3-experiment.json'
+            if previous and s3_path.exists():
+                s3 = json.loads(s3_path.read_text())
+                if s3.get('environment_run_id') == previous.get('run_id') and s3.get('phase') != 'cleaned':
+                    raise RuntimeError('S3 recovery owns VM power state; finish its cleanup before environment ensure')
             if previous and previous.get('phase') in ('inspecting', 'starting', 'recovering'):
                 raise RuntimeError('earlier environment ensure was interrupted; inspect its record first')
             if previous and previous.get('phase') == 'failed' and previous.get('start_attempted'):
@@ -303,6 +308,14 @@ class Environment:
                 s4 = json.loads(s4_path.read_text())
                 if s4.get('environment_run_id') == data['run_id'] and s4.get('phase') != 'restored':
                     raise RuntimeError('S4 fixture is still active or uncertain; clean it before stopping hosts')
+            for name, terminal in (('s1-preparation.json', 'restored'),
+                                   ('s2-experiment.json', 'cleaned'),
+                                   ('s3-experiment.json', 'cleaned')):
+                path = self.state_dir / name
+                if path.exists():
+                    scenario = json.loads(path.read_text())
+                    if scenario.get('environment_run_id') == data['run_id'] and scenario.get('phase') != terminal:
+                        raise RuntimeError(name + ' is active; clean it before stopping hosts')
             owned = [name for name in data['started_hosts']
                      if data['initial_hosts'][name]['status'] == 'TERMINATED']
             current = self.hosts()

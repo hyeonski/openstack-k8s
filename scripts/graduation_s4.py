@@ -246,6 +246,11 @@ class S4Preparation:
         return result
 
     def prepare(self):
+        for name, terminal in (('s1-preparation.json', 'restored'),
+                               ('s2-experiment.json', 'cleaned'), ('s3-experiment.json', 'cleaned')):
+            path = self.state_dir / name
+            if path.exists() and json.loads(path.read_text()).get('phase') != terminal:
+                raise RuntimeError('another scenario is active: ' + name)
         environment = self.environment_record()
         previous = archive_restored_record(self.state_dir, self.read())
         if previous and previous.get('phase') == 'prepared':

@@ -157,6 +157,10 @@ class S1:
         return mode, observed
 
     def ensure_absent(self):
+        for name in ('s2-experiment.json', 's3-experiment.json'):
+            path = self.client.state / name
+            if path.exists() and json.loads(path.read_text()).get('phase') != 'cleaned':
+                raise RuntimeError('another scenario is active: ' + name)
         namespace = self.obj('namespace', NAMESPACE, None)
         if namespace:
             raise RuntimeError('graduation-s1 namespace already exists; inspect ownership first')

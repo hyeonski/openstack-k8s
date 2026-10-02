@@ -37,6 +37,15 @@ compute
 
 
 class BuildKollaInventoryTest(unittest.TestCase):
+    def test_controller_storage_is_explicit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, target = root / 'sample', root / 'inventory'
+            source.write_text(SAMPLE)
+            subprocess.run([str(BUILDER), str(source), str(target), '--compute',
+                            'compute01=192.0.2.22', '--storage-controller'], check=True)
+            self.assertIn('[storage]\ncontroller\n', target.read_text())
+
     def test_replaces_primary_groups_and_preserves_children(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

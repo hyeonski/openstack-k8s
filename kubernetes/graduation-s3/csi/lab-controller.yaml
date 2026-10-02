@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: csi-cinder-controllerplugin
+  namespace: kube-system
+spec:
+  template:
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: csi-snapshotter
+          $patch: delete
+        - name: cinder-csi-plugin
+          env:
+            - name: CLUSTER_NAME
+              value: osk8s-workload
+      volumes:
+        - name: secret-cinderplugin
+          secret:
+            secretName: graduation-cinder-config

@@ -17,7 +17,7 @@
 | 구분 | 범위 |
 |---|---|
 | GCP OpenStack controller 호스트 | 1대 고정. OpenStack 관리 서비스와 management Kubernetes(kind), CAPI/CAPO, CA 실행 |
-| GCP OpenStack compute 호스트 | 2대 고정. 현재 각각 4 vCPU·16 GiB |
+| GCP OpenStack compute 호스트 | 2대 고정. compute01 8 vCPU·32 GiB, compute02 4 vCPU·16 GiB. 2026-10-02 S1 복구 실험에 따른 [ADR-0017](../adr/0017-increase-recovery-target-compute-capacity.md) 적용 |
 | workload Kubernetes control plane | Nova VM 1대 고정 |
 | workload Kubernetes worker | **Nova VM 최소 1대~최대 3대**, CA min=1/max=3 |
 | workload Kubernetes용 Nova VM 총합 | **2~4대**. control plane과 worker 모두 compute 호스트 자원 사용 |

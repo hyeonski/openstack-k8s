@@ -88,6 +88,18 @@ class ReadyEnvironment(Environment):
 
 
 class EnvironmentTests(unittest.TestCase):
+    def test_active_s3_prevents_general_guest_restart_before_any_cloud_call(self):
+        with tempfile.TemporaryDirectory() as directory:
+            commands = FakeCommands({})
+            environment = ReadyEnvironment(config(Path(directory)), commands)
+            environment.state_dir.mkdir(parents=True)
+            environment.state_path.write_text(json.dumps({'run_id': 'env', 'phase': 'ready'}))
+            (environment.state_dir / 's3-experiment.json').write_text(json.dumps({
+                'environment_run_id': 'env', 'phase': 'fenced'}))
+            with self.assertRaisesRegex(RuntimeError, 'S3 recovery owns'):
+                environment.ensure()
+            self.assertEqual(commands.calls, [])
+
     def test_missing_cluster_input_fails_before_starting_hosts(self):
         with tempfile.TemporaryDirectory() as directory:
             commands = FakeCommands({'controller': 'TERMINATED', 'compute1': 'TERMINATED',

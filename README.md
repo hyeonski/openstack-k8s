@@ -18,6 +18,9 @@
 S1 서비스·부하·정상 기준선의 실행 절차는
 [`docs/graduation/s1-baseline.md`](docs/graduation/s1-baseline.md)에 정리했다.
 실측 검증은 [`docs/graduation/s1-baseline-validation-2026-09-26.md`](docs/graduation/s1-baseline-validation-2026-09-26.md)에 기록했다.
+S1 자동 재배치·S2 QoS·S3 Cinder/DB 복구의 실행 계약은
+[`docs/graduation/recovery-automation.md`](docs/graduation/recovery-automation.md),
+실환경 검증 기록은 [`docs/graduation/recovery-validation-2026-10-02.md`](docs/graduation/recovery-validation-2026-10-02.md)에 있다.
 worker 수동·자동 제어 모드와 중단 후 복원 절차는
 [`docs/worker-control.md`](docs/worker-control.md)에 정리했다.
 실행 취소·재개·정리 및 시간 상한은 [`docs/run-lifecycle.md`](docs/run-lifecycle.md)를 따른다.
@@ -238,7 +241,9 @@ make cluster-autoscaler-test           # 자동 1→2→3→2→1→2→1
 
 GCP controller 1대·compute 2대와 workload control plane Nova VM 1대는 고정이다.
 worker Nova VM만 최소 1~최대 3대로 증감하므로 workload VM 총합은 2~4대다.
-compute별 4 vCPU·16 GiB, CP/worker별 2 vCPU·2 GiB·20 GB를 유지한다.
+compute01은 8 vCPU·32 GiB, compute02는 4 vCPU·16 GiB이며,
+CP/worker별 2 vCPU·2 GiB·20 GB를 유지한다.
+S1 복구 목적지 증설 근거와 과거 검증의 구분은 [ADR-0017](docs/adr/0017-increase-recovery-target-compute-capacity.md)을 따른다.
 worker 3대는 기능 검증용 상한이며 성능 여유가 검증된 값은 아니다.
 
 조회는 기존 kubeconfig/터널을 사용하고 자동 준비·복구를 수행하지 않는다.

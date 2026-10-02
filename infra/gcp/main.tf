@@ -22,7 +22,8 @@ locals {
     }
     compute01 = {
       name                       = "osk8s-compute01"
-      machine_type               = "n2-standard-4"
+      # The control-plane VM and the recovery destination worker share this host.
+      machine_type               = "n2-standard-8"
       address                    = "10.20.0.21"
       disk_size_gb               = 120
       nested_kvm                 = true

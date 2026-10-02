@@ -35,6 +35,8 @@ export ENV
 	graduation-s4-analyze graduation-s4-run-status graduation-s4-workflow-status graduation-s4-resume \
 	graduation-s1-prepare graduation-s1-verify graduation-s1-baseline graduation-s1-cleanup graduation-s1-status \
 	graduation-s1-contention graduation-s1-contention-cleanup graduation-s1-contention-status \
+	graduation-s1-auto graduation-s1-auto-cleanup graduation-s1-auto-status graduation-s1-spread \
+	graduation-foundation graduation-csi graduation-s2 graduation-s2-cleanup graduation-s3 graduation-s3-cleanup \
 	status lint
 
 help:
@@ -150,6 +152,12 @@ help:
 	@echo "  graduation-s1-verify Recheck the S1 service and Pod-to-Nova identity"
 	@echo "  graduation-s1-baseline Run a direct Service baseline from the workload control plane"
 	@echo "  graduation-s1-contention Run S1 same-compute CPU contention and manual Pod relocation"
+	@echo "  graduation-s1-auto Detect sustained contention and relocate to an eligible worker"
+	@echo "  graduation-s1-spread Place a new empty test worker on the alternate compute"
+	@echo "  graduation-foundation Enable Neutron QoS and dedicated Cinder lab storage"
+	@echo "  graduation-csi Install the pinned Cinder CSI driver and StorageClass"
+	@echo "  graduation-s2 Compare shared egress contention, fixed and adaptive QoS"
+	@echo "  graduation-s3 Fence a disconnected worker and recover the same PostgreSQL volume"
 	@echo "  graduation-s1-contention-cleanup Remove a leftover S1 competitor VM and load Job"
 	@echo "  graduation-s1-cleanup Remove S1 resources and restore worker control"
 	@echo "  graduation-s1-status Show the local S1 preparation record"
@@ -460,6 +468,36 @@ graduation-s1-contention-cleanup:
 
 graduation-s1-contention-status:
 	@bash scripts/graduation-s1-contention.sh status
+
+graduation-s1-auto:
+	@bash scripts/graduation-s1-auto.sh run --seconds "$(or $(SECONDS),1080)"
+
+graduation-s1-spread:
+	@bash scripts/graduation-s1-spread.sh
+
+graduation-s1-auto-cleanup:
+	@bash scripts/graduation-s1-auto.sh cleanup
+
+graduation-s1-auto-status:
+	@bash scripts/graduation-s1-auto.sh status
+
+graduation-foundation:
+	@bash scripts/graduation-foundation.sh apply
+
+graduation-csi:
+	@bash scripts/graduation-csi.sh
+
+graduation-s2:
+	@bash scripts/graduation-s2.sh run
+
+graduation-s2-cleanup:
+	@bash scripts/graduation-s2.sh cleanup
+
+graduation-s3:
+	@bash scripts/graduation-s3.sh run
+
+graduation-s3-cleanup:
+	@bash scripts/graduation-s3.sh cleanup
 
 status:
 	@scripts/status.sh
