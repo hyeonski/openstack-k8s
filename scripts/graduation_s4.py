@@ -8,6 +8,7 @@ from pathlib import Path
 from string import Template
 import sys
 import time
+import uuid
 
 from graduation_env import atomic_json, utc_now
 from worker_control import WorkerControl
@@ -260,7 +261,7 @@ class S4Preparation:
         if previous:
             raise RuntimeError('unfinished S4 preparation exists; clean it up before preparing again')
         mode, observed = self.preflight()
-        record = {'version': 1, 'created': utc_now(),
+        record = {'version': 1, 'run_id': 's4-prep-' + uuid.uuid4().hex[:12], 'created': utc_now(),
                   'environment_run_id': environment['run_id'],
                   'cluster_uid': observed['cluster_uid'], 'md_uid': observed['md_uid'],
                   'original_mode': mode, 'original_workers': observed['workers']}

@@ -47,6 +47,19 @@ def nova_status(server):
     return row
 
 
+def require_fresh_fixture(prior, preparation):
+    """Repeat only after a new owned fixture replaces a fully finalized trial."""
+    if not prior or prior.get('environment_run_id') != preparation.get('environment_run_id'):
+        return
+    final_path = Path(prior.get('evidence', '')) / 'finalization.json'
+    final = json.loads(final_path.read_text()) if final_path.is_file() else {}
+    if prior.get('phase') not in ('completed', 'completed_with_gap') or\
+            not preparation.get('run_id') or preparation['run_id'] == prior.get('preparation_run_id') or\
+            preparation.get('mhc_uid') == prior.get('mhc_uid') or\
+            final.get('fixture_phase') != 'restored':
+        raise RuntimeError('S4 experiment already ran in this prepared environment; a new restored fixture is required')
+
+
 def s4_host_budget(preparation_record):
     names = set(preparation_record['initial_hosts'])
     rows = json.loads(command(['gcloud', 'compute', 'instances', 'list',
@@ -287,11 +300,11 @@ class S4Run:
             prior = self.read()
             if prior and prior['phase'] not in ('completed', 'completed_with_gap', 'failed'):
                 raise RuntimeError('unfinished S4 experiment exists; use observe, never inject twice')
-            if prior and self.preparation.read().get('environment_run_id') == prior['environment_run_id']:
-                raise RuntimeError('S4 experiment already ran in this prepared environment')
+            require_fresh_fixture(prior, self.preparation.read())
             prep, verified, evidence, target, originals, budget = self.check_preflight()
             record = {'version': 1, 'run_id': 's4-' + uuid.uuid4().hex[:12],
                       'environment_run_id': prep['environment_run_id'], 'created': utc_now(),
+                      'preparation_run_id': prep.get('run_id'),
                       'evidence': str(evidence), 'target': target, 'original_workers': originals,
                       'probe_name': 'new-worker-probe-' + uuid.uuid4().hex[:8],
                       'mhc_uid': verified['mhc_uid'], 'host_deadline_epoch': budget,

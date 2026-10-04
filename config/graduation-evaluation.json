@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "repetitions": 5,
+  "environment": "cloud-gcp-amd64-greenfield",
+  "project": "openstack-k8s",
+  "zone": "asia-northeast3-a",
+  "hosts": {"osk8s-controller": "e2-standard-4", "osk8s-compute01": "n2-standard-8", "osk8s-compute02": "n2-standard-4"},
+  "kubernetes_version": "v1.35.7",
+  "source_compute": "osk8s-compute02",
+  "target_compute": "osk8s-compute01",
+  "control_plane_compute": "osk8s-compute01",
+  "s1": {"rate": 5, "rounds": 100000, "seconds": 1080, "modes": ["automatic", "no-action"]},
+  "s2": {"rate": 2, "response_bytes": 262144, "window_seconds": 60, "egress_mbps": 20, "burst_kbits": 250, "rates_kbps": [6000, 10000, 14000, 18000], "comparison_orders": ["fixed-first", "dynamic-first"]},
+  "s3": {"committed_records": 1000, "stable_requests": 60, "modes": ["automatic", "runbook"], "runbook_scope": "Separate explicit CLI steps executed by the evaluation runner. Human detection and reaction time are not measured."},
+  "s4": {"repetitions": 5, "stable_seconds": 30, "probe_path": "Kubernetes API Service proxy"},
+  "negative_cases": ["s1:no-destination", "s2:qos-rejection", "s3:fence-refusal", "s4:interrupt-resume"],
+  "max_case_seconds": 5400,
+  "host_headroom_seconds": 7200,
+  "manual_s1": "No human participant; no human manual-recovery-time claim. Automatic recovery is compared against a matched no-action control.",
+  "result_policy": "All scheduled attempts are retained. Measurement failures are not silently replaced. Thresholds and capacity stay fixed. Any source/profile change creates a new cohort."
+}

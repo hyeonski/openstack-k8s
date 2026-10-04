@@ -390,6 +390,20 @@ class S1Contention:
     def recovery_checks(self, record, rows, baseline_p95):
         return {}
 
+    def verify_intervention(self, record, moved):
+        if moved['node'] != record['target_node'] or moved['pod_uid'] == record['service_before']['pod_uid']:
+            raise RuntimeError('S1 HTTP Pod did not relocate to the alternate worker')
+        target_after = self.s1.placement(moved['nova_id'])
+        if target_after['compute_host'] != record['target_compute_host']:
+            raise RuntimeError('S1 target worker compute placement changed')
+
+    def evaluation_result(self, summary, valid):
+        """Keep measurement validity separate from the intervention's recovery result."""
+        summary['measurement_valid'] = bool(valid)
+        summary['state'] = 'passed' if valid and summary['latency_recovery_within_1_2x'] and\
+            all(summary['recovery_checks'].values()) else 'needs_review'
+        return summary
+
     def observe_recovery(self, record, job_name):
         time.sleep(self.recovery_seconds)
 
@@ -432,11 +446,7 @@ class S1Contention:
             self.s1.k('-n', NAMESPACE, 'rollout', 'status', 'deployment/http',
                       '--timeout=5m', timeout=330)
             moved = self.s1.verify()
-            if moved['node'] != record['target_node'] or moved['pod_uid'] == record['service_before']['pod_uid']:
-                raise RuntimeError('S1 HTTP Pod did not relocate to the alternate worker')
-            target_after = self.s1.placement(moved['nova_id'])
-            if target_after['compute_host'] != record['target_compute_host']:
-                raise RuntimeError('S1 target worker compute placement changed')
+            self.verify_intervention(record, moved)
             self.write(record, 'relocated', service_after=moved, relocated_at=utc_now())
             relocated_host = host_sample('relocated')
             self.observe_recovery(record, job_name)
@@ -509,9 +519,9 @@ class S1Contention:
                        'target_compute_host': record['target_compute_host'],
                        'latency_impact_over_1_5x': bool(impact),
                        'latency_recovery_within_1_2x': bool(recovery),
-                       'state': 'passed' if quality and impact and recovery and
-                       host_contention and all(controls.values()) and all(checks.values()) and
-                       not pod_throttling_observed else 'needs_review'}
+                       'state': 'needs_review'}
+            summary = self.evaluation_result(summary, quality and impact and host_contention and
+                                             all(controls.values()) and not pod_throttling_observed)
             atomic_json(evidence / 'summary.json', summary)
             self.write(record, 'measured', summary_state=summary['state'])
             return summary
