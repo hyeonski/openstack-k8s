@@ -37,6 +37,7 @@ export ENV
 	graduation-s1-contention graduation-s1-contention-cleanup graduation-s1-contention-status \
 	graduation-s1-auto graduation-s1-auto-cleanup graduation-s1-auto-status graduation-s1-spread \
 	graduation-foundation graduation-csi graduation-s2 graduation-s2-cleanup graduation-s3 graduation-s3-cleanup \
+	graduation-evaluation-freeze graduation-evaluation-run graduation-evaluation-status graduation-evaluation-verify \
 	status lint
 
 help:
@@ -504,3 +505,15 @@ status:
 
 lint:
 	@scripts/lint.sh
+
+graduation-evaluation-freeze:
+	@bash scripts/graduation-evaluation.sh freeze
+
+graduation-evaluation-run:
+	@bash scripts/graduation-evaluation.sh run --campaign "$(CAMPAIGN)"
+
+graduation-evaluation-status:
+	@bash scripts/graduation-evaluation.sh status --campaign "$(CAMPAIGN)"
+
+graduation-evaluation-verify:
+	@python3 scripts/graduation_evaluation_verify.py "$(CAMPAIGN)"

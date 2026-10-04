@@ -21,6 +21,9 @@ S1 서비스·부하·정상 기준선의 실행 절차는
 S1 자동 재배치·S2 QoS·S3 Cinder/DB 복구의 실행 계약은
 [`docs/graduation/recovery-automation.md`](docs/graduation/recovery-automation.md),
 실환경 검증 기록은 [`docs/graduation/recovery-validation-2026-10-02.md`](docs/graduation/recovery-validation-2026-10-02.md)에 있다.
+최종 조건 고정, 반복·비교 평가, 실제 실패·중단 시험과 독립 재검증 절차는
+[`docs/graduation/final-evaluation.md`](docs/graduation/final-evaluation.md)에 정리했다.
+반복 평가의 최신 집계·검증 수치·보존한 오류·남은 작업은 [최종 반복 평가 결과](docs/graduation/final-evaluation-results-2026-10-03.md)에서 확인한다.
 worker 수동·자동 제어 모드와 중단 후 복원 절차는
 [`docs/worker-control.md`](docs/worker-control.md)에 정리했다.
 실행 취소·재개·정리 및 시간 상한은 [`docs/run-lifecycle.md`](docs/run-lifecycle.md)를 따른다.

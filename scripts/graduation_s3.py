@@ -274,6 +274,8 @@ crictl ps --name db -o json
             self.save('committed-records-after.json', recovered_rows)
             self.sql("begin; insert into evidence values (1001, 'after-recovery'); commit;")
             new = self.sql('select value from evidence where id=1001')
+            self.save('new-transaction.json', {'time': utc_now(), 'id': 1001, 'value': new,
+                                             'operation': 'COMMIT completed, followed by a separate SELECT'})
             stable = self.sample('stabilization', seconds=60)
             source_final = self.admin_json('server', 'show', source['nova_id'])
             hypervisor = self.remote('sudo docker exec nova_libvirt virsh domstate ' + shlex.quote(source['instance_name']), host=source['host'])
@@ -390,6 +392,10 @@ rm /run/osk8s-s3-owner
                     return False
                 return pods[0]
             self.save('controller-manager-restored.json', wait_for(restored_policy, seconds=180))
+            restored_manifest = self.guest(cp, 'cat ' + path)
+            if hashlib.sha256(restored_manifest.encode()).hexdigest() != r['controller_original_sha256']:
+                raise RuntimeError('controller-manager manifest did not restore byte-for-byte')
+            self.save('controller-manager-after.yaml', restored_manifest)
         self.restore_workers()
         self.write('cleaned')
         return r

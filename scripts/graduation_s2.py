@@ -44,6 +44,7 @@ def next_rate(current, healthy):
 
 
 class S2(RecoveryLab):
+    comparison_order = 'fixed-first'
     def __init__(self):
         super().__init__('s2')
 
@@ -124,6 +125,25 @@ print(json.dumps(dict(rows=[json.loads(line) for line in raw.splitlines()], prog
         self.write('measured-' + name)
         return result
 
+    def dynamic_windows(self, base):
+        current, history = RATES[0], []
+        for i in range(5):
+            self.set_rate(current)
+            metric = self.window('dynamic-' + str(i))
+            healthy = stable(base, metric)
+            history.append({'rate': current, 'healthy': healthy})
+            following = next_rate(current, healthy)
+            if not healthy and current == RATES[0]:
+                raise RuntimeError('API did not recover at the minimum allowed upload rate')
+            if not healthy:
+                current = following
+                break
+            if following == current:
+                break
+            current = following
+        self.set_rate(current)
+        return history, [self.window('stable-' + str(i)) for i in range(2)]
+
     def run(self):
         workers = self.start()
         try:
@@ -185,7 +205,10 @@ print(json.dumps(dict(rows=[json.loads(line) for line in raw.splitlines()], prog
             self.write('diagnosed' if diagnosis else 'deferred', diagnosis=diagnosis)
             if not diagnosis:
                 raise RuntimeError('service impact and shared egress contention not established')
-            self.set_rate(10000)
+            if self.comparison_order not in ('fixed-first', 'dynamic-first'):
+                raise RuntimeError('unsupported S2 comparison order')
+            self.write('comparison-planned', comparison_order=self.comparison_order)
+            self.set_rate(10000 if self.comparison_order == 'fixed-first' else RATES[0])
             old = self.pods('upload')[0]
             self.save('upload-before.jsonl', self.k('-n', self.ns, 'logs', old['metadata']['name']))
             progress = self.remote('curl -fsS http://198.18.0.2:8090/progress')
@@ -196,29 +219,18 @@ print(json.dumps(dict(rows=[json.loads(line) for line in raw.splitlines()], prog
             if any(p['metadata']['uid'] == old['metadata']['uid'] for p in self.pods('upload')):
                 raise RuntimeError('old uploader is still present')
             self.write('relocated', upload_after=self.pods('upload')[0])
-            fixed = [self.window('fixed-' + str(i)) for i in range(2)]
+            if self.comparison_order == 'fixed-first':
+                fixed = [self.window('fixed-' + str(i)) for i in range(2)]
+            else:
+                history, final = self.dynamic_windows(base)
             # Controlled comparison: separate ports with no QoS still use the same bottleneck.
             self.admin('port', 'unset', '--qos-policy', b['port']['id'])
             split = self.window('split-unlimited')
-            current = RATES[0]
-            history = []
-            for i in range(5):
-                self.set_rate(current)
-                metric = self.window('dynamic-' + str(i))
-                healthy = stable(base, metric)
-                history.append({'rate': current, 'healthy': healthy})
-                following = next_rate(current, healthy)
-                if not healthy and current == RATES[0]:
-                    raise RuntimeError('API did not recover at the minimum allowed upload rate')
-                # A failed upward exploration backs off and stabilizes without another increase.
-                if not healthy:
-                    current = following
-                    break
-                if following == current:
-                    break
-                current = following
-            self.set_rate(current)
-            final = [self.window('stable-' + str(i)) for i in range(2)]
+            if self.comparison_order == 'fixed-first':
+                history, final = self.dynamic_windows(base)
+            else:
+                self.set_rate(10000)
+                fixed = [self.window('fixed-' + str(i)) for i in range(2)]
             api_after = self.pods('api')
             progress_after = json.loads(self.remote('curl -fsS http://198.18.0.2:8090/progress'))
             self.save('upload-after.jsonl', self.k('-n', self.ns, 'logs', 'deployment/upload'))
@@ -242,6 +254,7 @@ print(json.dumps({'rows':rows,'all_files_valid':valid,'bytes':sum(row[1] for row
                           api_after[0]['spec']['nodeName'] == a['node'],
                       'old_uploader_terminated': not any(p['metadata']['uid'] == old['metadata']['uid'] for p in self.pods('upload'))}
             summary = {'checks': checks, 'passed': all(checks.values()), 'windows': self.record['windows'],
+                       'comparison_order': self.comparison_order,
                        'dynamic_decisions': history, 'policy_changes': self.record['policy_changes'],
                        'progress': progress_after}
             self.save('summary.json', summary)
