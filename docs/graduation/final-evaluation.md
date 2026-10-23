@@ -1,10 +1,13 @@
 # 최종 반복·비교 및 실패 경로 평가 계약
 
-작성: 2026-10-02. 이 문서는 실행 계약이며, 실행 성공이나 반복 신뢰도를 선언하지 않는다. 결과는 실행별 원본과 독립 검증 파일로 확인한다.
+작성: 2026-10-02. 실행 코드 위치 정리: 2026-10-23.
+반복 평가는 `evaluation/`의 선택 도구이며 일반 테스트베드 시작·단일 실험과 분리한다.
+파일 이동·공통 코드 변경 뒤의 새 평가는 새 freeze로 시작한다. 과거 캠페인의 해시·원본은 바꾸지 않는다.
+ 이 문서는 실행 계약이며, 실행 성공이나 반복 신뢰도를 선언하지 않는다. 결과는 실행별 원본과 독립 검증 파일로 확인한다.
 
 ## 고정 조건
 
-설정은 `config/graduation-evaluation.json`, 실행 코드는 `scripts/graduation_evaluation.py`와 `scripts/graduation_evaluation_case.py`에 있다. `freeze`는 코드·매니페스트·공개 환경 설정의 SHA-256과 사본, 비공개 로컬 override의 해시, 예정된 34개 실행을 보존한다. 실행 전후 해시가 달라지면 같은 cohort를 계속하지 않는다. 정책이나 환경을 수정한 경우 이전 시도를 남기고 별도 cohort를 만든다.
+설정은 `config/graduation-evaluation.json`, 실행 코드는 `evaluation/graduation_evaluation.py`와 `evaluation/graduation_evaluation_case.py`에 있다. `freeze`는 코드·매니페스트·공개 환경 설정의 SHA-256과 사본, 비공개 로컬 override의 해시, 예정된 34개 실행을 보존한다. 실행 전후 해시가 달라지면 같은 cohort를 계속하지 않는다. 정책이나 환경을 수정한 경우 이전 시도를 남기고 별도 cohort를 만든다.
 
 - GCP: controller `e2-standard-4`, compute01 `n2-standard-8`, compute02 `n2-standard-4`.
 - workload control plane과 worker: 각각 2 vCPU, 2 GiB, 20 GB. Kubernetes v1.35.7.

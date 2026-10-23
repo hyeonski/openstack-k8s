@@ -1,519 +1,69 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
-
 override ENV := cloud-gcp-amd64
-
 export PROJECT_ROOT := $(CURDIR)
 export ENV
 
-.PHONY: help bootstrap-preflight preflight secrets-check inventory host-prepare kolla-sync openstack-precheck \
-	gcp-bootstrap gcp-iac-init gcp-iac-validate gcp-iac-import gcp-iac-plan gcp-iac-show-plan \
-	gcp-iac-apply gcp-foundation-plan gcp-foundation-show-plan gcp-foundation-apply \
-	gcp-floating-ip-route-plan gcp-floating-ip-route-show-plan gcp-floating-ip-route-apply \
-	gcp-status gcp-start gcp-stop gcp-host-verify gcp-deployment-key-setup \
-	gcp-wait-ssh gcp-openstack-recover gcp-sync-inputs gcp-controller-management-prepare lab-up \
-	openstack-pull openstack-deploy openstack-validate \
-	openstack-post-deploy openstack-bootstrap openstack-verify openstack-verification-cleanup \
-	kubernetes-image-builder-create kubernetes-image-builder-destroy \
-	kubernetes-image-build kubernetes-image-upload kubernetes-image-verify \
-	kubernetes-image management-cluster-create management-cluster-verify \
-	management-cluster-destroy capi-providers-install capi-providers-verify \
-	capi-credentials-verify workload-cluster-create workload-cluster-verify \
-	workload-cluster-scale workload-cluster-prepare workload-cluster-status workload-cluster-probe \
-	workload-cluster-diagnostics workload-cluster-destroy \
-	cluster-autoscaler-install cluster-autoscaler-verify \
-	cluster-autoscaler-test cluster-autoscaler-test-cleanup cluster-autoscaler-diagnostics \
-	cluster-autoscaler-test-status cluster-autoscaler-test-cancel cluster-autoscaler-test-reconcile cluster-autoscaler-test-resume \
-	cluster-autoscaler-mode cluster-autoscaler-control-status cluster-autoscaler-control-recover \
-	observability-gcp-status observability-gcp-setup observability-gcp-dedupe \
-	observability-hosts-install observability-workload-guests-start \
-	observability-hosts-status observability-clusters-install observability-clusters-status \
-	observability-verify observability-publish-run \
-	graduation-env-status graduation-env-ensure graduation-env-reconcile graduation-env-down \
-	graduation-s4-prepare graduation-s4-verify graduation-s4-cleanup graduation-s4-status \
-	graduation-s4-run graduation-s4-e2e graduation-s4-inject graduation-s4-observe \
-	graduation-s4-analyze graduation-s4-run-status graduation-s4-workflow-status graduation-s4-resume \
-	graduation-s1-prepare graduation-s1-verify graduation-s1-baseline graduation-s1-cleanup graduation-s1-status \
-	graduation-s1-contention graduation-s1-contention-cleanup graduation-s1-contention-status \
-	graduation-s1-auto graduation-s1-auto-cleanup graduation-s1-auto-status graduation-s1-spread \
-	graduation-foundation graduation-csi graduation-s2 graduation-s2-cleanup graduation-s3 graduation-s3-cleanup \
-	graduation-evaluation-freeze graduation-evaluation-run graduation-evaluation-status graduation-evaluation-verify \
-	status lint
+# Infrastructure -> scenarios. Telemetry and repeated evaluation are opt-in commands.
+include make/infrastructure.mk
+include experiments/commands.mk
+include observability/commands.mk
+include evaluation/commands.mk
+
+.PHONY: help help-experiments help-observability help-evaluation lab-start lab-status lab-stop experiment experiment-foundation
 
 help:
-	@echo "  cluster-autoscaler-test-{status,cancel,reconcile,resume}  Experiment lifecycle (mutations require RUN_ID)"
-	@echo "OpenStack/Kubernetes testbed automation"
-	@echo
-	@echo "Usage: make <target>"
-	@echo
-	@echo "GCP host lifecycle:"
-	@echo "  bootstrap-preflight    Check auth and local tools without requiring infrastructure"
-	@echo "  preflight              Read-only checks for an existing GCP foundation"
-	@echo "  secrets-check          Validate local secret permissions and Git ignores"
-	@echo "  status                 Show GCP instance and project state"
-	@echo "  gcp-status             Show exact GCP host state and runtime limit"
-	@echo "  gcp-start              Start only the declared GCP hosts"
-	@echo "  gcp-stop               Stop only the declared GCP hosts"
-	@echo "  gcp-host-verify        Run the GCP host readiness gate"
-	@echo "  gcp-openstack-recover  Recover OpenStack services after GCP host restart"
-	@echo "  gcp-deployment-key-setup Install the project key for controller-to-compute SSH"
-	@echo "  gcp-sync-inputs        Sync deployment code without installing Kolla"
-	@echo "  gcp-controller-management-prepare Move the private kind API gate to the controller"
-	@echo
-	@echo "GCP infrastructure:"
-	@echo "  gcp-bootstrap          Enable required APIs in an existing billed project"
-	@echo "  gcp-iac-init           Initialize OpenTofu/Terraform providers"
-	@echo "  gcp-iac-validate       Validate the GCP declaration"
-	@echo "  gcp-iac-import         Import existing resources without changing GCP"
-	@echo "  gcp-iac-plan           Save and classify the adoption plan"
-	@echo "  gcp-iac-show-plan      Display the saved adoption plan"
-	@echo "  gcp-foundation-plan    Plan only safe greenfield foundation creates"
-	@echo "  gcp-foundation-apply   Apply the saved foundation plan (CONFIRM=$(ENV))"
-	@echo "  gcp-floating-ip-route-plan  Plan the post-host Floating IP route"
-	@echo "  gcp-floating-ip-route-apply Apply the isolated route (CONFIRM=$(ENV))"
-	@echo "  lab-up                 Deploy the full testbed (CONFIRM=$(ENV))"
-	@echo
-	@echo "OpenStack deployment:"
-	@echo "  inventory              Generate the current Ansible/Kolla inventory"
-	@echo "  host-prepare           Prepare Ubuntu hosts, swap and external veth/NAT"
-	@echo "  kolla-sync             Sync deployment inputs to the controller"
-	@echo "  openstack-precheck     Run Kolla bootstrap and prechecks"
-	@echo "  openstack-pull         Cache required OpenStack images on both hosts"
-	@echo "  openstack-deploy       Deploy OpenStack with Kolla-Ansible"
-	@echo "  openstack-validate     Validate rendered service configurations"
-	@echo "  openstack-post-deploy  Generate admin credentials"
-	@echo "  openstack-bootstrap    Create networks, images and CAPO project credentials"
-	@echo "  openstack-verify       Run CirrOS, Ubuntu and CAPO-network preflight"
-	@echo "  openstack-verification-cleanup  Remove a preserved verification VM and Floating IP"
-	@echo
-	@echo "Kubernetes node image:"
-	@echo "  kubernetes-image-builder-create  Create the isolated GCP AMD64 image builder"
-	@echo "  kubernetes-image-build           Build and checksum the Kubernetes QCOW2"
-	@echo "  kubernetes-image-builder-destroy Delete only the image builder (CONFIRM=$(ENV))"
-	@echo "  kubernetes-image-upload          Upload the pinned image to Glance"
-	@echo "  kubernetes-image-verify          Boot and verify the image with Nova"
-	@echo "  kubernetes-image                 Upload and verify an existing built image"
-	@echo
-	@echo "Management cluster:"
-	@echo "  management-cluster-create  Create and verify the pinned single-node kind cluster"
-	@echo "  management-cluster-verify  Verify Ready state and the in-cluster OpenStack API path"
-	@echo "  management-cluster-destroy Delete only the kind cluster (CONFIRM=$(ENV))"
-	@echo
-	@echo "CAPI/CAPO workload cluster:"
-	@echo "  capi-providers-install    Install pinned CAPI, kubeadm, CAPO and ORC providers"
-	@echo "  capi-providers-verify     Verify provider versions and controller readiness"
-	@echo "  capi-credentials-verify   Verify the application credential from a kind Pod"
-	@echo "  workload-cluster-create   Create and verify one control plane and one worker"
-	@echo "  workload-cluster-prepare  Explicitly apply intended Calico probe settings"
-	@echo "  workload-cluster-status   One read-only observation (WORKERS=1)"
-	@echo "  workload-cluster-probe    Run owned API and per-node CNI/DNS probes"
-	@echo "  workload-cluster-verify   Read-only convergence check (WORKERS=1)"
-	@echo "  workload-cluster-scale    Manually scale workers within 1:3"
-	@echo "  workload-cluster-diagnostics Collect CAPI/Nova/bootstrap/compute diagnostics"
-	@echo "  workload-cluster-destroy  Delete exact workload Cluster (two confirmations)"
-	@echo
-	@echo "M3 Cluster Autoscaler:"
-	@echo "  cluster-autoscaler-install     Install pinned CA and dual-cluster RBAC"
-	@echo "  cluster-autoscaler-verify      Verify image, arguments, access and min/max"
-	@echo "  cluster-autoscaler-test        Run automatic 1-2-3-2-1-2-1 requests test"
-	@echo "  cluster-autoscaler-test-cleanup Preserve evidence, remove owned test resources"
-	@echo "  cluster-autoscaler-mode        Set MODE=auto or MODE=fixed for worker control"
-	@echo "  cluster-autoscaler-control-status Show recorded and actual worker control state"
-	@echo "  cluster-autoscaler-control-recover Reconcile an interrupted worker operation"
-	@echo "  cluster-autoscaler-diagnostics Preserve redacted M3 failure evidence"
-	@echo
-	@echo "Observability (1-4):"
-	@echo "  observability-gcp-status       Inspect independent telemetry storage and identity"
-	@echo "  observability-gcp-setup        Create storage/identity while hosts are stopped (CONFIRM=$(ENV))"
-	@echo "  observability-gcp-dedupe       Exclude dedicated telemetry logs from _Default (CONFIRM=$(ENV))"
-	@echo "  observability-workload-guests-start Start current CAPI VMs left SHUTOFF after GCE boot"
-	@echo "  observability-hosts-install   Install GCE host collectors and Nova inventory timer"
-	@echo "  observability-clusters-install Install collectors in management and workload clusters"
-	@echo "  observability-verify          Query recent GCP metrics/logs for missing data"
-	@echo "  observability-publish-run     Publish RUN_DIR correlation manifest to GCS"
-	@echo
-	@echo "Graduation experiments:"
-	@echo "  graduation-env-status   Inspect exact existing GCP hosts and last environment record"
-	@echo "  graduation-env-ensure   Verify the existing testbed; start only stopped hosts and guests"
-	@echo "  graduation-env-reconcile Recheck exact hosts after an interrupted preparation"
-	@echo "  graduation-env-down    Stop only hosts started by this environment run"
-	@echo "  graduation-s4-prepare  Fix two workers; apply worker MHC and HTTP test service"
-	@echo "  graduation-s4-verify   Recheck MHC scope, Pod placement and HTTP responses"
-	@echo "  graduation-s4-cleanup  Remove owned S4 resources and restore worker control"
-	@echo "  graduation-s4-status   Show locally recorded S4 preparation state"
-	@echo "  graduation-s4-run      Prepare, inject, analyze and clean S4 on an already Ready environment"
-	@echo "  graduation-s4-e2e      Ensure existing environment, run S4, then stop only owned GCP hosts"
-	@echo "  graduation-s4-inject   Low-level exact Nova worker stop and service/capacity observation"
-	@echo "  graduation-s4-observe  Continue observation after interruption without stopping a VM again"
-	@echo "  graduation-s4-analyze  Rebuild JSON/CSV/report table from immutable S4 run evidence"
-	@echo "  graduation-s4-run-status Show locally recorded S4 experiment state"
-	@echo "  graduation-s4-workflow-status Show the composite S4 workflow state"
-	@echo "  graduation-s4-resume Resume an interrupted S4 workflow without another VM stop"
-	@echo "  graduation-s1-prepare Fix two workers and create the S1 CPU HTTP service"
-	@echo "  graduation-s1-verify Recheck the S1 service and Pod-to-Nova identity"
-	@echo "  graduation-s1-baseline Run a direct Service baseline from the workload control plane"
-	@echo "  graduation-s1-contention Run S1 same-compute CPU contention and manual Pod relocation"
-	@echo "  graduation-s1-auto Detect sustained contention and relocate to an eligible worker"
-	@echo "  graduation-s1-spread Place a new empty test worker on the alternate compute"
-	@echo "  graduation-foundation Enable Neutron QoS and dedicated Cinder lab storage"
-	@echo "  graduation-csi Install the pinned Cinder CSI driver and StorageClass"
-	@echo "  graduation-s2 Compare shared egress contention, fixed and adaptive QoS"
-	@echo "  graduation-s3 Fence a disconnected worker and recover the same PostgreSQL volume"
-	@echo "  graduation-s1-contention-cleanup Remove a leftover S1 competitor VM and load Job"
-	@echo "  graduation-s1-cleanup Remove S1 resources and restore worker control"
-	@echo "  graduation-s1-status Show the local S1 preparation record"
-	@echo
-	@echo "Development:"
-	@echo "  lint                    Static checks that do not mutate the host"
-
-bootstrap-preflight:
-	@scripts/gcp-preflight.sh bootstrap
-
-preflight:
-	@scripts/gcp-preflight.sh
-
-gcp-bootstrap:
-	@scripts/gcp-project-bootstrap.sh "$(CONFIRM)"
-
-gcp-iac-init:
-	@scripts/gcp-iac.sh init
-
-gcp-iac-validate:
-	@scripts/gcp-iac.sh validate
-
-gcp-iac-import:
-	@scripts/gcp-iac.sh import
-
-gcp-iac-plan:
-	@scripts/gcp-iac.sh plan
-
-gcp-iac-show-plan:
-	@scripts/gcp-iac.sh show-plan
-
-gcp-foundation-plan:
-	@scripts/gcp-iac.sh foundation-plan
-
-gcp-foundation-show-plan:
-	@scripts/gcp-iac.sh foundation-show-plan
-
-gcp-foundation-apply:
-	@scripts/gcp-iac.sh foundation-apply "$(CONFIRM)"
-
-gcp-iac-apply: gcp-foundation-apply
-
-gcp-floating-ip-route-plan:
-	@scripts/gcp-iac.sh route-plan
-
-gcp-floating-ip-route-show-plan:
-	@scripts/gcp-iac.sh route-show-plan
-
-gcp-floating-ip-route-apply:
-	@scripts/gcp-iac.sh route-apply "$(CONFIRM)"
-
-gcp-status:
-	@scripts/gcp-hosts.sh status
-
-gcp-start:
-	@scripts/gcp-hosts.sh start
-
-gcp-stop:
-	@scripts/gcp-hosts.sh stop
-
-gcp-host-verify:
-	@scripts/gcp-hosts.sh verify
-
-gcp-wait-ssh:
-	@scripts/gcp-hosts.sh wait-ssh
-
-gcp-openstack-recover:
-	@scripts/gcp-openstack-recover.sh
-
-gcp-deployment-key-setup:
-	@scripts/setup-project-ssh.sh
-
-gcp-sync-inputs: inventory
-	@scripts/sync-to-controller.sh inputs-only
-
-gcp-controller-management-prepare:
-	@scripts/gcp-iac.sh controller-management
-
-observability-gcp-status:
-	@observability/gcp-setup.sh status
-
-observability-gcp-setup:
-	@observability/gcp-setup.sh apply "$(CONFIRM)"
-
-observability-gcp-dedupe:
-	@observability/gcp-setup.sh dedupe "$(CONFIRM)"
-
-observability-hosts-install:
-	@observability/deploy-hosts.sh install
-
-observability-workload-guests-start:
-	@observability/start-workload-guests.sh
-
-observability-hosts-status:
-	@observability/deploy-hosts.sh status
-
-observability-clusters-install:
-	@observability/deploy-clusters.sh install
-
-observability-clusters-status:
-	@observability/deploy-clusters.sh status
-
-observability-verify:
-	@bash -c 'source scripts/lib/common.sh; observability/verify-live.py --project "$$GCP_PROJECT_ID" --region "$$GCP_REGION" --host-cluster "$${ENVIRONMENT_NAME}-hosts"'
-
-observability-publish-run:
-	@observability/publish-run.sh "$(RUN_DIR)"
-
-secrets-check:
-	@scripts/secrets-check.sh
-
-inventory:
-	@scripts/generate-inventory.sh
-
-host-prepare: kolla-sync
-	@scripts/run-controller.sh prepare-hosts
-
-kolla-sync: inventory
-	@scripts/sync-to-controller.sh
-
-openstack-precheck: kolla-sync
-	@scripts/configure-kolla.sh
-	@scripts/run-kolla.sh bootstrap-servers
-	@scripts/run-kolla.sh prechecks
-
-openstack-pull: kolla-sync
-	@scripts/configure-kolla.sh
-	@scripts/run-kolla.sh pull
-
-openstack-deploy: kolla-sync
-	@scripts/configure-kolla.sh
-	@scripts/run-kolla.sh deploy
-
-openstack-validate:
-	@scripts/configure-kolla.sh
-	@scripts/run-kolla.sh validate-config
-
-openstack-post-deploy:
-	@scripts/run-kolla.sh post-deploy
-	@scripts/fetch-admin-clouds.sh
-
-openstack-bootstrap:
-	@scripts/bootstrap-openstack.sh
-
-openstack-verify:
-	@scripts/openstack-verify.sh
-
-openstack-verification-cleanup:
-	@scripts/openstack-verify.sh cleanup
-
-kubernetes-image-builder-create:
-	@scripts/gcp-image-builder.sh create
-
-kubernetes-image-builder-destroy:
-	@scripts/gcp-image-builder.sh delete "$(CONFIRM)"
-
-kubernetes-image-build:
-	@scripts/build-kubernetes-image.sh
-
-kubernetes-image-upload:
-	@scripts/upload-kubernetes-image.sh
-
-kubernetes-image-verify:
-	@scripts/verify-kubernetes-image.sh
-
-kubernetes-image: kubernetes-image-upload kubernetes-image-verify
-
-management-cluster-create:
-	@scripts/gcp-management-cluster.sh create
-
-management-cluster-verify:
-	@scripts/gcp-management-cluster.sh verify
-
-management-cluster-destroy:
-	@scripts/gcp-management-cluster.sh destroy "$(CONFIRM)"
-
-capi-providers-install:
-	@scripts/capi-providers.sh install
-
-capi-providers-verify:
-	@scripts/capi-providers.sh verify
-
-capi-credentials-verify:
-	@scripts/capi-providers.sh credentials
-
-workload-cluster-create:
-	@scripts/workload-cluster.sh create
-
-workload-cluster-prepare:
-	@scripts/workload-cluster.sh prepare
-
-workload-cluster-status:
-	@scripts/workload-cluster.sh status "$(or $(WORKERS),1)"
-
-workload-cluster-probe:
-	@scripts/workload-cluster.sh probe
-
-workload-cluster-verify:
-	@scripts/workload-cluster.sh verify "$(or $(WORKERS),1)"
-
-workload-cluster-scale:
-	@scripts/workload-cluster.sh scale "$(or $(WORKERS),2)"
-
-workload-cluster-diagnostics:
-	@scripts/workload-cluster.sh diagnostics
-
-workload-cluster-destroy:
-	@scripts/workload-cluster.sh destroy "$(CONFIRM)" "$(CONFIRM_CLUSTER)"
-
-cluster-autoscaler-install:
-	@scripts/cluster-autoscaler.sh install
-
-cluster-autoscaler-verify:
-	@scripts/cluster-autoscaler.sh verify
-
-cluster-autoscaler-test:
-	@scripts/cluster-autoscaler.sh test
-
-cluster-autoscaler-test-status cluster-autoscaler-test-cancel cluster-autoscaler-test-reconcile cluster-autoscaler-test-resume:
-	@scripts/cluster-autoscaler.sh $(patsubst cluster-autoscaler-%,%,$@)
-
-cluster-autoscaler-test-cleanup:
-	@scripts/cluster-autoscaler.sh test-cleanup
-
-cluster-autoscaler-mode:
-	@scripts/cluster-autoscaler.sh mode "$(MODE)"
-
-cluster-autoscaler-control-status:
-	@scripts/cluster-autoscaler.sh control-status
-
-cluster-autoscaler-control-recover:
-	@scripts/cluster-autoscaler.sh control-recover
-
-cluster-autoscaler-diagnostics:
-	@scripts/cluster-autoscaler.sh diagnostics
-
-lab-up:
-	@scripts/lab-up.sh "$(CONFIRM)"
-
-graduation-env-status:
-	@bash scripts/graduation-env.sh status
-
-graduation-env-ensure:
-	@bash scripts/graduation-env.sh ensure
-
-graduation-env-reconcile:
-	@bash scripts/graduation-env.sh reconcile
-
-graduation-env-down:
-	@bash scripts/graduation-env.sh down
-
-graduation-s4-prepare:
-	@bash scripts/graduation-s4.sh prepare
-
-graduation-s4-verify:
-	@bash scripts/graduation-s4.sh verify
-
-graduation-s4-cleanup:
-	@bash scripts/graduation-s4.sh cleanup
-
-graduation-s4-status:
-	@bash scripts/graduation-s4.sh status
-
-graduation-s4-run:
-	@bash scripts/graduation-s4-workflow.sh scenario
-
-graduation-s4-e2e:
-	@bash scripts/graduation-s4-workflow.sh e2e
-
-graduation-s4-inject:
-	@bash scripts/graduation-s4-run.sh run
-
-graduation-s4-observe:
-	@bash scripts/graduation-s4-run.sh observe
-
-graduation-s4-analyze:
-	@bash scripts/graduation-s4-analyze.sh
-
-graduation-s4-run-status:
-	@bash scripts/graduation-s4-run.sh status
-
-graduation-s4-workflow-status:
-	@bash scripts/graduation-s4-workflow.sh status
-
-graduation-s4-resume:
-	@bash scripts/graduation-s4-workflow.sh resume
-
-graduation-s1-prepare:
-	@bash scripts/graduation-s1.sh prepare
-
-graduation-s1-verify:
-	@bash scripts/graduation-s1.sh verify
-
-graduation-s1-baseline:
-	@bash scripts/graduation-s1.sh baseline --rate "$(or $(RATE),5)" --rounds "$(or $(ROUNDS),100000)" --warmup "$(or $(WARMUP),60)" --measure "$(or $(MEASURE),300)"
-
-graduation-s1-cleanup:
-	@bash scripts/graduation-s1.sh cleanup
-
-graduation-s1-status:
-	@bash scripts/graduation-s1.sh status
-
-graduation-s1-contention:
-	@bash scripts/graduation-s1-contention.sh run --rate "$(or $(RATE),5)" --rounds "$(or $(ROUNDS),100000)" --seconds "$(or $(SECONDS),780)"
-
-graduation-s1-contention-cleanup:
-	@bash scripts/graduation-s1-contention.sh cleanup
-
-graduation-s1-contention-status:
-	@bash scripts/graduation-s1-contention.sh status
-
-graduation-s1-auto:
-	@bash scripts/graduation-s1-auto.sh run --seconds "$(or $(SECONDS),1080)"
-
-graduation-s1-spread:
-	@bash scripts/graduation-s1-spread.sh
-
-graduation-s1-auto-cleanup:
-	@bash scripts/graduation-s1-auto.sh cleanup
-
-graduation-s1-auto-status:
-	@bash scripts/graduation-s1-auto.sh status
-
-graduation-foundation:
-	@bash scripts/graduation-foundation.sh apply
-
-graduation-csi:
-	@bash scripts/graduation-csi.sh
-
-graduation-s2:
-	@bash scripts/graduation-s2.sh run
-
-graduation-s2-cleanup:
-	@bash scripts/graduation-s2.sh cleanup
-
-graduation-s3:
-	@bash scripts/graduation-s3.sh run
-
-graduation-s3-cleanup:
-	@bash scripts/graduation-s3.sh cleanup
-
-status:
-	@scripts/status.sh
-
-lint:
-	@scripts/lint.sh
-
-graduation-evaluation-freeze:
-	@bash scripts/graduation-evaluation.sh freeze
-
-graduation-evaluation-run:
-	@bash scripts/graduation-evaluation.sh run --campaign "$(CAMPAIGN)"
-
-graduation-evaluation-status:
-	@bash scripts/graduation-evaluation.sh status --campaign "$(CAMPAIGN)"
-
-graduation-evaluation-verify:
-	@python3 scripts/graduation_evaluation_verify.py "$(CAMPAIGN)"
+	@echo "OpenStack + Kubernetes testbed"
+	@echo ""
+	@echo "Start here: README.md (code map and first deployment)"
+	@echo "Choose ENV_OVERRIDE_FILE for your existing deployment before running commands."
+	@echo ""
+	@echo "  make lab-up CONFIRM=<environment>  First deployment; see README prerequisites"
+	@echo "  make lab-start                    Start/recover the existing testbed"
+	@echo "  make lab-status                   Inspect hosts and recorded environment state"
+	@echo "  make experiment SCENARIO=s1       Run a scenario; s1, s2, s3, s4"
+	@echo "  make lab-stop                     Stop only hosts started by this environment run"
+	@echo "  make lint                         Offline checks"
+	@echo ""
+	@echo "  make help-experiments             Scenario prerequisites, status and cleanup"
+	@echo "  make help-observability           Optional continuous telemetry"
+	@echo "  make help-evaluation              Optional frozen repeat/comparison campaign"
+	@echo "  make help-all                     Low-level infrastructure and diagnostic commands"
+
+lab-start: graduation-env-ensure
+lab-status: graduation-env-status
+lab-stop: graduation-env-down
+
+experiment:
+	@bash experiments/run.sh "$(SCENARIO)" "$(or $(ACTION),run)"
+
+experiment-foundation:
+	@$(MAKE) --no-print-directory graduation-foundation
+	@$(MAKE) --no-print-directory graduation-csi
+
+help-experiments:
+	@echo "Start with make lab-start. S2/S3 additionally need make experiment-foundation once."
+	@echo "  make experiment SCENARIO=s1|s2|s3|s4 [ACTION=run|status|cleanup]"
+	@echo "  make experiment SCENARIO=s4 ACTION=resume"
+	@echo "Runs include fixture preparation where needed and cleanup after success."
+	@echo "On failure, evidence and ownership records remain: inspect status, then cleanup/resume."
+	@echo "The environment stays running. lab-stop refuses unfinished experiments."
+	@echo "S1 runs automatic relocation; baseline/manual comparison commands: make help-all."
+	@echo "Code: experiments/; procedure: docs/graduation/experiments.md"
+
+help-observability:
+	@echo "Optional OTel + Cloud Monitoring/Logging + GCS; not required for scenario decisions."
+	@echo "Setup changes IAM/storage and host identity: follow observability/README.md."
+	@echo "  make observability-gcp-status"
+	@echo "  make observability-hosts-status observability-clusters-status"
+	@echo "  make observability-verify"
+	@echo "Local experiment evidence is retained even without cloud telemetry."
+
+help-evaluation:
+	@echo "Optional fixed-profile repeat/comparison/negative tests; separate from a single experiment."
+	@echo "Read docs/graduation/final-evaluation.md and config/graduation-evaluation.json first."
+	@echo "  make graduation-evaluation-freeze"
+	@echo "  make graduation-evaluation-status CAMPAIGN=<absolute-path>"
+	@echo "  make graduation-evaluation-run CAMPAIGN=<absolute-path>"
+	@echo "  make graduation-evaluation-verify CAMPAIGN=<absolute-path>"
+	@echo "Code: evaluation/. Existing frozen campaigns retain their original code hashes."

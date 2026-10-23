@@ -1,6 +1,8 @@
 # 관측 운영과 증거 보존
 
-GCP·OpenStack·Kubernetes의 상시 관측 배포·조회와 한계를 설명한다.
+GCP·OpenStack·Kubernetes의 **선택 기능인 상시 관측** 배포·조회와 한계를 설명한다.
+`lab-start`와 단일 실험은 이 수집·전송 시스템을 설치하거나 평가 캠페인을 실행하지 않는다.
+로컬 증거 생성과 guest 기동은 `scripts/`의 공통 기능이며 관측 설치 없이도 사용한다.
 **2026-09-24에 정상 30분·전체 증감·Pod 실패 후 추적·수집기/gateway 중단·복귀를 검증했다.**
 범위·예외는 [종합 검증](../docs/foundation-priority1-final-validation-2026-09-24.md),
 초기 상태는 [최초 배포 기록](live-validation-2026-09-24.md)에 있다. 현재 클라우드 상태를 새로 확인한 기록은 아니다.
@@ -35,7 +37,7 @@ Federation을 쓰는 구성은 아니다. Kolla의 Prometheus·Fluentd와 이 OT
 | Nova 서비스·VM 상태·배치와 조회 주기 | [openstack-inventory.py](openstack-inventory.py), [timer](openstack-inventory.timer) |
 | node·Pod·container·volume 지표와 로그 | [management agent](k8s-agent-config.yaml.tpl), [workload agent](k8s-workload-agent-config.yaml.tpl) |
 | Node·Pod 상태·Events, 배치·권한·heartbeat | [cluster 설정](k8s-cluster-config.yaml.tpl), [매니페스트](k8s-collectors.yaml), [설치·CA 검사](deploy-clusters.sh) |
-| 식별자·관측 수명·누락 판정·업로드 허용 목록 | [manifest 생성](build-run-manifest.py), [검증기](verify-live.py), [publish](publish-run.sh) |
+| 식별자·관측 수명·누락 판정·업로드 허용 목록 | [manifest 생성](../scripts/build-run-manifest.py), [검증기](verify-live.py), [publish](publish-run.sh) |
 
 실행 ID·단계별 UTC·Pod/Node/Machine/Nova UID·compute 배치를 연결한다. 고정 호스트 지표에
 매 실행 ID를 붙이지 않고 manifest의 시간 구간으로 조회한다. 명령 요청과 실제 상태 확인,
@@ -82,7 +84,7 @@ make observability-gcp-dedupe CONFIRM=cloud-gcp-amd64
 다른 노드의 최신 표본으로 누락을 가리지 않으며 조용한 Events·앱 로그 자체는 장애로 판정하지 않는다.
 
 자동 증감 실행 후 `make observability-publish-run RUN_DIR=/absolute/path/to/autoscaler-cycle-...`로
-허용된 manifest·result만 GCS에 보낸다. 과거 실행은 `observability/build-run-manifest.py <run-dir>`로
+허용된 manifest·result만 GCS에 보낸다. 과거 실행은 `scripts/build-run-manifest.py <run-dir>`로
 인덱싱할 수 있다. 이미 만든 manifest는 덮어쓰지 않으며 v2는 단계 snapshot·UID·최초/최종 시각과
 짧게 존재한 probe Pod를 보존한다. 졸업작품의 전체 요청 원본·진단은 로컬 `artifacts/`에 남는다.
 

@@ -6,6 +6,9 @@ if [[ -z "${PROJECT_ROOT:-}" ]]; then
   PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fi
 
+# Python commands share core helpers and the explicitly invoked scenarios.
+export PYTHONPATH="${PROJECT_ROOT}/scripts:${PROJECT_ROOT}/experiments${PYTHONPATH:+:${PYTHONPATH}}"
+
 CONFIG="${ENV_CONFIG:-${PROJECT_ROOT}/config/environments/cloud-gcp-amd64.env}"
 
 if [[ ! -f "${CONFIG}" ]]; then

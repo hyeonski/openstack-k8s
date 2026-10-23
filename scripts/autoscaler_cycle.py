@@ -444,7 +444,7 @@ def main():
             # Keep the run/time/Machine/Node/Nova relation even on a failed stage.
             if action == 'test':
                 try:
-                    command([sys.executable, ROOT / 'observability/build-run-manifest.py', path], timeout=30)
+                    command([sys.executable, ROOT / 'scripts/build-run-manifest.py', path], timeout=30)
                 except BaseException as manifest_error:
                     print('WARN: observability manifest unavailable: ' + str(manifest_error), file=sys.stderr)
 

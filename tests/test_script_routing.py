@@ -9,28 +9,34 @@ PROJECT_ROOT = pathlib.Path(__file__).parents[1]
 MAKEFILE = PROJECT_ROOT / "Makefile"
 
 
+def command_sources():
+    files = [MAKEFILE, *sorted(PROJECT_ROOT.glob('*/commands.mk')),
+             PROJECT_ROOT / 'make/infrastructure.mk']
+    return '\n'.join(p.read_text() for p in files)
+
+
 class ScriptRoutingTests(unittest.TestCase):
     def test_make_script_references_exist(self) -> None:
-        text = MAKEFILE.read_text()
-        referenced = set(re.findall(r"scripts/[A-Za-z0-9_./-]+\.(?:sh|py)", text))
+        text = command_sources()
+        referenced = set(re.findall(r"(?:scripts|experiments|evaluation|observability)/[A-Za-z0-9_./-]+\.(?:sh|py)", text))
 
         self.assertTrue(referenced)
         for relative in referenced:
             self.assertTrue((PROJECT_ROOT / relative).is_file(), relative)
 
     def test_all_make_targets_are_phony(self) -> None:
-        text = MAKEFILE.read_text()
+        text = command_sources()
         logical_text = text.replace("\\\n", " ")
-        phony_match = re.search(r"(?m)^\.PHONY:\s*(.+)$", logical_text)
+        phony_matches = re.findall(r"(?m)^\.PHONY:[ \t]*(.+)$", logical_text)
 
-        self.assertIsNotNone(phony_match)
-        phony = set(phony_match.group(1).split())
+        self.assertTrue(phony_matches)
+        phony = {name for line in phony_matches for name in line.split()}
         targets = set(re.findall(r"(?m)^([A-Za-z0-9_.-]+):", text))
         targets.discard(".PHONY")
         self.assertEqual(set(), targets - phony)
 
     def test_public_targets_route_to_consolidated_commands(self) -> None:
-        text = MAKEFILE.read_text()
+        text = command_sources()
 
         expected = {
             "bootstrap-preflight": "scripts/gcp-preflight.sh bootstrap",
@@ -66,7 +72,8 @@ class ScriptRoutingTests(unittest.TestCase):
             r"(?m)(?:^\s*|[|;&]\s*)scripts/[A-Za-z0-9_.-]+"
         )
 
-        for script in (PROJECT_ROOT / "scripts").glob("*.sh"):
+        for script in (p for folder in ("scripts", "experiments", "evaluation")
+                       for p in (PROJECT_ROOT / folder).glob("*.sh")):
             self.assertIsNone(relative_call.search(script.read_text()), script.name)
 
 

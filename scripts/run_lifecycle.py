@@ -156,7 +156,7 @@ class RunLifecycle:
                                           'reason': 'runner lost; recovered under exclusive lock',
                                           'cleanup': 'not attempted; reconcile actual resources'})
         if not (attempt / 'observability-manifest.json').exists():
-            command(['python3', ROOT / 'observability/build-run-manifest.py', attempt], timeout=30)
+            command(['python3', ROOT / 'scripts/build-run-manifest.py', attempt], timeout=30)
 
     def identity(self):
         _, observed = self.control.preflight('auto')
@@ -319,7 +319,7 @@ class RunLifecycle:
             self.client.run_check = None
             self.client.deadline = None
             try:
-                command(['python3', ROOT / 'observability/build-run-manifest.py', attempt], timeout=30)
+                command(['python3', ROOT / 'scripts/build-run-manifest.py', attempt], timeout=30)
             except BaseException as exc:
                 save(attempt / 'manifest-error.txt', str(exc))
             save(self.path / 'result.json', {'state': self.record['state'], 'time': now(),

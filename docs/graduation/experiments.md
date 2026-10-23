@@ -4,6 +4,17 @@
 [장애 정의서](failure-scenarios.md), 고정 반복 평가의 조건·비교군·해석은
 [평가 계약](final-evaluation.md), 실측 결과는 [최종 평가](final-evaluation-results-2026-10-03.md)를 따른다.
 
+## 기본 진입점
+
+기존 환경은 `make lab-start`, 단일 실험은 `make experiment SCENARIO=s1|s2|s3|s4`를 사용한다.
+S1은 prepare·spread·verify·자동 대응·정리를 순서대로 실행한다. S2·S3는 각 실행과 정리,
+S4는 기존 workflow를 사용한다. S2·S3 기반 준비는 별도 `make experiment-foundation`이다.
+성공 시 시험 자원을 정리하고 환경은 유지한다. 중간 실패 시 다음 명령을 실행하지 않고 증거를 보존한다.
+
+`ACTION=status|cleanup`으로 같은 시나리오를 조회·정리하며 S4는 `ACTION=resume`도 지원한다.
+아래의 세부 명령은 기준선·비교·수동 진단이 필요한 경우에 사용한다. 새 진입점은 별도 상태
+파일이나 복구 정책을 만들지 않고 기존 실행기와 같은 기록·잠금·판정을 사용한다.
+
 ## 공통 준비와 코드 기준
 
 기존 테스트베드에서 올바른 환경 override와 API 터널을 유지하는 실행 세션을 사용한다.
@@ -22,11 +33,11 @@ make graduation-env-ensure
 | 확인할 설정·동작 | 코드 기준 |
 |---|---|
 | 명령 인자와 기본값 | [Makefile](../../Makefile) |
-| S1 서비스·요청·기준선 | [app.py](../../kubernetes/graduation-s1/app.py), [loadgen.py](../../kubernetes/graduation-s1/loadgen.py), [graduation_s1.py](../../scripts/graduation_s1.py) |
-| S1 경합·자동 진단·회복 정책 | [경합 실행기](../../scripts/graduation_s1_contention.py), [자동 대응의 POLICY·판정 함수](../../scripts/graduation_s1_auto.py) |
-| S2 경로·QoS 단계·판정 | [S2 실행기](../../scripts/graduation_s2.py), [네트워크 준비](../../scripts/graduation-s2-network.sh) |
-| S3 저장소·fencing·데이터 검증 | [foundation](../../scripts/graduation-foundation-remote.sh), [CSI 설정](../../kubernetes/graduation-s3/csi/kustomization.yaml), [S3 실행기](../../scripts/graduation_s3.py) |
-| S4 교체·서비스·시간 상한 | [MHC](../../kubernetes/graduation-s4/machine-health-check.yaml.tpl), [HTTP 서비스](../../kubernetes/graduation-s4/http-service.yaml), [실행기](../../scripts/graduation_s4_run.py), [workflow](../../scripts/graduation_s4_workflow.py) |
+| S1 서비스·요청·기준선 | [app.py](../../kubernetes/graduation-s1/app.py), [loadgen.py](../../kubernetes/graduation-s1/loadgen.py), [graduation_s1.py](../../experiments/graduation_s1.py) |
+| S1 경합·자동 진단·회복 정책 | [경합 실행기](../../experiments/graduation_s1_contention.py), [자동 대응의 POLICY·판정 함수](../../experiments/graduation_s1_auto.py) |
+| S2 경로·QoS 단계·판정 | [S2 실행기](../../experiments/graduation_s2.py), [네트워크 준비](../../experiments/graduation-s2-network.sh) |
+| S3 저장소·fencing·데이터 검증 | [foundation](../../experiments/graduation-foundation-remote.sh), [CSI 설정](../../kubernetes/graduation-s3/csi/kustomization.yaml), [S3 실행기](../../experiments/graduation_s3.py) |
+| S4 교체·서비스·시간 상한 | [MHC](../../kubernetes/graduation-s4/machine-health-check.yaml.tpl), [HTTP 서비스](../../kubernetes/graduation-s4/http-service.yaml), [실행기](../../experiments/graduation_s4_run.py), [workflow](../../experiments/graduation_s4_workflow.py) |
 | 반복 평가의 고정 부하·횟수·사양 | [graduation-evaluation.json](../../config/graduation-evaluation.json) |
 
 수치 정책을 바꾸면 과거 측정 결과의 조건도 같다고 간주하지 않는다. 평가 중 조건 변경은

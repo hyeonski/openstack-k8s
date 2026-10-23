@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path[:0] = [str(Path(__file__).resolve().parents[1] / d) for d in ('experiments', 'evaluation')]
 from graduation_s4_run import S4Run, s4_host_budget, summarize_capacity, summarize_http
 
 

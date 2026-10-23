@@ -13,34 +13,10 @@ import json
 import os
 from pathlib import Path
 import subprocess
-import tempfile
 import time
 import uuid
 
-
-def utc_now():
-    return dt.datetime.now(dt.timezone.utc).isoformat()
-
-
-def atomic_json(path: Path, value):
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    fd, temporary = tempfile.mkstemp(prefix='.' + path.name + '.', dir=path.parent)
-    try:
-        with os.fdopen(fd, 'w') as stream:
-            json.dump(value, stream, indent=2, ensure_ascii=False)
-            stream.write('\n')
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.chmod(temporary, 0o600)
-        os.replace(temporary, path)
-        directory = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
+from lib.state import atomic_json, utc_now
 
 
 class Commands:
@@ -153,7 +129,7 @@ class Environment:
     def start_current_guests(self, data, attempts=3):
         for attempt in range(1, attempts + 1):
             try:
-                output = self.command(self.root / 'observability/start-workload-guests.sh', timeout=360)
+                output = self.command(self.root / 'scripts/start-workload-guests.sh', timeout=360)
                 data.pop('guest_error', None)
                 data['guest_recovery'] = [line for line in output.splitlines() if 'workload guest' in line]
                 self.record(data, 'recovering')

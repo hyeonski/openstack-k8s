@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 sys.path.insert(0, str(ROOT / 'kubernetes/graduation-s1'))
 from app import Handler
+sys.path[:0] = [str(Path(__file__).resolve().parents[1] / d) for d in ('experiments', 'evaluation')]
 from graduation_s1 import S1, analyze_rows, host_cpu_pressure, host_cpu_utilization, pod_cpu_delta
 from graduation_s1_contention import (S1Contention, load_job, recovery_controls,
                                       stress_user_data, summarize_window)

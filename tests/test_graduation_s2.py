@@ -11,6 +11,7 @@ from unittest.mock import Mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path[:0] = [str(Path(__file__).resolve().parents[1] / d) for d in ('experiments', 'evaluation')]
 from graduation_s2 import S2, analyze, impacted, stable, next_rate
 spec = importlib.util.spec_from_file_location('s2_workload', ROOT / 'kubernetes/graduation-s2/workload.py')
 workload = importlib.util.module_from_spec(spec)

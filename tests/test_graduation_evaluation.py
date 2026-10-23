@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path[:0] = [str(Path(__file__).resolve().parents[1] / d) for d in ('experiments', 'evaluation')]
 from graduation_evaluation import schedule, Campaign, interruption_ready
 from graduation_evaluation_case import EvaluationS1, OrderedWorkers, run_s3_step
 from graduation_evaluation_verify import percentile, verify_s2, verify_negative

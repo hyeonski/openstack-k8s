@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path[:0] = [str(Path(__file__).resolve().parents[1] / d) for d in ('experiments', 'evaluation')]
 from graduation_s3 import S3, require_fenced, volume_matches
 
 
@@ -13,8 +14,8 @@ class S3SafetyTests(unittest.TestCase):
         runner = S3.__new__(S3)
         runner.client = Mock()
         runner.record = {'md_uid': 'md', 'original_mode': 'auto', 'original_workers': 1}
-        runner.s1 = Mock()
-        runner.s1.worker.return_value = ('auto', {'workers': 1})
+        runner.runtime = Mock()
+        runner.runtime.worker.return_value = ('auto', {'workers': 1})
         with patch('graduation_recovery.WorkerControl') as control_class, \
                 patch('graduation_recovery.command') as command, \
                 patch('graduation_recovery.time.sleep') as sleep:
