@@ -12,7 +12,7 @@
 
 - `cloud-gcp-amd64-greenfield`, Kubernetes v1.35.7, Kolla 2025.2, Neutron OVS.
 - 3번: S1 증거 기반 자동 재배치. 4번: S2 업로드 분리·QoS. 5번: S3 Cinder·CSI·PostgreSQL fencing 복구.
-- 서비스 기준과 실행 계약은 [복구 자동화](recovery-automation.md)에 기록한다.
+- 서비스 기준과 실행 계약은 [복구 자동화](experiments.md)에 기록한다.
 
 ## 기반 서비스 확인
 

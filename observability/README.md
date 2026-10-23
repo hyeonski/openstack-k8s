@@ -1,52 +1,52 @@
-# 기반작업 1-4: 상시 관측 구현
+# 관측 운영과 증거 보존
 
-이 디렉터리는 [1-4 아키텍처](../docs/product/monitoring-logging-architecture.md)의 배포 입력이다. **2026-09-24 최종 구성의 정상 30분·전체 증감·Pod 실패 후 추적·수집기 및 gateway 중단과 복귀 시험을 통과했다.** 범위·예외·원본 증거는 [1순위 종합 검증](../docs/foundation-priority1-final-validation-2026-09-24.md)에 있다. [최초 라이브 기록](live-validation-2026-09-24.md)은 당시 상태를 보존한다.
+GCP·OpenStack·Kubernetes의 상시 관측 배포·조회와 한계를 설명한다.
+**2026-09-24에 정상 30분·전체 증감·Pod 실패 후 추적·수집기/gateway 중단·복귀를 검증했다.**
+범위·예외는 [종합 검증](../docs/foundation-priority1-final-validation-2026-09-24.md),
+초기 상태는 [최초 배포 기록](live-validation-2026-09-24.md)에 있다. 현재 클라우드 상태를 새로 확인한 기록은 아니다.
 
-## 배치와 데이터 계약
+## 경로와 책임
 
 ```mermaid
 flowchart LR
   H[GCE controller·compute 수집기] --> G[Cloud Monitoring GMP·Cloud Logging]
-  K[management·workload DaemonSet] --> T[mTLS: controller gateway]
-  C[클러스터 상태·Events] --> T
+  K[management·workload 수집기] --> T[controller mTLS gateway]
   T --> G
-  O[Nova 서비스·VM 배치 30초 조회] --> H
-  R[실행 단계·UID manifest] --> S[GCS 증거 bucket]
+  O[Nova 상태·VM 배치 조회] --> H
+  A[Kubernetes·OpenStack API와 서비스 검사] --> R[로컬 실험 실행기]
+  R --> L[로컬 원본·판정·진단]
+  L --> S[GCS 허용 manifest·result]
 ```
 
-| 계층 | 지표/로그 | 간격·연결 키 |
-|---|---|---|
-| controller·compute | OpenTelemetry hostmetrics CPU/메모리/로드/디스크/네트워크/페이징, syslog, Kolla 파일, 1분 heartbeat | 15초. `environment`, `service.instance.id`(호스트), UTC |
-| OpenStack | Nova compute service·hypervisor·server 상태/배치의 허용된 필드만 JSONL | 약 30초. Nova server ID, compute host, UTC. 조회 실패도 별도 기록 |
-| management·workload | node/Pod/container/volume·파일시스템 지표, Pod 로그, Node/Pod 상태 지표, Events | 15초 지표, 발생 시 로그. 클러스터·node·Pod 경로/UID |
-| workload Nova VM | hostmetrics, kubelet/containerd journal | DaemonSet이 새 노드에 자동 배치. VM→Machine→Node 매핑은 실행 manifest와 Nova 조회로 연결 |
-| 자동 증감 실행 | 단계 UTC 구간, Machine/OSMachine/Node/Nova/실행 소유 Pod UID, 누락된 조회 | 기존 `autoscaler_cycle.py`가 끝날 때 `observability-manifest.json`을 작성 |
+GCE 수집기는 전용 서비스 계정으로 직접 전송한다. Nova guest에는 GCP 키를 배포하지 않고
+클라이언트 인증서로 controller gateway에 전송한다. 자체 Kubernetes Workload Identity
+Federation을 쓰는 구성은 아니다. Kolla의 Prometheus·Fluentd와 이 OTel 배포도 별개다.
 
-Cloud Monitoring의 `prometheus.googleapis.com/*` 시계열을 PromQL·Metrics Explorer에서 조회한다. Cloud Logging의 `osk8s-otel` 로그는 서울 리전 `osk8s-observability` bucket으로 라우팅한다. GCS `gs://osk8s-<project-number>-evidence/<environment>/<run-id>/`에는 실행 manifest와 결과만 업로드한다. 상세 진단 파일은 현재 로컬 `artifacts/`에 남는다.
+실험 실행기는 현재 Kubernetes/OpenStack 상태와 서비스 능동 검사로 조치한다. GCP 조회는
+조치의 전제 조건이 아니라 재현·감사·비교 근거다. 호스트 평균 사용률이나 VM 생성 성공만으로
+특정 요청 지연의 원인·성능 여유를 확정하지 않는다. 시나리오별 판단 근거는
+[S1~S4 실험 운영](../docs/graduation/experiments.md)을 따른다.
 
-졸업작품 자동 복구 모듈은 이 GCP 저장소를 조회해 조치하지 않는다. Kubernetes/OpenStack의 현재 상태와 서비스 능동 검사로 판단하고, GCP는 재현·감사·비교 근거를 보존한다. GCP 전송 또는 controller 장애로 workload 로그가 밀리면 로컬 큐와 `missing_data`로 드러나야 한다. controller가 중단된 동안 Nova guest→GCP 경로도 멈춘다. GCE compute 수집기는 각자 GCP에 전송한다.
+| 확인할 내용 | 코드 기준 |
+|---|---|
+| API·IAM·bucket·sink·보존 정책 | [gcp-setup.sh](gcp-setup.sh) |
+| 호스트 설치·버전·로그 회전, 인증서 생성 | [host-install.sh](host-install.sh), [deploy-hosts.sh](deploy-hosts.sh) |
+| 호스트 지표·Kolla 로그·gateway·큐 | [controller 설정](host-collector.yaml.tpl), [compute 설정](compute-collector.yaml.tpl) |
+| Nova 서비스·VM 상태·배치와 조회 주기 | [openstack-inventory.py](openstack-inventory.py), [timer](openstack-inventory.timer) |
+| node·Pod·container·volume 지표와 로그 | [management agent](k8s-agent-config.yaml.tpl), [workload agent](k8s-workload-agent-config.yaml.tpl) |
+| Node·Pod 상태·Events, 배치·권한·heartbeat | [cluster 설정](k8s-cluster-config.yaml.tpl), [매니페스트](k8s-collectors.yaml), [설치·CA 검사](deploy-clusters.sh) |
+| 식별자·관측 수명·누락 판정·업로드 허용 목록 | [manifest 생성](build-run-manifest.py), [검증기](verify-live.py), [publish](publish-run.sh) |
 
-지표의 큐 재전송 순서를 지키기 위해 Kubernetes OTLP와 호스트 GMP exporter는 consumer 1개를 사용한다. gateway는 guest 지표를 다시 batch로 합치지 않고 agent의 수집 묶음을 그대로 전달해 동일 시계열의 여러 시점이 한 API 요청에 들어가지 않게 한다. OTLP는 gateway 기동·재연결을 포함해 최대 10분 재시도하며 큐 용량은 1,000 batches다. 호스트 heartbeat·Nova JSONL은 원래 `time`을 로그 timestamp로 보존한다. 무기한 또는 포화 상태의 무손실 전송을 보장하지 않는다. 수용 시험에서는 대상별 공백 판정과 함께 수집기 전송 실패·수신 거부·큐 상태 및 영구 드롭 로그를 확인한다.
+실행 ID·단계별 UTC·Pod/Node/Machine/Nova UID·compute 배치를 연결한다. 고정 호스트 지표에
+매 실행 ID를 붙이지 않고 manifest의 시간 구간으로 조회한다. 명령 요청과 실제 상태 확인,
+값 0과 측정 불가, 실행 성공과 증거 완전성을 구분한다. heartbeat·Nova 로그는 원래 발생 시각을 보존한다.
 
-## GCP에 적용할 변경
+## 설치·조회 순서
 
-`gcp-setup.sh apply cloud-gcp-amd64`의 변경 내용은 다음과 같다. 세 GCE 호스트가 모두 중지된 상태인지 먼저 검사한다.
-
-1. 이미 사용 중인 Logging, Monitoring, Telemetry, IAM, Storage API의 활성화를 확인한다.
-2. `osk8s-telemetry` 서비스 계정을 만들고 프로젝트에서 `roles/logging.logWriter`, `roles/monitoring.metricWriter`만 부여한다.
-3. 서울 리전에 Cloud Logging `osk8s-observability` bucket(검색 보존 30일)과 `log_id("osk8s-otel")` sink를 만든다. 전용 bucket 유입을 확인한 뒤 `gcp-setup.sh dedupe`로 `_Default` sink에서 이 로그 ID만 제외한다.
-4. 서울 리전에 공개 접근 차단·균일 권한의 GCS 증거 bucket을 만들고 해당 계정에 bucket 범위 `roles/storage.objectCreator`를 준다. 자동 삭제는 설정하지 않는다.
-5. 중지된 controller/compute 3대에 이 계정을 `cloud-platform` OAuth scope로 붙인다. 실권한은 위 IAM 역할로 제한한다. 기존에 다른 계정이 있으면 중단한다.
-
-호스트 배포는 Docker 기반 OpenTelemetry Collector Contrib `0.140.0`을 systemd 서비스로 설치한다. management와 workload에는 동일 버전의 노드 DaemonSet과 클러스터 상태 Deployment를 설치한다. Nova guest에는 GCP 키를 복사하지 않는다. guest 수집기는 로컬에서 만든 클라이언트 인증서로 controller의 `10.20.0.10:4317`에 mTLS로 전송한다. CA와 키는 `.state/<environment>/secrets/observability/`에 0600으로 저장하며 Git에 넣지 않는다. 서버/클라이언트 인증서는 365일 후 갱신이 필요하다.
-
-로그 전송 직전에 토큰·암호 등 일반적인 패턴을 가리는 processor를 적용한다. 임의의 고객 로그에서 모든 비밀을 가릴 수 있다고 보장하지 않는다. 외부 고객 코드를 넣기 전에는 고객 로그의 수집 범위·접근권·보존·삭제 정책과 별도 격리를 확정해야 한다. 현재 kubelet TLS 서버 인증서 검증은 수집기 설정에서 건너뛰므로, 실제 클러스터 인증서를 확인해 CA 검증으로 교체해야 한다.
-
-## 적용·조회 순서
-
-최초 설치 때는 멈춘 호스트에서 GCP 리소스를 구성한다. 이후 기존 10시간 자동 STOP 정책을 유지하면서 호스트를 켜고, OpenStack이 `SHUTOFF`로 남겨둔 현재 CAPI VM만 시작한 뒤 설치·검증한다. `make gcp-openstack-recover`는 Keystone·Placement·Nova를 확인하지만 guest VM을 시작하지 않는다.
-
-호스트·클러스터 설치와 검증에는 같은 `ENV_OVERRIDE_FILE`을 사용한다. 클러스터 설치는 선택한 프로필의 CA와 controller gateway에 설치된 CA의 SHA-256을 대조하고, 다르면 Kubernetes 설정을 변경하기 전에 중단한다. 이때 같은 프로필로 `observability-hosts-install`을 먼저 수행한다. `make observability-verify`는 해당 환경의 호스트 클러스터 이름을 자동 전달한다. Python 검증기를 직접 호출할 때에는 `--host-cluster <ENVIRONMENT_NAME>-hosts`를 지정한다.
+실제 배포와 같은 `ENV_OVERRIDE_FILE`을 선택한다. 최초 GCP setup은 세 호스트가 모두
+중지되어 있어야 하며 기존의 다른 서비스 계정이 붙어 있으면 거부한다. Logging·Monitoring
+전용 쓰기 권한과 증거 bucket 범위의 objectCreator를 부여한다. 공개 bucket을 만들지 않는다.
+`CONFIRM`은 선택한 환경 이름이며 아래는 기본 환경 예시다.
 
 ```bash
 make observability-gcp-status
@@ -62,21 +62,49 @@ make observability-verify
 make observability-gcp-dedupe CONFIRM=cloud-gcp-amd64
 ```
 
-조회는 [Metrics Explorer](https://console.cloud.google.com/monitoring/metrics-explorer?project=openstack-k8s)에서 PromQL로 `system_*`·`k8s_*` 시계열을, [Logs Explorer](https://console.cloud.google.com/logs/query?project=openstack-k8s)에서 전용 bucket과 `log_id("osk8s-otel")`를 사용한다. `observability/verify-live.py --start <UTC> --end <UTC>`는 세 호스트와 두 클러스터의 지표, Node Ready·Pod phase·Deployment 가용성, heartbeat·Nova·Kolla·Pod·Event 로그를 조회한다. 노드 수집 Pod의 경량 heartbeat 컨테이너는 60초마다 식별자만 로그에 남겨 filelog→gateway→Cloud Logging 경로를 검사한다. 대상별 시계열과 호스트·노드별 heartbeat·Nova 조회 상태를 검사하며, 조회 구간 양끝과 중간에 기본 300초보다 긴 공백이 있으면 `missing_data`다. 다른 대상의 최근 표본으로 누락을 가리지 않는다. Events·앱 로그의 존재는 별도로 표시하며, 조용한 스트림 자체를 수집 장애로 판단하지 않는다.
+`gcp-openstack-recover`는 Nova guest를 시작하지 않으므로 별도 guest 시작 단계가 필요하다.
+클러스터 설치는 선택 프로필의 CA와 gateway에 설치된 CA의 SHA-256이 다르면 변경 전에
+중단한다. 같은 프로필로 호스트 설치부터 수행한다. 전용 로그 bucket의 유입을 검증한 뒤
+`dedupe`로 해당 로그 ID만 `_Default` sink에서 제외한다. GCE 자동 STOP 정책은 유지한다.
 
-`--max-gap-seconds`로 허용 공백을 명시할 수 있다. `--expected-targets <JSON>`은 `targets` 배열의 `cluster`, `instance`, 선택적인 `start_utc`·`end_utc`로 한 번도 보고하지 못한 노드까지 검사한다. 증감 실행의 과거 구간은 `--manifest <schema v2 manifest>`로 삭제된 worker의 관측 수명을 지정한다. 기대 대상 목록 없이 하는 조회는 관측된 대상과 고정 호스트·클러스터의 검사이므로 전체 동적 노드의 완전한 수집을 보장하지 않는다.
+조회는 [Metrics Explorer](https://console.cloud.google.com/monitoring/metrics-explorer)에서
+`prometheus.googleapis.com/*`의 `system_*`·`k8s_*`를, [Logs Explorer](https://console.cloud.google.com/logs/query)에서
+선택 project의 `osk8s-observability` bucket과 `log_id("osk8s-otel")`를 사용한다.
+`make observability-verify`는 환경의 project·region·호스트 클러스터를 전달한다. 검증기를 직접
+호출할 때는 이 인자를 실제 환경에 맞춰 지정한다. 전체 옵션은 `python3 observability/verify-live.py --help`로 확인한다.
 
-manifest v2는 단계 전체 snapshot의 Machine·Node·Pod UID와 최초/최종 관측 시각, 짧게 존재한 probe Pod를 보존한다. 기존 manifest는 불변으로 유지하고 새 실행부터 v2를 생성한다.
+검증기는 대상별 시계열·heartbeat·Nova 상태의 양끝과 중간 공백을 검사한다.
+`--start`·`--end`로 UTC 구간, `--max-gap-seconds`로 허용 공백을 지정한다.
+`--expected-targets <JSON>`의 `targets` 배열에 `cluster`, `instance`, 선택적
+`start_utc`·`end_utc`를 넣으면 한 번도 보고하지 못한 노드도 검사한다.
+삭제된 worker는 `--manifest <schema v2 manifest>`로 관측 수명을 지정한다.
+기대 대상 없이 하는 조회는 모든 동적 노드의 완전한 수집을 보장하지 않는다.
+다른 노드의 최신 표본으로 누락을 가리지 않으며 조용한 Events·앱 로그 자체는 장애로 판정하지 않는다.
 
-자동 증감 실행 후에는 `make observability-publish-run RUN_DIR=/absolute/path/to/autoscaler-cycle-...`로 **허용된 manifest·result만** GCS에 보낸다. 과거 자료를 인덱싱하려면 `observability/build-run-manifest.py <run-dir>`를 한 번 실행한다. 이미 생성된 manifest는 덮어쓰지 않는다.
+자동 증감 실행 후 `make observability-publish-run RUN_DIR=/absolute/path/to/autoscaler-cycle-...`로
+허용된 manifest·result만 GCS에 보낸다. 과거 실행은 `observability/build-run-manifest.py <run-dir>`로
+인덱싱할 수 있다. 이미 만든 manifest는 덮어쓰지 않으며 v2는 단계 snapshot·UID·최초/최종 시각과
+짧게 존재한 probe Pod를 보존한다. 졸업작품의 전체 요청 원본·진단은 로컬 `artifacts/`에 남는다.
 
-## 실제 수용 시험
+## 장애 해석과 남은 범위
 
-1. 정상 30분: host 3대, management, workload의 CPU·메모리·디스크·네트워크·Node/Pod 지표와 host heartbeat·Pod/Events 로그를 Cloud Monitoring/Logging에서 조회한다. collector 로그에 내보내기 실패·큐 드롭이 없는지 본다.
-2. 증감: `1→2→3→2→1→2→1` 실행에서 각 단계 UTC 구간·Machine/Node/Nova/Pod UID·Nova→compute 배치가 조회되는지 본다. 삭제된 worker도 마지막 ID로 과거 로그가 찾아져야 한다. 실패한 시점의 `missing_data`는 실패 판정에 포함한다.
-3. 장애: worker NotReady 또는 Pod 반복 실패를 통제된 조건으로 주입해 장애 전·중·후 지표/로그와 서비스 회복 시각을 확인한다. Ingress 경로와 능동 검사는 기반작업 9번이 준비된 뒤 시험한다.
-4. collector/전송 장애: controller 또는 수집기 중단 시 host와 guest의 자료 누락·복귀, 디스크 큐 포화 여부를 별도 실패로 기록한다.
+- 큐와 재시도는 유한하다. exporter의 표본 순서와 gateway가 표본을 다시 묶지 않는 설정을 유지하고,
+  전송 실패·수신 거부·큐 포화·영구 드롭·복귀 공백을 기록한다. 삭제된 VM의 미전송 큐 복원을 가정하지 않는다.
+- controller 중단 시 guest의 GCP 전송이 멈춘다. compute 수집기는 직접 전송하지만 controller는
+  OpenStack·management 제어 경로이기도 하므로 실험 대응의 지속을 보장하지 않는다.
+- 실행기·HTTP 검사기는 로컬 작업 컴퓨터에 있다. 절전·터널·API 오류의 공백과 서비스 장애,
+  계획된 GCE STOP과 예기치 않은 중단을 구분한다. 시간 상한·소유 자원 정리는 [운영 가이드](../docs/operations.md)를 따른다.
+- 관측 수용 시험은 정상 구간, 전체 증감과 삭제 노드 추적, Pod 실패, 수집기/gateway 중단·복귀를 포함한다.
+  이후 S1~S4 성공이 각 실행의 GCP telemetry 전체 경로 수용까지 뜻하지는 않는다.
+- Grafana·CAPI/CA 내부 reconcile 메트릭은 미구현이다. CA/CAPI의 Pod 상태·Events·로그는 수집한다.
+  일반 고객 Ingress·HTTP 연속성·성능·격리는 [기반 우선순위](../docs/product/infrastructure-priorities.md)의 별도 범위다.
 
-현재 **미검증·후속 범위**: worker NotReady 자동 복구, 고객 서비스의 HTTP 연속성·성능·격리, CAPI/CA 내부 Prometheus endpoint, Grafana 대시보드. Ingress 경로의 능동 검사는 기반작업 9번 이후에 시험한다. CA/CAPI의 Pod 상태·Events·로그는 수집하지만 controller 내부 reconcile 메트릭 scrape는 아직 없다. Pod 반복 실패 시험은 장애 관측과 삭제 후 추적의 근거이며 고객 서비스 자동 복구 완료의 근거는 아니다. 기존 controller Ops Agent는 중복 수집을 피하려고 비활성화했고 정책 label도 제거했다.
+CA·키는 `.state/<environment>/secrets/observability/`에 두고 Git에 넣지 않는다.
+서버·클라이언트 인증서는 365일 후 갱신이 필요하다. kubelet TLS 서버 검증 생략을 CA 검증으로
+교체하고 인증서 갱신 후 전송 복귀를 확인해야 한다. 로그 가림 processor가 임의 고객 로그의
+모든 비밀을 제거한다고 보장하지 않으며 고객별 수집·권한·보존·삭제·격리 정책은 별도로 정해야 한다.
 
-보존: Cloud Logging 30일, Cloud Monitoring Managed Prometheus는 서비스 정책에 따름, GCS 증거는 자동 삭제 없음, 호스트 JSONL은 일 단위 회전 7개를 유지한다. GCS 고객 자료 보존은 PRD 제품의 정책을 정할 때 별도로 확정한다. [OTel 수신](https://docs.cloud.google.com/stackdriver/docs/otlp/overview), [GMP exporter](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter), [Cloud Logging bucket](https://docs.cloud.google.com/logging/docs/buckets).
+현재 Cloud Logging 검색 보존은 30일, GCS 자동 삭제는 없으며 호스트 JSONL은 일 단위 7개를
+유지한다. 관리형 지표 보존은 서비스 정책을 따른다. 수집기 자원·비용·실험 영향의 측정과
+[최종 평가의 API·DNS·Neutron 후속 과제](../docs/graduation/final-evaluation-results-2026-10-03.md)는 남아 있다.
+물리 서버 이전 시에는 별도 관리망·저장소·인증·백업·장애 감지 경로를 새 ADR과 실측으로 검증한다.

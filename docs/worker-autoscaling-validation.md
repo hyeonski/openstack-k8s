@@ -36,7 +36,7 @@
 
 기존 `make gcp-status`의 `labels.env` 필터는 결과를 반환하지 않았다. 호스트 부재로
 판정하지 않고 이름으로 재조회했다. 프로필 선택 확인 사항을
-[범위 밖 기록](product/infrastructure-follow-ups.md)에 남겼으며 기본값 선택 방식은 수정하지 않았다.
+[범위 밖 기록](#follow-ups-2026-09-11)에 남겼으며 기본값 선택 방식은 수정하지 않았다.
 이후 사용자의 기동 승인을 받아 실환경 검증에 착수했다. 실제 배포 프로필은
 기존 `config/environments/local.env`의 `cloud-gcp-amd64-greenfield`였다.
 기본 프로필의 채택 state로는 SSH key metadata와 provider label에 7개 차이가
@@ -302,4 +302,22 @@ SHUTOFF가 확인되어 Machine providerID와 Nova UUID를 대조한 후 별도 
 고객 HTTP 요청의 무중단 처리·SIGTERM/drain 영향, 실제 CPU/HTTP 성능 시험,
 상시 모니터링, HPA, 고객 앱/장애 시나리오, worker 자동 복구, 실행기 재시작/분산
 잠금/보존 기한을 포함한 전체 수명주기 관리는 이번 범위 밖이다. 별도
-[범위 기록](product/infrastructure-follow-ups.md)을 따른다.
+[범위 기록](#follow-ups-2026-09-11)을 따른다.
+
+<a id="follow-ups-2026-09-11"></a>
+
+## 2026-09-11 당시 후속 항목
+
+아래는 당시 범위 기록이다. 이후 구현 상태는 [현재 우선순위](product/infrastructure-priorities.md)를 따른다.
+
+| 후속 항목 | 이번에 구현하지 않은 내용 |
+|---|---|
+| 고객 HTTP 연속성 | 실제 서비스 요청, 오류/timeout 측정, SIGTERM 처리, PDB/replica 설계에 따른 서비스 품질 |
+| 성능·비용 | HTTP 부하/실제 CPU 사용량 측정, compute 포화, 고객 비용 추정. worker 3대의 성능 여유는 미검증 |
+| HPA·상시 관측 | Metrics Server/HPA, Prometheus 등 상시 수집·대시보드 |
+| 장애·복구 | 고객 앱/Ingress/DB 장애 시나리오, worker 자동 복구 또는 MHC |
+| 전체 실행 관리 | 분산 lock, 재시작 후 자동 재개, 중복 작업 조정, TTL/보존 정책, 외부 고객 격리 |
+| GCP status label 계약 | 첫 기본 프로필 조회가 비었으나 실제 배포는 기존 local.env greenfield 프로필임을 실환경 착수 시 확인. 올바른 override/state에서는 No changes. 기본 프로필 오선택 방지 UX는 별도 작업이며 필터 코드 결함으로 확정하지 않음 |
+| host verify gate 통합 | `gcp-host-verify`는 KVM 장치/활성 상태를 검사한다. ADR-0015의 실제 nested kernel boot와 controller→compute SSH는 이번에 별도 실행했다. 이를 단일 host gate로 통합하는 코드는 별도 작업 |
+| 기존 이미지 검사 keypair 소유권 | 기존 image guest 검사는 고정 keypair를 사전 삭제한다. 이번 live 실행은 별도 artifact 스크립트에서 고유 이름·기존 자원 존재 시 중단·생성한 자원만 정리하도록 제한했다. 공통 guest 검사의 소유권 개선은 별도 작업 |
+| 과거 고정 이름 probe | 소유 label 없는 과거 workload API/CNI probe는 자동 삭제하지 않는다. 소유권을 별도 확인해 운영자가 처리 |

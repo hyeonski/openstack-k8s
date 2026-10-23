@@ -6,7 +6,7 @@
 - 작품 주제: **OpenStack 기반 Kubernetes 환경에서 대표 장애 대응 자동화 모듈 프로토타입 설계 및 구현**
 - 적용 관점: 일반적인 OpenStack 위의 Kubernetes 클러스터에서 운영되는 서비스의 장애와 복구
 
-구체적인 실행 파라미터와 자동화 명령은 [3·4·5번 실행 계약](recovery-automation.md),
+구체적인 실행 파라미터와 자동화 명령은 [3·4·5번 실행 계약](experiments.md),
 사전 시험과 최종 검증은 [2026-10-02 검증 기록](recovery-validation-2026-10-02.md)을 참고한다.
 반복 횟수·대조군·실제 실패 경로의 실행 계약은 [최종 평가 계약](final-evaluation.md)을 따른다.
 실제 진행 상태와 시도별 결과는 [최종 반복 평가 결과](final-evaluation-results-2026-10-03.md)에 별도로 기록한다.
