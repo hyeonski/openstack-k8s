@@ -147,27 +147,16 @@ class EvaluationTests(unittest.TestCase):
             root = Path(directory)
             def put(name, value):
                 (root / name).write_text(json.dumps(value))
-            names = ['baseline', 'uncontrolled-0', 'uncontrolled-1', 'fixed-0', 'fixed-1', 'stable-0', 'stable-1']
-            raw = {'rows': [{'index': i, 'ok': True, 'latency_ms': 100} for i in range(120)],
-                   'progress_before': {'bytes': 0}, 'progress_after': {'bytes': 100},
-                   'qdisc_before': [{'bytes': 0}], 'qdisc_after': [{'bytes': 600}], 'elapsed': 60}
-            expected = dict(p95_ms=100, upload_bytes=100, egress_bps=80)
-            put('summary.json', {'windows': {name: expected for name in names}})
-            pod = {'status': {'containerStatuses': [{'imageID': 'image'}]}}
-            put('run.json', {'workers': [{'host': 'osk8s-compute02'}, {'host': 'osk8s-compute01'}],
-                             'policy_changes': [{'burst_kbits': 250, 'kbps': 6000, 'ovs': [['if', 6000, 250]]}],
-                             'api_before': pod, 'upload_before': pod})
-            payload = hashlib.sha256(b'0').digest() * (1024 * 1024 // 32)
-            put('upload-integrity.json', {'rows': [[0, len(payload), hashlib.sha256(payload).hexdigest()]], 'bytes': len(payload), 'all_files_valid': True})
-            for name in names:
-                put(name + '.json', raw)
+            from evaluation_fixtures import s2_evidence
+            summary = s2_evidence(root)
+            raw = json.loads((root / 'baseline.json').read_text())
             checks, _, _ = verify_s2(root)
             self.assertTrue(all(checks.values()))
             raw['rows'].pop()
             put('baseline.json', raw)
             checks, _, _ = verify_s2(root)
             self.assertFalse(checks['baseline_sample_indexes'])
-            changed = {'windows': {name: dict(expected) for name in names}}
+            changed = copy.deepcopy(summary)
             changed['windows']['fixed-0']['p95_ms'] = 99
             put('summary.json', changed)
             checks, _, _ = verify_s2(root)

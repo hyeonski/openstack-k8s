@@ -25,6 +25,8 @@ HTTP_PATH = f'/api/v1/namespaces/{NAMESPACE}/services/{HTTP_NAME}:http/proxy/hea
 NOVA = ROOT / 'experiments/graduation-s4-nova.sh'
 OBSERVE_SECONDS = 2700
 STABLE_SECONDS = 30
+HTTP_MAX_GAP_SECONDS = 2.5
+HTTP_MIN_STABLE_SAMPLES = 20
 
 
 def unix_time(value):
@@ -126,24 +128,42 @@ class ProbeSampler:
             self.error = 'HTTP sampler did not terminate'
 
 
+def stable_http_window(samples, seconds=STABLE_SECONDS):
+    """Require a sufficiently sampled, contiguous successful tail, not elapsed silence."""
+    streak = []
+    for sample in samples:
+        if not sample['ok']:
+            streak = []
+            continue
+        if streak and not 0 < unix_time(sample['time']) - unix_time(streak[-1]['time']) <= HTTP_MAX_GAP_SECONDS:
+            streak = []
+        streak.append(sample)
+    if not streak:
+        return None, None
+    started = streak[0]['time']
+    confirmed = next((row['time'] for i, row in enumerate(streak, 1)
+                      if i >= HTTP_MIN_STABLE_SAMPLES and
+                      unix_time(row['time']) - unix_time(started) >= seconds), None)
+    return started, confirmed
+
+
 def summarize_http(samples, injection, stable_seconds=STABLE_SECONDS):
     after = [row for row in samples if unix_time(row['time']) >= unix_time(injection)]
     if not after:
         return {'state': 'unavailable', 'reason': 'no HTTP samples after injection'}
     failures = [row for row in after if not row['ok']]
+    stable_start, stable_at = stable_http_window(after, stable_seconds)
     if not failures:
-        return {'state': 'no_observed_outage', 'requests': len(after), 'failed': 0,
+        return {'state': 'no_observed_outage' if stable_at else 'not_stable', 'requests': len(after), 'failed': 0,
                 'service_recovered_at': None, 'outage_seconds': None}
     last_failure = failures[-1]
-    later = [row for row in after if unix_time(row['time']) > unix_time(last_failure['time'])]
-    if not later or not all(row['ok'] for row in later) or\
-            unix_time(later[-1]['time']) - unix_time(later[0]['time']) < stable_seconds:
+    if not stable_at:
         return {'state': 'not_stable', 'requests': len(after), 'failed': len(failures),
                 'first_failure_at': failures[0]['time'], 'last_failure_at': last_failure['time']}
     return {'state': 'recovered', 'requests': len(after), 'failed': len(failures),
             'first_failure_at': failures[0]['time'], 'last_failure_at': last_failure['time'],
-            'service_recovered_at': later[0]['time'],
-            'outage_seconds': round(unix_time(later[0]['time']) - unix_time(failures[0]['time']), 3)}
+            'service_recovered_at': stable_start,
+            'outage_seconds': round(unix_time(stable_start) - unix_time(failures[0]['time']), 3)}
 
 
 def summarize_capacity(observation, target, originals, probe_name):
@@ -357,6 +377,7 @@ class S4Run:
         deadline = min(time.monotonic() + OBSERVE_SECONDS,
                        time.monotonic() + max(0, record['host_deadline_epoch'] - time.time() - 600))
         capacity_since = None
+        capacity_wall_since = None
         index = len(list(snapshots.glob('[0-9][0-9][0-9][0-9].json')))
         last_capacity = None
         while time.monotonic() < deadline:
@@ -378,14 +399,17 @@ class S4Run:
             atomic_json(evidence / 'latest-capacity.json', capacity)
             if capacity['state'] == 'recovered':
                 capacity_since = capacity_since or time.monotonic()
+                capacity_wall_since = capacity_wall_since or unix_time(observation['time'])
             else:
                 capacity_since = None
+                capacity_wall_since = None
             # The stop operation can take a minute; failures during that call
             # are part of the experiment, not baseline traffic.
             http = summarize_http(sampler.samples, record['stop_intent_at'])
             atomic_json(evidence / 'latest-http.json', http)
             print(f"S4 observe: capacity={capacity['state']} http={http['state']} samples={len(sampler.samples)}", flush=True)
             if capacity_since and time.monotonic() - capacity_since >= STABLE_SECONDS and\
+                    unix_time(observation['time']) - capacity_wall_since >= STABLE_SECONDS and\
                     http['state'] in ('recovered', 'no_observed_outage') and\
                     unix_time(sampler.samples[-1]['time']) - unix_time(record['stop_intent_at']) >= STABLE_SECONDS:
                 sampler.stop.set()

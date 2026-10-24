@@ -11,4 +11,4 @@ graduation-evaluation-status:
 	@bash evaluation/graduation-evaluation.sh status --campaign "$(CAMPAIGN)"
 
 graduation-evaluation-verify:
-	@python3 evaluation/graduation_evaluation_verify.py "$(CAMPAIGN)"
+	@python3 evaluation/graduation_evaluation_verify.py "$(CAMPAIGN)" $(if $(filter 1,$(PARTIAL)),--partial,)

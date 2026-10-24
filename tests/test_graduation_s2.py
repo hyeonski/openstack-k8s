@@ -19,6 +19,37 @@ spec.loader.exec_module(workload)
 
 
 class S2Tests(unittest.TestCase):
+    def test_partial_qos_update_does_not_record_success_when_port_attach_fails(self):
+        runner = S2.__new__(S2)
+        runner.record = {'workers': [{}, {'node': 'b', 'node_uid': 'uid', 'nova_id': 'vm',
+                                         'port': {'id': 'port'}}], 'policy_id': 'policy', 'rule_id': 'rule'}
+        runner.obj = Mock(return_value={'metadata': {'uid': 'uid'}, 'spec': {},
+            'status': {'conditions': [{'type': 'Ready', 'status': 'True'}]}})
+        runner.admin_json = Mock(return_value={'device_id': 'vm', 'qos_policy_id': None, 'id': 'port'})
+        runner.admin = Mock(side_effect=[None, RuntimeError('port attach rejected')])
+        runner.write = Mock()
+        runner.remote = Mock()
+        with self.assertRaisesRegex(RuntimeError, 'port attach rejected'):
+            runner.set_rate(10000)
+        self.assertEqual(runner.admin.call_count, 2)
+        self.assertNotIn('policy_changes', runner.record)
+        runner.remote.assert_not_called()
+        runner.write.assert_called_once_with('qos-change-intent', desired_rate_kbps=10000)
+
+    def test_cleanup_failure_preserves_workers_and_can_retry(self):
+        runner = S2.__new__(S2)
+        runner.record = {'phase': 'failed'}
+        runner.acquire = Mock(); runner.ownership = Mock()
+        runner.delete_namespace = Mock(side_effect=[RuntimeError('API unavailable'), None])
+        runner.restore_workers = Mock(); runner.write = Mock()
+        with self.assertRaisesRegex(RuntimeError, 'API unavailable'):
+            runner.cleanup()
+        runner.restore_workers.assert_not_called()
+        self.assertEqual(runner.write.call_args.args[0], 'cleanup-failed')
+        runner.cleanup()
+        runner.restore_workers.assert_called_once()
+        self.assertEqual(runner.write.call_args.args[0], 'cleaned')
+
     def test_cleanup_removes_an_unattached_owned_security_group(self):
         runner = S2.__new__(S2)
         runner.record = {'phase': 'failed', 'run_id': 's2-test', 'security_group_id': 'sg',

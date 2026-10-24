@@ -24,6 +24,7 @@ from graduation_recovery import RecoveryLab, wait_for
 from graduation_s1_spread import eligible, validate_server
 from workload_state import ROOT, command, condition
 from worker_control import WorkerControl
+from graduation_evaluation_verify import verify
 
 PROFILE = ROOT / 'config/graduation-evaluation.json'
 
@@ -34,7 +35,7 @@ def read(path):
 
 def source_files():
     files = [ROOT / 'Makefile', PROFILE, ROOT / 'config/environments/cloud-gcp-amd64.env']
-    for directory in ('scripts', 'experiments', 'evaluation', 'make', 'kubernetes', 'observability', 'infra/gcp', 'kolla', 'ansible', 'systemd'):
+    for directory in ('scripts', 'experiments', 'evaluation', 'tests', 'make', 'kubernetes', 'observability', 'infra/gcp', 'kolla', 'ansible', 'systemd'):
         files += [p for p in (ROOT / directory).rglob('*') if p.is_file() and
                   '__pycache__' not in p.parts and '.terraform' not in p.parts and
                   p.suffix in ('.py', '.sh', '.yaml', '.yml', '.tpl', '.tf', '.json', '.j2', '.service', '.mk') and
@@ -419,6 +420,12 @@ class Campaign:
                     if case['status'] != 'pending':
                         continue
                     self.execute(case)
+                    verification = verify(self.directory, partial=True)
+                    audit = next(c for c in verification['cases'] if c['id'] == case['id'])
+                    if case.get('accepted') and (not audit['verified'] or
+                            not verification['source_snapshots_valid'] or
+                            verification['image_consistency'].get(case['scenario']) is False):
+                        raise RuntimeError('independent verification failed: ' + case['id'])
                     count += 1
                     if limit and count >= limit:
                         break
@@ -431,6 +438,10 @@ class Campaign:
                 self.make('graduation-env-down', 'environment.log', timeout=1800)
                 atomic_json(self.directory / 'environment-final.json', read(self.state / 'graduation-environment.json'))
                 self.data['status'] = 'awaiting-independent-verification'; self.save()
+                verification = verify(self.directory, partial=True)
+                self.data['status'] = 'verified' if (verification['verification_complete'] and
+                    verification['hosts_stopped'] and verification['all_acceptance_conditions_passed']) else 'review-required'
+                self.save()
 
 
 def main():

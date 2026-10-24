@@ -13,7 +13,7 @@ import statistics
 import tempfile
 
 from lib.state import atomic_json
-from graduation_s4_run import STABLE_SECONDS, summarize_capacity
+from graduation_s4_run import STABLE_SECONDS, summarize_capacity, stable_http_window
 from workload_state import condition
 
 
@@ -40,11 +40,7 @@ def error_kind(sample):
 
 def stable_success(samples, last_failure, seconds=STABLE_SECONDS):
     later = [row for row in samples if epoch(row['time']) > epoch(last_failure)] if last_failure else samples
-    if not later or not all(row['ok'] for row in later):
-        return None, None
-    started = later[0]['time']
-    confirmed = next((row['time'] for row in later if difference(row['time'], started) >= seconds), None)
-    return started, confirmed
+    return stable_http_window(later, seconds)
 
 
 def hash_sources(paths):
@@ -146,6 +142,16 @@ def confirmed_capacity_result(result, timeline, record):
     if len(matches) != 1 or seconds is None or result.get('capacity_seconds') is None or\
             abs(seconds - result['capacity_seconds']) > 0.01:
         raise RuntimeError('S4 online capacity verdict does not match a recovered snapshot')
+    streak = []
+    for row in timeline:
+        if row['capacity_state'] != 'recovered':
+            streak = []
+        else:
+            streak.append(row['time'])
+        if row['time'] == at:
+            break
+    if not streak or difference(at, streak[0]) < STABLE_SECONDS:
+        raise RuntimeError('S4 capacity has no independently observed 30-second stable interval')
     return at
 
 

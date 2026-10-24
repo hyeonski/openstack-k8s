@@ -31,16 +31,16 @@ def obj(name, uid, ready=True, node=None, deployment=None, provider=None):
 
 class S4ResultsTests(unittest.TestCase):
     def test_no_http_failure_does_not_invent_outage(self):
-        rows = [{'time': stamp(i), 'ok': True} for i in (10, 20, 50)]
+        rows = [{'time': stamp(i), 'ok': True} for i in range(10, 51)]
         result = summarize_http(rows, stamp(5))
         self.assertEqual(result['state'], 'no_observed_outage')
         self.assertIsNone(result['outage_seconds'])
 
     def test_http_recovery_requires_stable_success_after_last_failure(self):
         rows = [{'time': stamp(i), 'ok': okay} for i, okay in
-                ((5, False), (10, True), (20, False), (21, True), (45, True))]
+                [(5, False), (10, True), (20, False)] + [(i, True) for i in range(21, 46)]]
         self.assertEqual(summarize_http(rows, stamp(0))['state'], 'not_stable')
-        rows.append({'time': stamp(52), 'ok': True})
+        rows.extend({'time': stamp(i), 'ok': True} for i in range(46, 53))
         result = summarize_http(rows, stamp(0))
         self.assertEqual(result['state'], 'recovered')
         self.assertEqual(result['failed'], 2)
@@ -48,7 +48,7 @@ class S4ResultsTests(unittest.TestCase):
 
     def test_stop_command_window_includes_failures_before_shutoff_confirmation(self):
         rows = [{'time': stamp(i), 'ok': okay} for i, okay in
-                ((0, True), (3, False), (9, False), (12, True), (45, True))]
+                [(0, True), (3, False), (9, False)] + [(i, True) for i in range(12, 46)]]
         result = summarize_http(rows, stamp(0))
         self.assertEqual(result['failed'], 2)
         self.assertEqual(result['outage_seconds'], 9)

@@ -10,6 +10,34 @@ from graduation_s3 import S3, require_fenced, volume_matches
 
 
 class S3SafetyTests(unittest.TestCase):
+    def test_cleanup_refuses_externally_restarted_fenced_vm(self):
+        runner = S3.__new__(S3)
+        runner.record = {'phase': 'failed', 'source': {'nova_id': 'vm'}, 'fenced_at': 'time'}
+        runner.acquire = Mock(); runner.ownership = Mock()
+        runner.admin_json = Mock(return_value={'status': 'ACTIVE'})
+        runner.clear_fault = Mock(); runner.delete_namespace = Mock(); runner.admin = Mock()
+        with self.assertRaisesRegex(RuntimeError, 'restarted externally'):
+            runner.cleanup()
+        runner.clear_fault.assert_not_called()
+        runner.delete_namespace.assert_not_called()
+        runner.admin.assert_not_called()
+
+    def test_volume_cleanup_timeout_never_restarts_fenced_source(self):
+        runner = S3.__new__(S3)
+        runner.record = {'phase': 'failed', 'run_id': 'run', 'source': {'nova_id': 'vm', 'node': 'node'},
+                         'volume_id': 'volume'}
+        runner.acquire = Mock(); runner.ownership = Mock()
+        runner.admin_json = Mock(return_value={'status': 'SHUTOFF'})
+        runner.obj = Mock(return_value={'spec': {'taints': [{'key': 'node.kubernetes.io/out-of-service',
+                                                           'value': 'run'}]}})
+        runner.delete_namespace = Mock(); runner.admin = Mock(); runner.k = Mock()
+        with patch('graduation_s3.wait_for', side_effect=TimeoutError('volume remains')):
+            with self.assertRaisesRegex(TimeoutError, 'volume remains'):
+                runner.cleanup()
+        runner.delete_namespace.assert_called_once()
+        runner.admin.assert_not_called()
+        runner.k.assert_not_called()
+
     def test_cleanup_waits_for_machine_deployment_after_node_recovery(self):
         runner = S3.__new__(S3)
         runner.client = Mock()
