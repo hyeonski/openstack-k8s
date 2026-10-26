@@ -37,7 +37,9 @@ class AgreementReviewTests(unittest.TestCase):
     def test_complete_live_schema_requires_concrete_fixture_and_actual_mhc_policy(self):
         p=fixtures.profile()
         for scenario in ('s1','s2','s3','s4'):
-            p[scenario].update(horizon_seconds=900 if scenario=='s1' else 600,stable_seconds=30,bin_seconds=10,min_samples=5,deadline_seconds=5,slo_ms=100)
+            p[scenario].update(horizon_seconds=900 if scenario=='s1' else 600,stable_seconds=30,bin_seconds=10,min_samples=5,deadline_seconds=5,slo_ms=100,bin_max_bad_fraction=0)
+        p['s3']['evidence_timeout_seconds']=60
+        p['v1_condition']={'slo_ms':100,'bin_max_bad_fraction':0,'baseline_p95_ratio':1.5}
         p.update(readiness='confirmed',fault=SUPPORTED_FAULTS,initial_fixture=copy.deepcopy(SUPPORTED_FIXTURE),
                  v1_candidates=[{'cpu_workers':4,'workload_rounds':10000}],v1_selected={'cpu_workers':4,'workload_rounds':10000})
         p['s1']['max_clock_offset_seconds']=1;p['s2']['max_clock_offset_seconds']=1

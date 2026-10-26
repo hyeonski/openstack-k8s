@@ -111,6 +111,9 @@ class LiveBackend:
             if present and (present.get('Status') or present.get('status'))=='SHUTOFF':
                 ev.event('rescue_requested',target=target['nova_id'],actor='cleanup')
                 h.lab.admin('server','start',target['nova_id'])
+            if present and (case.get('mode')=='off' or (present.get('Status') or present.get('status'))=='SHUTOFF'):
+                # A previous start may have succeeded before its response was lost.
+                # ACTIVE alone is insufficient: keep MHC paused until Node Ready.
                 wait_for(lambda: nova_status(target['nova_id'])['status']=='ACTIVE',seconds=180)
                 from workload_state import condition
                 wait_for(lambda:condition(h.lab.obj('node',target['node'],False),'Ready'),seconds=300)

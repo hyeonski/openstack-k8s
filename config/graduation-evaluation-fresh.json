@@ -71,7 +71,8 @@
     "seconds": 1800,
     "warmup_seconds": 0,
     "rounds": 100000,
-    "max_clock_offset_seconds": null
+    "max_clock_offset_seconds": null,
+    "bin_max_bad_fraction": null
   },
   "s2": {
     "horizon_seconds": null,
@@ -82,7 +83,8 @@
     "slo_ms": null,
     "rate": 2,
     "uploader_seconds": null,
-    "max_clock_offset_seconds": null
+    "max_clock_offset_seconds": null,
+    "bin_max_bad_fraction": null
   },
   "s3": {
     "horizon_seconds": null,
@@ -91,7 +93,9 @@
     "min_samples": null,
     "deadline_seconds": null,
     "slo_ms": null,
-    "rate": 1
+    "rate": 1,
+    "bin_max_bad_fraction": null,
+    "evidence_timeout_seconds": null
   },
   "s4": {
     "horizon_seconds": null,
@@ -100,7 +104,8 @@
     "min_samples": null,
     "deadline_seconds": null,
     "slo_ms": null,
-    "rate": 1
+    "rate": 1,
+    "bin_max_bad_fraction": null
   },
   "fault": {
     "s1": null,
@@ -544,5 +549,10 @@
       "order": 37,
       "depends_on": []
     }
-  ]
+  ],
+  "v1_condition": {
+    "slo_ms": null,
+    "bin_max_bad_fraction": null,
+    "baseline_p95_ratio": 1.5
+  }
 }

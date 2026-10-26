@@ -16,7 +16,9 @@ def synthetic_profile(profile):
     p['readiness']='synthetic-only'
     for s in ('s1','s2','s3','s4'):
         p[s].update(horizon_seconds=40,stable_seconds=10,bin_seconds=5,min_samples=2,
-                    deadline_seconds=2,slo_ms=100)
+                    deadline_seconds=2,slo_ms=100,bin_max_bad_fraction=0)
+    p['s3']['evidence_timeout_seconds']=60
+    p['v1_condition']={'slo_ms':100,'bin_max_bad_fraction':0,'baseline_p95_ratio':1.5}
     p['s1']['max_clock_offset_seconds']=2
     p['s2']['max_clock_offset_seconds']=2
     p['s2']['uploader_seconds']=640
@@ -61,6 +63,7 @@ class FakeBackend:
             offset=i/cfg['rate']
             good=v1 or (not control and not self.unrecovered and offset>=10) or offset>=H
             append(ev.directory/'requests.jsonl',dict(request_id=str(i),index=i,scheduled_utc=utc(t+offset),
+                time=utc(t+offset),latency_ms=10,
                 started_utc=utc(t+offset+.001),completed_utc=utc(t+offset+.011),ok=good,correct=good,bytes=128 if good else 0,
                 generator_rejection=False,deadline_seconds=cfg['deadline_seconds'],clock_id='synthetic-request',
                 started_monotonic=1000+offset+.001,completed_monotonic=1000+offset+.011))
@@ -68,6 +71,11 @@ class FakeBackend:
             for phase,offset in (('before-injection',-1),('horizon-end',H)):
                 append(ev.directory/'clock-checks.jsonl',{'phase':phase,'utc':utc(t+offset),'source':'synthetic clock only','offset_lower_seconds':0,'offset_upper_seconds':0,'round_trip_seconds':0})
         raw=fake_raw(case)
+        if v1:
+            raw['baseline_interval_utc']=[utc(t-60),utc(t)]
+            raw['policy_windows_utc']=[[utc(t),utc(t+H)]]
+            for i in range(300):
+                append(ev.directory/'baseline-requests.jsonl',dict(index=i,time=utc(t-60+i/5),ok=True,latency_ms=10))
         if case['scenario']=='s2':
             append(ev.directory/'decisions.jsonl',{'raw_before':{'utc':utc(t),'monotonic':0,'clock_id':'synthetic-network','qdisc':{'bytes':0,'overlimits':0}},'raw_after':{'utc':utc(t+H-1),'monotonic':H-1,'clock_id':'synthetic-network','qdisc':{'bytes':(H-1)*2_500_000,'overlimits':10}}})
             for second in range(-1,H+1):
@@ -85,6 +93,9 @@ class FakeBackend:
         event('horizon_end',H);event('phase',H,phase='HORIZON_END')
 
     def cleanup(self, case, profile, ev):
+        if case['scenario']=='s4' and not self.fail_cleanup:
+            from lib.state import atomic_json
+            atomic_json(ev.directory/'mhc-restored.json',fake_raw(case)['mhc_restored'])
         return {'synthetic':True,'actor':'cleanup','checks':{'owned_resources_absent':not self.fail_cleanup,'controller_restored':not self.fail_cleanup}}
 
 

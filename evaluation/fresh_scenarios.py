@@ -23,19 +23,31 @@ from graduation_s4 import MHC_NAME, NAMESPACE as S4_NS, LABEL_KEY, EXPERIMENT
 from graduation_s4_run import S4Run, nova, nova_status, summarize_capacity
 from graduation_recovery import RecoveryLab, wait_for
 from workload_state import condition
-from fresh_evidence import Evidence, OpenLoopProbe, append, clock_check
+from fresh_evidence import Evidence, OpenLoopProbe, append, clock_check, utc
 from fresh_contract import digest
 
 
-def injection_guard(profile, needed):
+def injection_guard(profile, needed, environment):
     ops=profile['operations']
-    if time.time() >= epoch(ops['last_injection_utc']):
+    now = time.time()
+    if now >= epoch(ops['last_injection_utc']):
         raise RuntimeError('registered last injection time passed')
+    hosts = environment.get('final_hosts', {})
+    if not hosts:
+        raise RuntimeError('host auto-stop evidence unavailable before injection')
+    deadline = min(epoch(host['last_start']) + int(host['max_run_seconds'])
+                   for host in hosts.values())
+    if deadline - now < needed + ops['cleanup_seconds']:
+        raise RuntimeError('host auto-stop headroom no longer covers H and cleanup')
 
 
 def horizon(ev, start, seconds):
     time.sleep(max(0,start+seconds-time.monotonic()))
     ev.event('horizon_end');ev.state('HORIZON_END')
+
+
+def remote_tail_seconds(cfg):
+    return cfg['max_clock_offset_seconds']+cfg['deadline_seconds']+3
 
 
 class FreshS1(EvaluationS1):
@@ -66,7 +78,7 @@ class FreshS1(EvaluationS1):
 
     def create_competitor(self, record):
         self.check_clock(record,'before-injection')
-        injection_guard(self.profile,self.profile['s1']['horizon_seconds'])
+        injection_guard(self.profile,self.profile['s1']['horizon_seconds'],self.s1.environment())
         before=self.s1.verify()
         self.raw.update(service_before=before,node_before=self.s1.obj('node',before['node'],None),
                         vm_before=self.server(before['nova_id']),compute_before=record['service_compute_host'],
@@ -180,6 +192,14 @@ class FreshS1(EvaluationS1):
         completion_end=json.loads((Path(record['evidence'])/'hosts-completion-end.json').read_text())
         self.raw['completion_host_metrics']=interval(completion_start[self.raw['source_compute']],completion_end[self.raw['source_compute']])
         self.raw['provenance']={'file':'raw/run.json','fields':['service_before','service_after'],'transform':'fresh-S1 identity snapshots; host interval from raw/hosts-*.json'}
+        if self.case['mode']=='V1':
+            end=epoch(record['baseline_end_at'])
+            self.raw['baseline_interval_utc']=[utc(end-60),utc(end)]
+            source_rows=[json.loads(line) for line in (Path(record['evidence'])/'http.jsonl').read_text().splitlines() if line]
+            baseline=[row for row in source_rows if end-60<=epoch(row['time'])<end]
+            (self.ev.directory/'baseline-requests.jsonl').write_text(''.join(json.dumps(row)+'\n' for row in baseline))
+            decisions=[json.loads(line) for line in (Path(record['evidence'])/'decisions.jsonl').read_text().splitlines() if line]
+            self.raw['policy_windows_utc']=[[d['window']['start'],d['window']['end']] for d in decisions if d.get('kind')=='diagnosis']
         atomic_json(self.ev.directory/'observations/contract.json',self.raw)
         # Source loadgen contains canonical arrivals as well as legacy fields.
         (self.ev.directory/'requests.jsonl').write_bytes((Path(record['evidence'])/'http.jsonl').read_bytes())
@@ -358,7 +378,7 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
             previous=initial_progress
             with RemoteProbe(self,"sudo bash -o pipefail -c "+shlex.quote(cmd+' | sudo tee '+shlex.quote(raw_path)+' >/dev/null'),raw_path,stop_path,cfg['horizon_seconds']+600):
                 self.check_clock('before-injection')
-                injection_guard(self.profile,cfg['horizon_seconds'])
+                injection_guard(self.profile,cfg['horizon_seconds']+remote_tail_seconds(cfg),self.runtime.environment())
                 self.ev.event('injection_requested',target=a['port']['id'])
                 self.apply(self.deployment('upload',a['node'],['upload','--url','http://198.18.0.2:8090','--seconds',str(cfg['uploader_seconds'])]))
                 wait_for(lambda:self.ready('upload',a['node']))
@@ -404,6 +424,9 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
                         diagnostic_before=diagnostic_after;diagnostic_progress=progress
                         next_decision=time.monotonic()+60
                 horizon(self.ev,start,cfg['horizon_seconds'])
+                # Keep the remote clock's complete H and in-flight completions in raw;
+                # the analyser still selects only the original runner-clock interval.
+                time.sleep(remote_tail_seconds(cfg))
             self.check_clock('horizon-end')
             text=self.remote('sudo cat '+shlex.quote(raw_path))
             (self.ev.directory/'requests.jsonl').write_text(text)
@@ -411,8 +434,6 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
             (self.ev.directory/'uploader-progress.jsonl').write_text(progress_text)
             from fresh_analysis import uploader_metrics
             upload=uploader_metrics([json.loads(l) for l in progress_text.splitlines() if l],epoch(injection['utc']),epoch(injection['utc'])+cfg['horizon_seconds'])
-            if upload['errors']:
-                raise RuntimeError('uploader observation incomplete: '+','.join(upload['errors']))
             windows=upload['windows']
             integrity_code="""import hashlib,json,sqlite3
 from pathlib import Path
@@ -484,7 +505,7 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
                 raise RuntimeError('committed baseline records differ from the seed')
             self.save('committed-records-before.json', committed_rows)
             query = "select count(*)::text || ':' || md5(string_agg(id::text || ':' || value, ',' order by id)) from evidence where id<=1000"
-            digest = self.sql(query)
+            committed_digest = self.sql(query)
             durability = self.sql("select current_setting('fsync') || ':' || current_setting('synchronous_commit') || ':' || current_setting('full_page_writes') || ':' || current_setting('data_directory')")
             if not durability.startswith('on:on:on:/var/lib/postgresql/data/pgdata'):
                 raise RuntimeError('DB durability settings differ from the experiment contract')
@@ -492,7 +513,7 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
             baseline = self.sample('baseline')
             if len(baseline) != 30 or not all(r['ok'] for r in baseline):
                 raise RuntimeError('invalid DB baseline')
-            self.write('baseline-ready', committed_digest=digest, durability=durability)
+            self.write('baseline-ready', committed_digest=committed_digest, durability=durability)
             # Scoped transient rules: old PostgreSQL remains running, its client path and
             # kubelet API traffic fail. Rules disappear on VM restart and have owned chains.
             cfg=self.profile['s3']
@@ -515,7 +536,7 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
             sampler=OpenLoopProbe(self.ev.directory/'requests.jsonl',probe,cfg['rate'],cfg['horizon_seconds']+300,cfg['deadline_seconds'])
             with sampler:
                 time.sleep(2)
-                injection_guard(self.profile,cfg['horizon_seconds'])
+                injection_guard(self.profile,cfg['horizon_seconds'],self.runtime.environment())
                 self.ev.event('injection_requested',target=source['node_uid'])
                 self.write('fault-intent',fault_at=utc_now())
                 fault = '''set -Eeuo pipefail
@@ -565,12 +586,13 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
                     atomic_json(self.ev.directory/'observations'/('db-'+str(time.monotonic_ns())+'.json'),last_snapshot)
                     time.sleep(min(3,max(0,start+cfg['horizon_seconds']-time.monotonic())))
                 horizon(self.ev,start,cfg['horizon_seconds'])
-            seed_after=None
-            try:seed_after=json.loads(self.sql(rows_query,timeout=cfg['deadline_seconds']))
-            except (RuntimeError,TimeoutError,subprocess.TimeoutExpired):pass
+            seed_after=None;seed_error=None
+            try:seed_after=json.loads(self.sql(rows_query,timeout=cfg['evidence_timeout_seconds']))
+            except (RuntimeError,TimeoutError,subprocess.TimeoutExpired,json.JSONDecodeError) as exc:
+                seed_error=f'{type(exc).__name__}: {exc}'
             fence_path=Path(self.record['evidence'])/'fence.json'
             raw=dict(source_machine_uid=source['machine_uid'],run_id=self.record['run_id'],seed=seed,admitted_machine=admitted_machine,pod_before=self.record['pod_before'],statefulset=st,controller_manifest=controller,mhc_snapshot=mhc,source_vm=source['nova_id'],
-                     seed_before=committed_rows,seed_after=seed_after,
+                     seed_before=committed_rows,seed_after=seed_after,seed_collection_error=seed_error,
                      fence=json.loads(fence_path.read_text()) if fence_path.exists() else {},db_final=last_snapshot,
                      old_database_processes=running,source_node_uid=source['node_uid'],
                      pvc_after=self.obj('pvc','data-db-0'),pv_after=self.obj('pv',self.record['pv_name'],False),
@@ -636,10 +658,10 @@ def run_s4(case,profile,ev):
     sampler=OpenLoopProbe(ev.directory/'requests.jsonl',probe,cfg['rate'],cfg['horizon_seconds']+600,cfg['deadline_seconds'])
     try:
         with sampler:
-            time.sleep(5)
-            if len(sampler.rows)<3 or not all(r['ok'] for r in sampler.rows[-3:]):
+            wait_for(lambda:len(sampler.rows)>=3,seconds=3/cfg['rate']+cfg['deadline_seconds']+10,interval=.5)
+            if not all(r['ok'] for r in sampler.rows[-3:]):
                 raise RuntimeError('S4 continuous baseline invalid')
-            injection_guard(profile,cfg['horizon_seconds'])
+            injection_guard(profile,cfg['horizon_seconds'],prep.environment_record())
             ev.event('injection_requested',target=target['nova_id'])
             runner.write(record,'stop-intent',stop_intent_at=utc_now())
             nova('stop',target['nova_id'])
@@ -667,8 +689,9 @@ def run_s4(case,profile,ev):
                 atomic_json(ev.directory/'observations'/f'capacity-{index:04}.json',observation)
                 time.sleep(min(5,max(0,start+cfg['horizon_seconds']-time.monotonic())))
             horizon(ev,start,cfg['horizon_seconds'])
-        restored=restore_mhc(lab,{'before':before,'owner':case['id']},ev)
-        raw=dict(mhc_before=before,mhc_during=during,mhc_restored=restored,capacity=capacity,
+        # Keep off paused until cleanup has restarted the owned VM and observed
+        # Node Ready. Unpausing an unhealthy target races native remediation.
+        raw=dict(mhc_before=before,mhc_during=during,capacity=capacity,
                  capacity_snapshot=observation,original_workers=originals,probe_name=record['probe_name'],
                  replacement_binding=binding,capacity_probe=capacity_probe,target=target,
                  stopped_vm=stopped_vm,application_image_ids={'http':initial_image_id},

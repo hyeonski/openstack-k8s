@@ -23,16 +23,35 @@ from fresh_analysis import judge, read, rows
 
 def source_hashes(root=ROOT):
     # Include entire mixed policy/instrumentation modules: never silently exempt a policy edit.
+    # Respect ignored local overrides/generated secrets before reading file contents.
+    inventory = subprocess.run(['git', '-C', str(root), 'ls-files', '--cached', '--others',
+                                '--exclude-standard', '-z'], capture_output=True, check=True)
+    eligible = {name for name in inventory.stdout.decode().split('\0') if name}
     paths = [root / 'Makefile']
     for d in ('evaluation','experiments','scripts','config','kubernetes','make','ansible','kolla','systemd','infra/gcp','observability','tests'):
         paths += [p for p in (root / d).rglob('*') if p.is_file() and '__pycache__' not in p.parts
                   and '.terraform' not in p.parts and p.suffix in ('.py','.sh','.json','.yaml','.yml','.mk','.env','.tf','.j2','.tpl','.service')]
     paths += [root/'docs/graduation'/name for name in ('fresh-evaluation-build-plan-2026-10-26.md','fresh-evaluation-run-plan-2026-10-26.md','consensus-research-plan-2026-10-26.md','consensus-discussion-2026-10-26/README.md')]
-    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(set(paths))}
+    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(set(paths)) if str(p.relative_to(root)) in eligible}
 
 
 def policy_manifest(source):
     return {name: value for name, value in source.items() if name.startswith(('experiments/','scripts/','kubernetes/')) or name in ('evaluation/fresh_scenarios.py','evaluation/fresh_live.py','evaluation/fresh_contract.py','evaluation/fresh_campaign.py','evaluation/graduation_evaluation_case.py')}
+
+
+def pilot_contract(profile, scenario):
+    """Calibration must have tested this scenario's main contract, not merely its code."""
+    common=('seed','environment','project','zone','hosts','kubernetes_version',
+            'source_compute','target_compute','control_plane_compute','analysis')
+    result={key:profile[key] for key in common}
+    result.update(measurement=profile[scenario],fault=profile['fault'][scenario])
+    fixture={'s2':'s2_port_qos_workload_progress','s3':'s3_volume_seed','s4':'s4_capacity'}
+    if scenario in fixture:result['fixture']=profile['initial_fixture'][fixture[scenario]]
+    if scenario=='s1':
+        result.update(v1_candidates=profile['v1_candidates'],v1_selected=profile['v1_selected'],v1_condition=profile['v1_condition'])
+    if scenario in ('s3','s4'):result['timers']=profile['timers']
+    return result
 
 
 def freeze(profile_path, destination, stage, scenario=None, policy_path=None, synthetic=False, pilot_campaign=None, previous_campaign=None):
@@ -64,6 +83,7 @@ def freeze(profile_path, destination, stage, scenario=None, policy_path=None, sy
             raise ValueError('explicit environment override path does not match profile')
         if not destination.is_relative_to(Path(ops['artifact_root']).resolve()):
             raise ValueError('campaign must be inside registered artifact root')
+    pilot_manifest = check_frozen(pilot_campaign) if pilot_campaign else None
     if not synthetic and stage=='main':
         if not pilot_campaign:
             raise ValueError('main requires --pilot-campaign with independently valid preparation evidence')
@@ -74,9 +94,11 @@ def freeze(profile_path, destination, stage, scenario=None, policy_path=None, sy
         valid={r['case_id'] for r in pilot['run_results'] if r['trial_valid'] and r.get('safety') is True and r.get('cleanup') is True and r.get('fault_realized') is True and (r['mode'] not in ('P','P3600','on') or r.get('recovered') is True) and (r['mode']!='V1' or r['v1_outcome']=='held')}
         if not required.issubset(valid):
             raise ValueError('required smoke/pilot evidence missing or invalid')
-        prior=check_frozen(pilot_campaign)
-        if prior['policy_sha256']!=digest(policy):
+        if pilot_manifest['policy_sha256']!=digest(policy):
             raise ValueError('pilot policy differs from main')
+        for selected_scenario in {c['scenario'] for c in selected}:
+            if pilot_contract(profile,selected_scenario)!=pilot_contract(pilot_manifest['profile'],selected_scenario):
+                raise ValueError('main contract differs from validated pilot: '+selected_scenario+'; run a new pilot')
     if not synthetic:
         for saved in Path(profile['operations']['artifact_root']).rglob('campaign.json'):
             existing=read(saved,{})
@@ -125,7 +147,9 @@ def freeze(profile_path, destination, stage, scenario=None, policy_path=None, sy
         manifest['override_path'] = str(Path(override).resolve())
         manifest['override_sha256'] = hashlib.sha256(Path(override).read_bytes()).hexdigest()
     if pilot_campaign:
-        manifest['pilot_campaign_id']=prior['id'] if 'id' in prior else str(pilot_campaign)
+        manifest['pilot_campaign_id']=pilot_manifest['id']
+        manifest['pilot_profile_changes']={key:{'pilot':pilot_manifest['profile'].get(key),'main':profile.get(key)}
+            for key in profile.keys()|pilot_manifest['profile'].keys() if profile.get(key)!=pilot_manifest['profile'].get(key)}
     if change_audit:
         atomic_json(destination/'tool-change-audit.json',change_audit)
         manifest['tool_change_audit_sha256']=digest(change_audit)
@@ -277,7 +301,13 @@ class FreshCampaign:
                 result = judge(path, case, self.profile)
                 atomic_json(path / 'judgement.json', {k:v for k,v in result.items() if k!='metrics'})
                 atomic_json(path / 'metrics.json', result['metrics'])
-                atomic_json(path / 'normalized-requests.json', __import__('fresh_analysis').normalize(path))
+                try:
+                    normalized = __import__('fresh_analysis').normalize(path)
+                    atomic_json(path / 'normalized-requests.json', normalized)
+                except (OSError,ValueError,TypeError,KeyError,AttributeError) as exc:
+                    # Malformed input is already an invalid independent judgement.
+                    # Retain it and close/seal the attempt rather than strand running state.
+                    atomic_json(path / 'normalization-error.json', {'error':f'{type(exc).__name__}: {exc}'})
                 attempt['evidence_sha256'] = evidence_hashes(path)
                 case.update(status='finished',judgement={k:v for k,v in result.items() if k!='metrics'})
                 self.ledger(case, attempt, 'finished',trial_valid=result['trial_valid'],recovered=result['recovered'])
@@ -370,6 +400,7 @@ def report(directory, allow_synthetic=False):
     primary = [r for r in results if r['purpose']=='main' and r['attempt']=='attempt-01']
     contrasts = []
     for scenario, left, right in data['profile']['analysis']['contrasts']:
+        if not any(c['scenario']==scenario for c in data['cases']):continue
         for block in ('b01','b02','b03'):
             pair = [next((r for r in primary if (r['scenario'],r['block'],r['mode'])==(scenario,block,m)),None) for m in (left,right)]
             contrasts.append(dict(scenario=scenario,block=block,arms=[left,right],complete=all(pair),
@@ -377,6 +408,22 @@ def report(directory, allow_synthetic=False):
                      fault_realized=all(r and r['fault_realized'] for r in pair),safety=all(r and r['safety'] for r in pair),
                      failure_rate_difference=(pair[0]['metrics']['failure_rate']-pair[1]['metrics']['failure_rate']) if all(r and r['trial_valid'] and r['fault_realized'] and r['metrics'].get('failure_rate') is not None for r in pair) else None,
                      recovery_seconds_difference=(pair[0]['metrics']['recovery_seconds']-pair[1]['metrics']['recovery_seconds']) if all(r and r['trial_valid'] and r['fault_realized'] and r['safety'] and r['metrics'].get('recovery_seconds') is not None for r in pair) else None))
+            contrast=contrasts[-1]
+            metric_names=('safe_recovered','service_recovered','intervention_delivered','capacity_recovered',
+                          'violation_seconds_lower_bound','unobserved_seconds','failure_rate',
+                          'service_slo_violation_fraction','scheduled_latency_p95_ms','recovery_seconds',
+                          'upload_goodput_Bps','upload_edge_unobserved_seconds')
+            contrast['arm_results']=[dict(mode=mode,observed=r is not None,
+                trial_valid=r['trial_valid'] if r else None,recovered=r['recovered'] if r else None,
+                safety=r['safety'] if r else None,
+                **{name:r['metrics'].get(name) if r else None for name in metric_names}) for mode,r in zip((left,right),pair)]
+            for metric in ('violation_seconds_lower_bound','service_slo_violation_fraction','upload_goodput_Bps'):
+                contrast[metric+'_difference']=(pair[0]['metrics'][metric]-pair[1]['metrics'][metric]) if all(r and r['trial_valid'] and r['fault_realized'] and r['metrics'].get(metric) is not None for r in pair) else None
+            contrast['claim_limitations']=[]
+            if right=='A' and pair[1] and pair[1]['metrics'].get('intervention_delivered') is not True:
+                contrast['claim_limitations'].append('A intervention not delivered: assignment-policy comparison only, not the effect of an actual restart')
+            if not contrast['trial_valid'] or not contrast['fault_realized']:
+                contrast['claim_limitations'].append('Incomplete primary contrast; retries do not replace first attempts')
     coverage = {s:dict(scheduled=sum(c['scenario']==s and c['purpose']=='main' for c in data['cases']),
                      observed=sum(r['scenario']==s for r in primary),fault_realized=sum(r['scenario']==s and r['fault_realized'] is True for r in primary),valid=sum(r['scenario']==s and r['trial_valid'] for r in primary),
                      recovered=sum(r['scenario']==s and r['recovered'] is True for r in primary),
@@ -421,7 +468,13 @@ def main():
     try:
         if args.action in ('schedule','validate'):
             p=load(args.profile,live=args.action=='validate')
-            print(json.dumps(dict(counts=validate(p),cases=schedule(p)),indent=2));return
+            import math
+            bins={}
+            for name,cfg in [(s,p[s]) for s in ('s1','s2','s3','s4')]+[('v1',{**p['s1'],**p['v1_condition']})]:
+                count=cfg['bin_seconds']*cfg['rate'] if cfg.get('bin_seconds') else None
+                allowed=math.floor(count*cfg['bin_max_bad_fraction']) if count is not None and cfg.get('bin_max_bad_fraction') is not None else None
+                bins[name]=dict(arrivals=count,allowed_bad_count=allowed,zero_bad_allowed=allowed==0 if allowed is not None else None)
+            print(json.dumps(dict(counts=validate(p),cases=schedule(p),bin_contracts=bins),indent=2));return
         if not args.campaign:
             parser.error('--campaign required')
         if args.action=='freeze':

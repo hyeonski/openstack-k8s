@@ -107,7 +107,9 @@ class FreshTests(unittest.TestCase):
                 if key=='uploader':raw['upload_windows'][0]['after']['bytes']=0
                 if key=='fence':raw['fence']['server']['id']='wrong-vm'
                 if key=='identity':raw['replacement_binding']['nova_id']='wrong-vm'
-                if key=='restore':raw['mhc_restored']=copy.deepcopy(raw['mhc_restored']);raw['mhc_restored']['spec']={}
+                if key=='restore':
+                    restored=read(Path(root)/'mhc-restored.json');restored['spec']={}
+                    atomic_json(Path(root)/'mhc-restored.json',restored)
                 atomic_json(Path(root)/'observations/contract.json',raw)
                 result=judge(root,c,p)
                 if key=='uploader':
@@ -263,7 +265,7 @@ class FreshTests(unittest.TestCase):
             atomic_json(base/'existing/campaign.json',dict(schema_version=3,status='batch-complete',synthetic=False,stage='main',policy_sha256=digest(policy),cases=[{'scenario':'s1'}]))
             preparation=[dict(case_id=c['id'],trial_valid=True,mode=c['mode'],v1_outcome='held',safety=True,cleanup=True,fault_realized=True,recovered=True) for c in p['cases'] if c['purpose']!='main']
             env={'ENVIRONMENT_NAME':p['environment'],'GCP_PROJECT_ID':p['project'],'GCP_ZONE':p['zone'],'ENV_OVERRIDE_FILE':str(override)}
-            with patch('fresh_campaign.load',return_value=p),patch.dict('os.environ',env),patch('fresh_campaign.report',return_value=dict(stage='preparation',missingness=[],run_results=preparation)),patch('fresh_campaign.check_frozen',return_value={'policy_sha256':digest(policy)}):
+            with patch('fresh_campaign.load',return_value=p),patch.dict('os.environ',env),patch('fresh_campaign.report',return_value=dict(stage='preparation',missingness=[],run_results=preparation)),patch('fresh_campaign.check_frozen',return_value={'policy_sha256':digest(policy),'profile':p}):
                 with self.assertRaisesRegex(ValueError,'same existing freeze'):
                     freeze(base/'profile.json',base/'new','main',policy_path=policy_path,pilot_campaign=base/'pilot')
             self.assertFalse((base/'new').exists())

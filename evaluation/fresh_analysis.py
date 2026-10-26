@@ -8,7 +8,7 @@ import math
 from pathlib import Path
 
 from fresh_contract import expected_requests, digest
-from fresh_evidence import epoch
+from fresh_evidence import epoch, elapsed
 
 
 def read(path, default=None):
@@ -34,6 +34,34 @@ def normalize(directory):
     for i, row in enumerate(rows(directory / 'requests.jsonl')):
         result.append({**row, 'provenance': {'file': 'requests.jsonl', 'row': i + 1,
                        'fields': list(row), 'transform': 'fresh-request-v1 identity; UTC parsed only during analysis'}})
+    return result
+
+
+def event_metrics(events, injected, horizon_seconds):
+    """Observed milestone times only; absent/internal controller events stay unknown."""
+    names = {'symptom_detected': 'detection_seconds',
+             'node_not_ready_observed': 'node_not_ready_seconds',
+             'diagnosis_completed': 'diagnosis_seconds',
+             'action_requested': 'action_start_seconds',
+             'action_applied': 'action_applied_seconds',
+             'fence_confirmed': 'fence_seconds',
+             'out_of_service_applied': 'out_of_service_seconds'}
+    result = {name: None for name in names.values()}
+    timeline = []
+    for event in events:
+        if event['kind'] not in names:
+            continue
+        same_clock = event['clock_id'] == injected['clock_id']
+        seconds = elapsed(injected, event) if same_clock else None
+        within = seconds is not None and 0 <= seconds <= horizon_seconds
+        timeline.append(dict(kind=event['kind'], event_id=event['event_id'], utc=event['utc'],
+                             seconds_since_injection=seconds, within_horizon=within,
+                             limitation=None if same_clock else 'different monotonic clock origins'))
+        name = names[event['kind']]
+        if within and result[name] is None:
+            result[name] = seconds
+    result['observed_event_timeline'] = timeline
+    result['event_timing_semantics'] = 'seconds from injection confirmation to first observed milestone within H; absent events are null; all milestones retained'
     return result
 
 
@@ -94,8 +122,12 @@ def request_metrics(requests, cfg, start, end, expected=None):
         a, b = start + i * bin_seconds, min(end, start + (i + 1) * bin_seconds)
         samples = [r for r in timed if a <= r[0] < b]
         complete = len(samples) >= max(cfg['min_samples'], int(round((b - a) * cfg['rate'])))
-        healthy = complete and all(ok and latency <= cfg['slo_ms'] for _, ok, latency in samples)
-        bins.append(dict(start=a, end=b, samples=len(samples), complete=complete, healthy=healthy))
+        bad=sum(not ok or latency>cfg['slo_ms'] for _,ok,latency in samples)
+        successful_p95=quantile([latency for _,ok,latency in samples if ok])
+        healthy = complete and bad/len(samples)<=cfg['bin_max_bad_fraction'] and successful_p95 is not None and successful_p95<=cfg['slo_ms']
+        bins.append(dict(start=a, end=b, samples=len(samples), complete=complete, healthy=healthy,
+                         service_slo_violations=bad,successful_p95_ms=successful_p95,
+                         allowed_bad_count=math.floor(cfg['bin_max_bad_fraction']*int(round((b-a)*cfg['rate'])))))
     # Recovery is the final contiguous healthy tail; an earlier healthy interval followed by relapse is not final recovery.
     tail = []
     for b in bins:
@@ -107,6 +139,7 @@ def request_metrics(requests, cfg, start, end, expected=None):
     confirmed = next((b['end'] for b in tail if stable_start is not None and b['end'] - stable_start >= cfg['stable_seconds']), None)
     return dict(expected_arrivals=expected, observed_arrivals=len(arrivals), failures=failures,
                 failure_rate=failures / expected if expected else None, missing=missing, incomplete=incomplete,
+                service_slo_violation_fraction=(missing+sum(not ok or latency>cfg['slo_ms'] for _,ok,latency in timed))/expected if expected else None,
                 generator_rejections=rejected, scheduled_latency_p95_ms=quantile(latencies),
                 execution_latency_p95_ms=quantile(execution_latencies), queue_p95_ms=quantile(queue),
                 violation_seconds_lower_bound=sum(b['end'] - b['start'] for b in bins if b['complete'] and not b['healthy']),
@@ -137,6 +170,29 @@ def uploader_metrics(samples,start,end,max_gap=3):
             'goodput_lower_bound_Bps':unique_bytes/(end-start) if unique_bytes is not None else None}
 
 
+def v1_relative_impact(directory, raw, requests, profile):
+    """Recompute service evidence in the policy's actual windows, ignoring its decisions."""
+    from graduation_s1_contention import summarize_window
+    a,b=map(epoch,raw['baseline_interval_utc'])
+    if abs(b-a-60)>.001:raise ValueError('V1 baseline must be the policy pre-injection 60s window')
+    baseline=summarize_window(rows(Path(directory)/'baseline-requests.jsonl'),a,b)
+    rate=profile['s1']['rate']
+    if baseline['requests']<rate*54 or baseline['failures'] or not baseline['latency_ms']['p95']:
+        raise ValueError('V1 independent baseline unavailable')
+    intervals=raw['policy_windows_utc']
+    if not intervals:raise ValueError('V1 policy observation windows missing')
+    impact=False;observed=[]
+    for start,end in intervals:
+        start,end=epoch(start),epoch(end)
+        sample=summarize_window(requests,start,end)
+        if end<=start or sample['requests']<rate*(end-start)*.9 or sample['duplicate_indexes'] or sample['max_sample_gap_seconds'] is None or sample['max_sample_gap_seconds']>max(2.5,3/rate) or not sample['latency_ms']['p95']:
+            raise ValueError('V1 policy-window requests incomplete')
+        affected=sample['failures']>baseline['failures'] or sample['latency_ms']['p95']>baseline['latency_ms']['p95']*profile['v1_condition']['baseline_p95_ratio']
+        impact|=affected
+        observed.append(dict(start=start,end=end,impact=affected,p95_ms=sample['latency_ms']['p95'],failures=sample['failures']))
+    return impact,dict(baseline=baseline,windows=observed)
+
+
 def scenario_checks(case, raw, events):
     """Read identity/configuration snapshots, never summary booleans."""
     s, mode = case['scenario'], case['mode']
@@ -153,6 +209,7 @@ def scenario_checks(case, raw, events):
         else:
             checks['relocation'] = len(actions) == 1 and before['pod_uid'] != after['pod_uid'] and before['node'] != after['node'] and raw['compute_before'] != raw['compute_after']
         checks['action_target'] = all(e.get('target_uid') == before['pod_uid'] for e in actions)
+        outcomes['intervention_delivered']=len(actions)==1
         checks['contention_at_completion']=raw['completion_host_metrics']['cpu_utilization']>=.7 and raw['completion_host_metrics']['cpu_pressure_some']>=.02
         checks['image_unchanged']=before['image_id']==after['image_id']
         checks['node_vm_identity'] = raw['node_before']['metadata']['uid'] == raw['node_after']['metadata']['uid'] and raw['vm_before']['id'] == raw['vm_after']['id']
@@ -163,7 +220,7 @@ def scenario_checks(case, raw, events):
         checks['source_port_initial'] = not initial.get('source_port',{}).get('qos_policy_id')
         checks['fresh_initial'] = initial['progress']['bytes'] == 0 and initial['progress']['next'] == 0 and not initial['port'].get('qos_policy_id') and initial['api_node'] == initial['upload_node']
         checks['uploader_progress_observed'] = bool(raw['upload_windows']) and all(w['after']['bytes'] > w['before']['bytes'] for w in raw['upload_windows'])
-        checks['uploader_offered_through_H'] = raw.get('offered_seconds',raw.get('upload_elapsed_seconds',0)) >= raw.get('horizon_seconds',raw.get('upload_elapsed_seconds',0)) and raw['upload_windows'][-1]['after'].get('next',0) < raw.get('max_chunks',4096)
+        checks['uploader_offered_through_H'] = raw.get('offered_seconds',raw.get('upload_elapsed_seconds',0)) >= raw.get('horizon_seconds',raw.get('upload_elapsed_seconds',0)) and (not raw['upload_windows'] or raw['upload_windows'][-1]['after'].get('next',0) < raw.get('max_chunks',4096))
         outcomes['upload_progress_each_window']=checks['uploader_progress_observed']
         # A stalled uploader is a performance outcome, not grounds to discard an otherwise valid P run.
         checks.pop('uploader_progress_observed')
@@ -174,9 +231,9 @@ def scenario_checks(case, raw, events):
             checks['policy_held']=initial['upload_node']==final['upload_node'] and not final['port'].get('qos_policy_id')
         else:
             checks['split_and_qos'] = bool(actions) and final['upload_node'] != initial['api_node'] and final['port'].get('qos_policy_id') == raw['policy_id']
-        byte_delta = raw['upload_windows'][-1]['after']['bytes'] - raw['upload_windows'][0]['before']['bytes']
+        byte_delta = raw['upload_windows'][-1]['after']['bytes'] - raw['upload_windows'][0]['before']['bytes'] if raw['upload_windows'] else None
         outcomes['upload_unique_bytes'] = byte_delta
-        outcomes['upload_goodput_Bps'] = byte_delta / raw['upload_elapsed_seconds']
+        outcomes['upload_goodput_Bps'] = byte_delta / raw['upload_elapsed_seconds'] if byte_delta is not None else None
         manifest=raw['upload_integrity']['rows'];files=raw['upload_integrity']['files']
         checks['upload_unique_integrity']=len({r[0] for r in manifest})==len(manifest) and len(files)==len(manifest) and all(f['index']==r[0] and f['size']==r[1] and f['sha256']==r[2] for f,r in zip(files,manifest))
     elif s == 's3':
@@ -251,6 +308,8 @@ def _judge(directory, case, profile):
     injected = next((e for e in events if e['kind'] == 'injection_applied'), None)
     ended = next((e for e in events if e['kind'] == 'horizon_end'), None)
     cfg = profile[case['scenario']]
+    if case['mode']=='V1':
+        cfg={**cfg,**profile['v1_condition']}
     if sum(e['kind']=='injection_applied' for e in events)!=1 or sum(e['kind']=='horizon_end' for e in events)!=1:
         errors.append('semantic_event_missing_or_duplicate')
     metrics = {}
@@ -283,6 +342,8 @@ def _judge(directory, case, profile):
             if len(indexes) != expected_requests(cfg) or set(indexes) != set(range(expected_requests(cfg))):
                 errors.append('s1_total_request_indexes')
     raw = read(directory / 'observations' / 'contract.json', {})
+    if case['scenario']=='s4':
+        raw['mhc_restored']=read(directory/'mhc-restored.json',{})
     checks, outcomes = {}, {}
     try:
         checks, outcomes = scenario_checks(case, raw, events)
@@ -342,14 +403,22 @@ def _judge(directory, case, profile):
     impact = any(b['complete'] and not b['healthy'] for b in metrics.get('bins', []))
     safety = bool(checks) and all(checks.values())
     recovered = metrics.get('recovered') if metrics else None
-    if case['scenario'] == 's3' and recovered and outcomes.get('seed_preserved') is not True:
-        safety = False
+    if case['scenario'] == 's3' and recovered and outcomes.get('seed_preserved') is None:
+        errors.append('seed_after_unavailable')
+        safety = None if safety else False
     v1 = None
     if case['mode'] == 'V1':
         host = raw.get('host_metrics', {})
         host_busy = fault
-        v1 = 'exception' if execution_error else 'condition_not_realized' if not host_busy or impact else 'held' if safety else 'misaction'
+        relative_impact=False
+        try:
+            relative_impact,metrics['v1_service_condition']=v1_relative_impact(directory,raw,requests,profile)
+        except (KeyError,ValueError,TypeError) as exc:
+            errors.append('v1_service_condition_unverified:'+str(exc))
+        v1 = 'exception' if execution_error else 'condition_not_realized' if not host_busy or impact or relative_impact else 'held' if safety else 'misaction'
+        if errors:v1='exception' if execution_error else 'condition_unverified'
     if injected:
+        metrics.update(event_metrics(events, injected, cfg['horizon_seconds']))
         requested=next((e for e in events if e['kind']=='injection_requested'),None)
         metrics['injection_application_bounds_utc']=[requested['utc'] if requested else None,injected['utc']]
         metrics['injection_clock_limit']='applied is first independent confirmation; exact transition lies within request/confirmation bounds'
@@ -374,7 +443,7 @@ def _judge(directory, case, profile):
 def judge(directory,case,profile):
     try:
         return _judge(directory,case,profile)
-    except (OSError,KeyError,TypeError,ValueError,IndexError,ZeroDivisionError) as exc:
+    except (OSError,KeyError,TypeError,ValueError,IndexError,ZeroDivisionError,AttributeError) as exc:
         # Broken raw is an auditable failed judgement, never a crash that loses the attempt.
         return dict(trial_valid=False,fault_realized=None,impact_realized=None,recovered=None,
                     safety=None,execution='evidence_incomplete',cleanup=False,

@@ -140,3 +140,16 @@ S2 uploader goodput은 H 안의 첫/마지막 실제 receiver 관측 사이 고�
 추가 테스트는 `tests/test_fresh_evaluation_review.py`에 있다. 최종 `make lint`는 **270 tests OK**(새 평가 45개 포함), shell 검사 통과, `git diff --check` 통과다. 실제 CLI의 합성 `main` 29개와 `preparation` 8개도 각각 freeze/run/report를 완료했다. 두 보고서의 primary sample count는 0이며 일반 primary report의 합성 입력 거절, draft live validation exit 2를 확인했다.
 
 최신 로컬 증거는 `artifacts/fresh-review-validation-2026-10-26/`의 `validation-summary.json`, `commands.json`, `make-lint.log`와 각 합성 campaign에 있다. 이전 `fresh-local-validation-2026-10-26/`는 재검토 전 검증 이력으로 보존한다. 두 묶음 모두 live 실험 증거가 아니다. 다음 live pilot에는 아직 H/SLO/clock bound·주입/V1 후보·실제 MHC spec·환경 override/identity·예산/운영 입력 확정과 운영 승인이 필요하다.
+
+
+## Claude 공동 구현 리뷰 후 변경 (2026-10-26)
+
+위 270개 테스트는 최초 구현 당시의 검증 이력이다. 이후 기존 Claude 세션에서 코드 리뷰·반론·수정 원칙 합의를 진행했다. 최신 변경, 검증 결과와 실행 절차는 [공동 리뷰 및 실행 인계](fresh-evaluation-review-2026-10-26.md)를 따른다. 승인된 연구·구축·실행 계획 원본과 과거 실험 결과는 변경하지 않았다.
+
+추가 필수 입력은 각 시나리오의 `bin_max_bad_fraction`, V1의 별도 `v1_condition.slo_ms`·`bin_max_bad_fraction`, S3의 `evidence_timeout_seconds`다. 저장소 draft에는 실측하지 않은 값을 채우지 않았다. `schedule`/`validate` 출력의 `bin_contracts`가 bin별 예정 요청 수와 허용되는 정수 bad 건수를 보여 준다.
+
+bin의 bad는 오류·잘못된 응답·deadline 초과·SLO 지연 초과의 합집합이다. healthy는 완전한 관측, 등록한 bad 비율 이하, deadline 안의 성공 요청 p95가 SLO 이하라는 조건을 모두 요구한다. 기존 `failure_rate`(오류·잘못된 응답·deadline 초과) 정의는 유지하며, SLO 초과까지 포함한 비율은 `service_slo_violation_fraction`으로 별도 출력한다. 작은 bin에서는 허용 건수가 0일 수 있고 p95 자체도 이상값에 민감하므로 pilot 전에 확인한다.
+
+V1은 자체 SLO와 자기 baseline 대비 영향을 모두 확인한다. baseline은 정책이 사용한 주입 전 60초 창이며, 실제 정책 관측 창의 요청을 독립 재계산한다. 상대 p95 1.5배 초과 또는 오류 증가가 있으면 host-only 조건 불성립이다. 증거가 부족하면 `condition_unverified`로 남기고 정상 보류로 세지 않는다.
+
+비교표에는 arm별 서비스·안전·capacity 회복 여부, D 하한·미관측 시간, 실패율·SLO 위반 비율·지연, S2 고유 byte goodput 하한·edge 미관측, A의 `intervention_delivered`가 들어간다. A 미전달은 배정 정책의 결과로 유지하되 순수 재시작 효과라는 주장을 자동 제한한다. 첫 attempt가 무효면 그 primary block은 불완전하며 retry가 이를 대체하지 않는다. retry는 비용이 드는 선택적 보조 증거다.

@@ -47,6 +47,15 @@ def validate(p, live=False):
     if p.get('v1_selected') is not None and not isinstance(p['v1_selected'],dict):raise ValueError('V1 selected candidate must be an object')
     if p['s2'].get('uploader_seconds') is not None and (type(p['s2']['uploader_seconds']) is not int or p['s2']['uploader_seconds']<=0):raise ValueError('S2 uploader duration must be positive integer seconds')
     if not isinstance(p.get('v1_candidates'),list):raise ValueError('V1 candidates list required')
+    v1=p.get('v1_condition')
+    if not isinstance(v1,dict):raise ValueError('v1_condition object required')
+    for name,value in [('v1_condition.slo_ms',v1.get('slo_ms')),
+                       ('s3.evidence_timeout_seconds',p['s3'].get('evidence_timeout_seconds'))]:
+        if value is not None and (type(value) not in (int,float) or not math.isfinite(value) or value<=0):
+            raise ValueError(name+': finite positive number or draft null required')
+    fraction=v1.get('bin_max_bad_fraction')
+    if fraction is not None and (type(fraction) not in (int,float) or not math.isfinite(fraction) or not 0<=fraction<1):
+        raise ValueError('v1_condition.bin_max_bad_fraction: finite fraction in [0,1) required')
     for c in p['cases']:
         if set(c)-{'id','scenario','mode','purpose','block','seed','session','order','depends_on'}:
             raise ValueError('unsupported case contract field')
@@ -55,6 +64,9 @@ def validate(p, live=False):
         if not isinstance(c.get('depends_on',[]),list) or not all(isinstance(d,str) for d in c.get('depends_on',[])):
             raise ValueError('depends_on must contain case IDs')
     for scenario in MODES:
+        fraction=p[scenario].get('bin_max_bad_fraction')
+        if fraction is not None and (type(fraction) not in (int,float) or not math.isfinite(fraction) or not 0<=fraction<1):
+            raise ValueError(scenario+'.bin_max_bad_fraction: finite fraction in [0,1) required')
         for key in ('horizon_seconds','stable_seconds','bin_seconds','min_samples','deadline_seconds','slo_ms','rate',*(['max_clock_offset_seconds'] if scenario in ('s1','s2') else [])):
             value=p[scenario].get(key)
             if value is not None and (type(value) not in (int,float) or not math.isfinite(value) or value<=0):
@@ -123,6 +135,13 @@ def validate(p, live=False):
         if live and key not in ('operations','timers'):
             require(not unresolved(p.get(key)), key + ': unresolved live input')
     if live:
+        for s in MODES:
+            require(p[s].get('bin_max_bad_fraction') is not None,s+'.bin_max_bad_fraction: unresolved live parameter')
+        v1=p.get('v1_condition',{})
+        require(isinstance(v1,dict) and type(v1.get('slo_ms')) in (int,float) and math.isfinite(v1['slo_ms']) and v1['slo_ms']>0,'v1_condition.slo_ms: unresolved/invalid live parameter')
+        require(isinstance(v1,dict) and type(v1.get('bin_max_bad_fraction')) in (int,float) and math.isfinite(v1['bin_max_bad_fraction']) and 0<=v1['bin_max_bad_fraction']<1,'v1_condition.bin_max_bad_fraction: unresolved/invalid live parameter')
+        require(isinstance(v1,dict) and v1.get('baseline_p95_ratio')==1.5,'V1 baseline ratio must match fixed S1 policy (1.5)')
+        require(type(p['s3'].get('evidence_timeout_seconds')) in (int,float) and math.isfinite(p['s3']['evidence_timeout_seconds']) and p['s3']['evidence_timeout_seconds']>0,'s3.evidence_timeout_seconds: unresolved/invalid live parameter')
         for scenario in ('s1','s2'):
             require(p[scenario].get('max_clock_offset_seconds') is not None,f'{scenario}.max_clock_offset_seconds: unresolved live clock bound')
         ops=p.get('operations',{})
