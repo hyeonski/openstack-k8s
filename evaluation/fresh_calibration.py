@@ -321,6 +321,50 @@ def measure(s1, case, profile, ev):
         return rows(ev.directory/'requests.jsonl')
 
 
+
+def close_session(backend, helper, case, profile, directory):
+    """Never stop the bed before verified ownership cleanup, including timeouts.
+
+    Child command guards can retain a worker lock briefly while terminating their
+    own process groups. Retry only this transient lock condition, within one
+    cleanup deadline; persist every failure and leave hosts available on failure.
+    """
+    from workload_state import command
+    directory = Path(directory)
+    try:
+        with phase('normal fixture cleanup',1800,directory/'phases.jsonl'):
+            retry_end = time.monotonic()+30
+            while True:
+                try:
+                    helper.cleanup_case(case)
+                    break
+                except BlockingIOError as exc:
+                    append(directory/'cleanup-retries.jsonl',dict(utc=utc(),error=str(exc)))
+                    if time.monotonic() >= retry_end:raise
+                    time.sleep(1)
+            proof = json.loads((helper.directory/'cases'/case['id']/'cleanup-verification.json').read_text())
+            if proof.get('passed') is not True or not proof.get('checks') or not all(v is True for v in proof['checks'].values()):
+                raise RuntimeError('owned cleanup proof did not pass')
+            atomic_json(directory/'cleanup.json',proof)
+    except BaseException as exc:
+        error = type(exc).__name__+': '+str(exc)
+        atomic_json(directory/'cleanup-error.json',dict(error=error,utc=utc(),down_blocked=True))
+        return error
+    try:
+        with phase('normal host down',1800,directory/'phases.jsonl'):
+            backend.environment_action(profile,'down')
+        hosts = json.loads(command(['gcloud','compute','instances','list','--project='+profile['project'],'--format=json(name,id,status,machineType)']))
+        hosts = {h['name']:h for h in hosts if h['name'] in profile['hosts']}
+        if set(hosts) != set(profile['hosts']) or any(h['status'] != 'TERMINATED' for h in hosts.values()):
+            raise RuntimeError('final host down readback incomplete')
+        atomic_json(directory/'hosts-final.json',hosts)
+    except BaseException as exc:
+        error = 'down: '+type(exc).__name__+': '+str(exc)
+        atomic_json(directory/'down-error.json',dict(error=error,utc=utc()))
+        return error
+    return None
+
+
 def run(directory):
     from fresh_live import LiveBackend
     from graduation_s1 import S1
@@ -409,25 +453,9 @@ def run(directory):
         append(directory/'attempts.jsonl',dict(state='interrupted',utc=utc(),error=error))
         print(error,flush=True)
     finally:
-        cleanup_error = None
-        try:
-            # Safety cleanup continues after work budget; never abandon resources
-            # merely to satisfy an elapsed-time target.
-            with phase('normal fixture cleanup',1800,directory/'phases.jsonl'):
-                helper.cleanup_case(case)
-                atomic_json(directory/'cleanup.json',json.loads((ev.directory/'cases'/case['id']/'cleanup-verification.json').read_text()))
-        except BaseException as exc:
-            cleanup_error = str(exc)
-            atomic_json(directory/'cleanup-error.json',dict(error=cleanup_error,utc=utc()))
-        if ensure_started:
-            try:
-                with phase('normal host down',1800,directory/'phases.jsonl'):
-                    backend.environment_action(profile,'down')
-                hosts = json.loads(command(['gcloud','compute','instances','list','--project='+profile['project'],'--format=json(name,id,status,machineType)']))
-                atomic_json(directory/'hosts-final.json',{h['name']:h for h in hosts if h['name'] in profile['hosts']})
-            except BaseException as exc:
-                atomic_json(directory/'down-error.json',dict(error=str(exc),utc=utc()))
-                cleanup_error = (cleanup_error or '')+'; down: '+str(exc)
+        # Ownership cleanup is a prerequisite for down. A failed cleanup leaves
+        # the bed and ledger active for explicit owned cleanup, never a false stop.
+        cleanup_error = close_session(backend,helper,case,profile,directory) if ensure_started else None
         passed = len(measurements)==5 and all(a['baseline_accepted'] and a['sustained_accepted'] for a in measurements[3:]) and not error and not cleanup_error
         summary = dict(completed_utc=utc(),accepted=passed,error=error,cleanup_error=cleanup_error,
                        normal_runs_completed=len(measurements),candidate=candidate,primary_sample_count=0,

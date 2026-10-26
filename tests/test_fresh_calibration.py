@@ -14,7 +14,7 @@ from http.server import ThreadingHTTPServer
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/d) for d in ('evaluation','scripts','experiments')]
-from fresh_calibration import assess, choose, admission, normal_job, RULE, check_root, exclusive_json, measure, validate_binding
+from fresh_calibration import assess, choose, admission, normal_job, RULE, check_root, exclusive_json, measure, validate_binding, close_session
 from fresh_campaign import freeze
 from fresh_evidence import utc, Evidence
 
@@ -110,6 +110,33 @@ class CalibrationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'document binding'):validate_binding(altered)
                 (directory/'validation-01/requests.jsonl').write_text('')
                 with self.assertRaisesRegex(ValueError,'proof changed'):validate_binding(profile)
+
+    def test_cleanup_failure_blocks_down_and_lock_drain_precedes_stop(self):
+        with tempfile.TemporaryDirectory() as d:
+            directory=Path(d);helper=Mock();helper.directory=directory/'fixture'
+            backend=Mock();case={'id':'one'};profile={'project':'p','hosts':{'host':'type'}}
+            helper.cleanup_case.side_effect=RuntimeError('worker restoration failed')
+            error=close_session(backend,helper,case,profile,directory)
+            self.assertIn('restoration failed',error)
+            backend.environment_action.assert_not_called()
+            self.assertTrue(json.loads((directory/'cleanup-error.json').read_text())['down_blocked'])
+            proof=helper.directory/'cases/one/cleanup-verification.json';proof.parent.mkdir(parents=True)
+            def restored(case):
+                proof.write_text(json.dumps({'passed':True,'checks':{'worker_auto_one':True}}))
+            helper.cleanup_case.side_effect=[BlockingIOError(35,'draining'),None]
+            helper.cleanup_case.side_effect=None
+            calls=[0]
+            def cleanup(case):
+                calls[0]+=1
+                if calls[0]==1:raise BlockingIOError(35,'draining')
+                restored(case)
+            helper.cleanup_case.side_effect=cleanup
+            def down(*args):self.assertTrue(proof.exists())
+            backend.environment_action.side_effect=down
+            with patch('fresh_calibration.time.sleep'),patch('workload_state.command',return_value=json.dumps([{'name':'host','status':'TERMINATED'}])):
+                self.assertIsNone(close_session(backend,helper,case,profile,directory))
+            backend.environment_action.assert_called_once_with(profile,'down')
+            self.assertEqual(len((directory/'cleanup-retries.jsonl').read_text().splitlines()),1)
 
     def test_job_apply_exception_still_collects_deletes_and_joins_observers(self):
         with tempfile.TemporaryDirectory() as d:
