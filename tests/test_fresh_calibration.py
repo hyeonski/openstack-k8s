@@ -14,7 +14,7 @@ from http.server import ThreadingHTTPServer
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/d) for d in ('evaluation','scripts','experiments')]
-from fresh_calibration import assess, choose, admission, normal_job, RULE, check_root, exclusive_json, measure, validate_binding, close_session
+from fresh_calibration import assess, choose, admission, normal_job, RULE, check_root, exclusive_json, measure, validate_binding, close_session, TransportWatch
 from fresh_campaign import freeze
 from fresh_evidence import utc, Evidence
 
@@ -116,7 +116,8 @@ class CalibrationTests(unittest.TestCase):
             directory=Path(d);helper=Mock();helper.directory=directory/'fixture'
             backend=Mock();case={'id':'one'};profile={'project':'p','hosts':{'host':'type'}}
             helper.cleanup_case.side_effect=RuntimeError('worker restoration failed')
-            error=close_session(backend,helper,case,profile,directory)
+            with patch.dict('os.environ',{'WORKLOAD_LOCAL_API_PORT':'16444'}):
+                error=close_session(backend,helper,case,profile,directory)
             self.assertIn('restoration failed',error)
             backend.environment_action.assert_not_called()
             self.assertTrue(json.loads((directory/'cleanup-error.json').read_text())['down_blocked'])
@@ -133,10 +134,25 @@ class CalibrationTests(unittest.TestCase):
             helper.cleanup_case.side_effect=cleanup
             def down(*args):self.assertTrue(proof.exists())
             backend.environment_action.side_effect=down
-            with patch('fresh_calibration.time.sleep'),patch('workload_state.command',return_value=json.dumps([{'name':'host','status':'TERMINATED'}])):
+            with patch.dict('os.environ',{'WORKLOAD_LOCAL_API_PORT':'16444'}),patch('fresh_calibration.time.sleep'),patch('workload_state.command',return_value=json.dumps([{'name':'host','status':'TERMINATED'}])):
                 self.assertIsNone(close_session(backend,helper,case,profile,directory))
             backend.environment_action.assert_called_once_with(profile,'down')
             self.assertEqual(len((directory/'cleanup-retries.jsonl').read_text().splitlines()),1)
+
+    def test_transport_watch_only_repairs_missing_local_listener_and_is_bounded(self):
+        with tempfile.TemporaryDirectory() as d,patch.dict('os.environ',{'STATE_DIR':d}):
+            helper=Mock();watch=TransportWatch(helper,d,port=16444)
+            with patch.object(watch,'reachable',return_value=True):watch.check()
+            helper.call.assert_not_called()
+            with patch.object(watch,'reachable',return_value=False):
+                watch.check();watch.check();watch.check()
+            self.assertEqual(helper.call.call_count,2)
+            self.assertTrue(watch.stop.is_set())
+            self.assertIn('limit',watch.error)
+            with TransportWatch(helper,d,port=16444,interval=100) as active:
+                self.assertTrue(active.thread.is_alive())
+            self.assertFalse(active.thread.is_alive())
+            self.assertTrue(json.loads((Path(d)/'transport-watch-summary.json').read_text())['stopped'])
 
     def test_job_apply_exception_still_collects_deletes_and_joins_observers(self):
         with tempfile.TemporaryDirectory() as d:

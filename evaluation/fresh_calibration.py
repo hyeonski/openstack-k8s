@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import shlex
 import shutil
+import socket
 import sys
 import threading
 import time
@@ -27,6 +28,7 @@ from fresh_operations import BedLedger, phase
 from fresh_campaign import source_hashes
 
 PROTOCOL = 'docs/graduation/s1-baseline-calibration-protocol-2026-10-26.md'
+RETRY_PROTOCOL = 'docs/graduation/s1-baseline-calibration-retry-protocol-2026-10-26.md'
 RULE = dict(multiplier=1.20, round_up_ms=10, minimum_ms=200, maximum_ms=500,
             statistic='maximum of 45 linear-interpolated per-bin successful scheduled-latency p95 values',
             calibration_runs=3, validation_runs=2, seconds=300, diagnostic_runs=0,
@@ -84,11 +86,13 @@ def register(directory, profile_path):
         shutil.copyfile(ROOT/name, dest)
     shutil.copyfile(ROOT/PROTOCOL, directory/'protocol.md')
     shutil.copyfile(profile_path, directory/'registered-profile.json')
+    shutil.copyfile(ROOT/RETRY_PROTOCOL, directory/'retry-protocol.md')
     manifest = dict(schema='s1-normal-calibration-v1', purpose='calibration/validation',
                     created_utc=utc(), primary_sample_count=0, injection_allowed=False,
                     rule=RULE, source_sha256=source, profile_path=str(profile_path),
                     profile_sha256=sha(profile_path), protocol_path=PROTOCOL,
                     protocol_sha256=sha(ROOT/PROTOCOL),
+                    retry_protocol_path=RETRY_PROTOCOL, retry_protocol_sha256=sha(ROOT/RETRY_PROTOCOL),
                     override_sha256=sha(profile['operations']['environment_override']))
     exclusive_json(directory/'registration.json', manifest)
     (directory/'registration.sha256').write_text(sha(directory/'registration.json')+'\n')
@@ -107,6 +111,8 @@ def check_registration(directory):
             raise ValueError('source snapshot changed: '+name)
     if sha(ROOT/reg['protocol_path']) != reg['protocol_sha256'] or sha(directory/'protocol.md') != reg['protocol_sha256']:
         raise ValueError('registered document changed')
+    if sha(ROOT/reg['retry_protocol_path']) != reg['retry_protocol_sha256'] or sha(directory/'retry-protocol.md') != reg['retry_protocol_sha256']:
+        raise ValueError('registered retry document changed')
     if sha(directory/'registered-profile.json') != reg['profile_sha256'] or sha(reg['profile_path']) != reg['profile_sha256']:
         raise ValueError('registered profile changed')
     profile = json.loads((directory/'registered-profile.json').read_text())
@@ -220,6 +226,64 @@ def validate_binding(profile):
         result = assess(rows(directory/f'validation-{i:02}'/'requests.jsonl'), profile['s1'])
         if not result['baseline_accepted'] or not result['sustained_accepted']:
             raise ValueError('validation raw does not satisfy S1 contract')
+
+
+class TransportWatch:
+    """Reconnect only the local API transport while existing preparation runs.
+
+    This never changes desired workers, restarts VMs or retries a worker command.
+    The watcher is joined before any normal-load stream can start.
+    """
+    def __init__(self, helper, directory, port=None, interval=10):
+        self.helper = helper
+        self.directory = Path(directory)
+        self.port = int(port or os.environ['WORKLOAD_LOCAL_API_PORT'])
+        self.interval = interval
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self.loop, daemon=True)
+        self.repairs = 0
+        self.error = None
+
+    def reachable(self):
+        try:
+            with socket.create_connection(('127.0.0.1',self.port),timeout=1):return True
+        except OSError:return False
+
+    def check(self):
+        if self.reachable():return
+        append(self.directory/'transport-watch.jsonl',dict(utc=utc(),state='local_listener_unavailable',port=self.port))
+        if self.repairs >= 2:
+            self.error = 'local API reconnect limit reached'
+            self.stop.set()
+            return
+        self.repairs += 1
+        # Save the old failure log before the established ensure replaces it.
+        saved = Path(os.environ['STATE_DIR'])/'workload-api-iap-tunnel.log'
+        if saved.exists():shutil.copyfile(saved,self.directory/f'transport-before-repair-{self.repairs}.log')
+        try:
+            self.helper.call([ROOT/'scripts/gcp-workload-api-tunnel.sh','ensure'],
+                             'transport-reconnect.log',timeout=60)
+            append(self.directory/'transport-watch.jsonl',dict(utc=utc(),state='reconnect_completed',attempt=self.repairs,listener_reachable=self.reachable()))
+        except BaseException as exc:
+            self.error = type(exc).__name__+': '+str(exc)
+            append(self.directory/'transport-watch.jsonl',dict(utc=utc(),state='reconnect_failed',attempt=self.repairs,error=self.error))
+
+    def loop(self):
+        try:
+            while not self.stop.wait(self.interval):self.check()
+        except BaseException as exc:
+            self.error = type(exc).__name__+': '+str(exc)
+
+    def __enter__(self):
+        self.directory.mkdir(parents=True,exist_ok=True)
+        self.thread.start()
+        return self
+
+    def __exit__(self, *_):
+        self.stop.set()
+        self.thread.join(65)
+        if self.thread.is_alive():raise RuntimeError('API transport watcher did not stop')
+        atomic_json(self.directory/'transport-watch-summary.json',dict(reconnect_attempts=self.repairs,error=self.error,stopped=True))
 
 
 class Samplers:
@@ -336,7 +400,8 @@ def close_session(backend, helper, case, profile, directory):
             retry_end = time.monotonic()+30
             while True:
                 try:
-                    helper.cleanup_case(case)
+                    with TransportWatch(helper,directory/'cleanup-transport'):
+                        helper.cleanup_case(case)
                     break
                 except BlockingIOError as exc:
                     append(directory/'cleanup-retries.jsonl',dict(utc=utc(),error=str(exc)))
@@ -403,7 +468,8 @@ def run(directory):
             record = json.loads((backend.state/'graduation-environment.json').read_text())
             helper.verify_ready_environment(record)
             case['environment_run_id'] = record['run_id']
-            helper.prepare_workers(case)
+            with TransportWatch(helper,directory/'preparation-transport'):
+                helper.prepare_workers(case)
             # Persist placement/worker ownership before any app preparation.
             helper.save()
         for number in range(5):
