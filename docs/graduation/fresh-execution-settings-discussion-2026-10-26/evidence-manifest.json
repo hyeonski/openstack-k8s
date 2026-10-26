@@ -18,5 +18,21 @@
     "bed-b-empty-resource-check.json": "df969afc0ab25023cbd3f0934457d7ebd2249b105777ad9e85fc00e9f86f23ff"
   },
   "subsequent_user_confirmation": "Free Trial billing account; quota increase unavailable; serial execution under current requirements",
-  "cloud_execution": "preflight project created and linked to existing billing; no experiment, VM or disk creation"
+  "cloud_execution": "preflight project created and linked to existing billing; no experiment, VM or disk creation",
+  "sonnet_finalization": {
+    "scope": "this task only; CLI model flags; original session forked; global model settings unchanged",
+    "session_id": "195711e5-a99d-4e2d-8a94-785e3d393a4b",
+    "model": "claude-sonnet-5-5",
+    "rounds": 2,
+    "raw_archive": "artifacts/fresh-execution-sonnet-review-2026-10-26",
+    "final_consensus_file": "sonnet-final-consensus.md",
+    "sha256": {
+      "review-01-prompt.txt": "998fda733433cf3a99c7f39d1cb8d6614518d6615a41f28b15f25b3ee8af9d45",
+      "review-01-response.json": "7604b23f72aabd504e08f698f71555e847cae1f04b281aa584a54c5ebef8a28c",
+      "review-02-prompt.txt": "dc98bdf785faf885854c7338ed02c0399077f11c11c9665bc7942d023628f1bf",
+      "review-02-response.json": "2c8ccdfdcc6f0c4a650a082355437470452a8af97d8d19e4f8e1b8063686be93",
+      "local-validation.json": "a7e7d3dd6bd8d3997fbcc191b2194b69c829ff2c93b52ea00d2193bd6274c809",
+      "model-usage-delta.json": "f080fb2f6e47ca99463378b37b7989ab06ed9519cbfec6259cef38b3fbadd040"
+    }
+  }
 }

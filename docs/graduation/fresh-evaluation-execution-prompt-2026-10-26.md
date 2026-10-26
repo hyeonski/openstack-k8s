@@ -17,7 +17,7 @@
 
 기준 구현 commit은 `11b4f30`이며, 인계 문서/candidate를 추가한 이후 현재 HEAD부터 시작한다. 이전 로컬 검증은 284 tests와 합성 29 main/8 preparation이 통과했고 합성 primary=0이었다. **새 live DEV·pilot·main은 아직 수행하지 않았다.** 이전 실행·합성 결과를 새 결과로 표시하지 않는다.
 
-기존 Claude 세션과 설정 논의는 끝났다. 세션 한도 경고가 있었으므로 재검토를 반복 호출하지 말고 합의 문서를 우선 사용한다. 실제 구현 결함은 증거를 보존해 해결하되, 합의된 연구 설계를 조용히 바꾸지 않는다.
+기존 Claude 세션과 설정 논의는 끝났다. 추가로 원세션을 분기해 **이번 인계 작업에만 Sonnet 5.5**로 두 차례 검토·반론·최종 합의를 마쳤다. 이 모델 선택을 앞으로의 기본 설정으로 이어가지 않는다. 세션 한도 경고가 있었으므로 Claude 재검토를 반복 호출하지 말고 합의 문서를 우선 사용한다. 실제 구현 결함은 증거를 보존해 해결하되, 합의된 연구 설계를 조용히 바꾸지 않는다.
 
 ## 2. 승인된 범위와 현재 인프라
 
@@ -38,29 +38,33 @@
 - 실제 준비·H·증거·cleanup/down 시간과 모든 진행 중 작업을 반영해 더 이른 gate를 적용한다. 마감에 맞추려고 H를 줄이거나 관측 중 cleanup을 회복으로 계산하지 않는다.
 - 기존 48시간 상한은 보수적으로 가동 bed-hours의 합으로 유지한다. 한 bed 내 어느 VM/image builder라도 켜진 구간의 합집합을 센다. DEV·준비·유휴·중단·정리를 모두 포함한다. 44시간부터는 새 case 시작을 막고 정리 여유를 남긴다.
 - candidate의 `budget_seconds=158400`은 attempt ledger gate일 뿐 클라우드 가동·금액 상한 장치가 아니다. 현재 max_case 5400초도 adapter subprocess만 제한한다. 외부 준비 작업까지 bounded하게 만들고 실제 가동 원장으로 잔여 시간을 검사한다.
+- 확정한 whole-phase 상한은 cold ensure3600초, ready/identity/터널·worker/fixture 준비 전체1800초, adapter5400초, cleanup1800초, down/정지검증1800초다. `host_headroom_seconds=10800`이다. 개별 명령마다 상한을 새로 주어 전체 시간이 누적되는 구현은 안 된다.
+- warm case 예약은 180분, cold ensure까지 필요하면240분, 세션 교체의 이전 host down까지 필요하면270분이다. 자정에서 역산하면 각각21시/20시/19:30 미만이다. 주입·drain·가동예산·실측 예상시간으로 더 이른 제한도 적용한다. 예약 상한은 기대 소요시간이 아니며 cleanup/down을 두 번 더하지 않는다.
 - 신규 작업 비용 gate 16만 원, 정리/오차 reserve 4만 원. 실제 잔여 크레딧이 더 작으면 낮춘다. VM·디스크·IP·network·image/snapshot·기타 프로젝트 사용량·정지 후 잔여 요금을 포함한다. 크레딧 만료 전에 끝낼 수 있는지도 확인한다.
 - 공식 단가상 기존 bed compute는 약 1250.38원/시간, 합산48시간 약60018원이다. 320GiB pd-balanced는 약1823원/달력일이다. 별도 요금·세금이 있고 이는 확정 청구액이 아니다. 원문 단가와 산식은 설정 문서에 있다.
 
-기본 일정은 **33시간23.6분**, pilot wave 전체를 한 번 더 하면 **39시간36.4분**이다. 사전 구현·예외·추가 기동은 별도다. DEV 진입 시 현재 시각과 실측 기동 시간을 기준으로 마감 여유를 다시 계산한다. 시간을 넘길 전망이면 조용히 범위를 줄이지 말고 실제 가능한 완전 block·누락 범위를 제시해 협의한다. 기존 결과나 retry로 부족한 n을 채우지 않는다.
+기본 일정은 **33시간23.6분**, pilot wave 전체를 한 번 더 하면 **39시간36.4분**이다. 사전 구현·예외·추가 기동은 별도다. 사전 보완 후/DEV 후/전체 pilot 후에 현재 시각과 실측 시간을 기준으로 **남은 작업만** 다시 계산한다. 완료한 DEV·pilot을 다시 더하지 않는다. 재pilot 예비가 없어도 기본29+8이 안전하게 가능하면 낮아진 여유를 알리고 진행할 수 있다. 기본 범위도 불가능하면 실제 가능한 완전 block·누락 범위를 제시해 협의한다. 승인 없이 축소하거나 불가능한 실행을 강행하지 않으며 응답 전에도 독립적인 로컬 분석과 안전 정리는 계속한다. 기존 결과나 retry로 부족한 n을 채우지 않는다.
 
 ## 4. 첫 live pilot freeze 전 사전 보완
 
 이 네 항목은 아직 완료된 기능이 아니다. 관련 코드와 tests를 확인하고 최소 범위로 구현해라. 이번에는 병렬 coordinator를 만들지 않는다.
 
 1. **DEV 전용 실행 경로:** S1 A 경로와 공통 계측/cleanup 점검에 기존 live adapter를 사용한다. 주입 gate·환경 잠금·ownership cleanup·실패/중단 증거·예산 적용을 유지한다. `development` 결과를 명시적으로 primary에서 배제하고 campaign root 밖에 보존한다. 기존 37-case profile을 가짜 main으로 실행해 DEV라고 재분류하지 않는다. crash 후 cleanup을 재개할 수 있어야 한다. A가 보류됐다면 실제 restart 전달까지 검증됐다고 보고하지 않는다.
-2. **주입 전 정상 baseline:** 각 case에서 60초의 raw를 동일 20초 bin 3개로 독립 재계산한다. 표본 완전성, bad≤.05, 성공 p95≤등록 SLO가 모두 충족돼야 주입한다. V1은 전용 SLO100ms를 쓴다. S1/S2 기존60초 raw를 활용하고 S3의30표본/S4의3표본 baseline은 보강한다. 마지막 arrival의 deadline 처리도 끝낸다. missing을 정상으로 보거나 주입 후 자료를 baseline에 넣지 않는다. `analysis.baseline_contract`는 사전 등록이며 기존 코드가 이미 강제한다고 가정하지 않는다.
+2. **주입 전 정상 baseline:** probe 준비 후 시작한 등록 stream의 **예정 index 0부터 `60×rate`개**를 고정한다. 처음 관측된 행을 새 index 0으로 삼거나 실패 뒤 같은 attempt에서 좋은 창을 찾지 않는다. 각 `20×rate`개의 index로 3개 bin을 나누고 UTC/monotonic/clock-id/arrival schedule 일관성도 검증한다. float 시각 경계로 표본을 재분류하지 않는다. 표본 완전성, bad≤.05, 성공 p95≤등록 SLO가 모두 충족돼야 주입한다. V1은 전용100ms다. 마지막 arrival의 deadline 처리를 최대5초 기다린다. S1의 독립 gate는 경쟁 VM 생성 전에 실행하고, 정책의 기존90초 대기 후 마지막60초 창은 변경하지 않은 채 연구 창과의 차이를 기록한다. S2의 baseline raw를 활용하고 S3는 레거시30행 대신 OpenLoopProbe의 동일 schema로60초 수집하며 S4도3표본에서보강한다. missing을 정상으로 보거나 주입 후 자료를 넣지 않는다. `analysis.baseline_contract`는 등록사항이며 기존 코드가 이미 강제한다고 가정하지 않는다.
 3. **S1/S2 paired p95 차이:** 기존 arm별 값에서 사전 등록한 보조 차이 열을 만든다. 성공·정확·deadline 내 요청에 조건부인 p95이며 실패율/SLO피해/결측과 함께 해석한다. 유효한 첫 attempt 비교가 아니거나 값이 없으면 null을 유지한다. co-primary로 바꾸지 않는다.
-4. **실행 마감 gate:** candidate의 마지막 주입 시각 외에 21시 case-start 제한과 자정까지 준비·관측·정리·down이 끝나는 조건을 구현/강제한다. DEV와 일반 case 모두 적용한다. 23시 drain 시 raw와 불완전 상태를 남기고 cleanup만 수행한다. 정상 H를 침범하는 다음 case를 시작하지 않는다.
+4. **실행 마감·단계·freeze gate:** candidate의 명시된 운영 키를 실제로 읽어 21시 case-start, 22시주입, 23시drain, 23:30down개시, 자정종료와 whole-phase 상한을 강제한다. DEV에도 적용한다. 환경 회전은 case 밖의 명시적 down→cold ensure 단계로 분리한다. 현재 `Campaign.environment()`의 내부 재기동 경로를 case 안에서 그대로 호출하지 말고 ready 검사만 fixture 상한 안에서 한다. 환경·수명 admission은 attempt 생성 및 case별 mutation 전에 거절해야 하며, attempt 진입 뒤 준비 실패는 infra-invalid/cleanup으로 기록한다. 상한·headroom을 validator/consumer뿐 아니라 `pilot_contract()`에도 묶는다. 운영 키와 `analysis` 추가 키를 기존 validator가 무시하는 상태에서 지원 완료라고 하지 않는다. `operations.preregistered_documents`의 설정 부록·프롬프트는 freeze에 파일명·SHA-256·복사본을 보존하고 변경을 검사한다. 현재 source_hashes에 자동 포함되지 않는 문서다. 정상 H를 침범하는 다음 case를 시작하지 않는다.
 
-오프라인 검증은 실제로 필요한 failure path에 집중한다: DEV primary 유입 차단과 중단 cleanup, 불완전/느린 baseline에서 주입 차단, V1 전용 경계, invalid/retry의 p95 차이 제외, 시간·예산 gate가 주입 전에 막는지. `make lint`와 관련 검증을 실행한다. 합성 검증은 새 artifact에서 하되 일반 primary에 넣지 않는다. 의미 없는 테스트를 늘리지 않는다.
+오프라인 검증은 실제로 필요한 failure path에 집중한다: DEV primary 유입 차단과 중단 cleanup, baseline index0 누락·경계·불완전/느린응답에서 주입 차단, V1 전용 경계, invalid/retry의 p95 차이 제외, 새 키 누락/범위 오류 거절과 실제 consumer의 적용, whole-phase timeout, admission 거절 시 attempt 미생성, 내부 재기동 금지, pilot–main 상한 불일치 및 문서 변경 거절. `make lint`와 관련 검증을 실행한다. 합성 검증은 새 artifact에서 하되 일반 primary에 넣지 않는다. 의미 없는 테스트를 늘리지 않는다.
 
-수정·문서·커밋은 **pilot freeze 전에** 끝낸다. 정책과 판정 의미에 걸친 파일은 보수적으로 전체 hash를 유지한다. 검증을 우회하려고 hash 대상에서 제외하지 않는다.
+수정·문서·커밋과 운영 세부 구현을 끝낸 뒤 **DEV용 source/profile snapshot → DEV → 최종 코드의 preparation freeze** 순서로 진행한다. DEV에서 고쳤으면 새 snapshot과 필요한 검증을 남긴다. 정책과 판정 의미에 걸친 파일은 보수적으로 전체 hash를 유지한다. 검증을 우회하려고 hash 대상에서 제외하지 않는다.
 
 ## 5. profile 확정과 DEV/pilot
 
 tracked candidate를 `.state/cloud-gcp-amd64-greenfield/evaluation-profiles/` 아래 새 버전 파일로 복사한다. 실제 실행 checkout·operator·override·artifact root를 채우고, 실제 MHC specs와 host/image/version identity를 기록한다. candidate의 `s3_specs=[]`는 기대값일 뿐 실측이 아니다. 다르면 원인을 조사해 실제 계약을 등록하며 무관한 MHC를 지우지 않는다.
 
 MHC readback 등 환경 관측에 필요한 기존 bed 기동은 허용된다. 이 준비 시간도 원장에 포함한다. 모든 입력과 사전 보완이 명시된 후 `readiness=confirmed`로 만든다. confirmed는 pilot 성공을 뜻하지 않는다. profile/override 버전은 freeze 뒤 수정하지 않는다.
+
+현장 확인은 설정 문서의 체크리스트대로 수행한다. MHC는 management kubeconfig의 실제 목록/spec, host는 GCP identity/type/cpuPlatform, 이미지는 checksum/ID와 실제 Kubernetes/flavor/timer, 경로는 현재 checkout/override/artifact의 절대경로·hash다. 크레딧 콘솔을 읽을 수 없으면 사용자에게 잔액·만료일 두 값만 요청하고 로컬 보완은 계속한다. 사용자 제공 정보와 실측을 구분한다. 이들은 연구자가 아직 결정하지 않은 수치가 아니라 실행 전에 관측할 사실이다.
 
 고정 수치는 H=1200/1200/900/1200초, stable120초, bin20초, rate5/2/1/1, min100/40/20/20, deadline5초, SLO200/500/2000/2000ms, bad.05다. S1/S2 clockbound5초, S2 uploader1800초, S3 evidence60초, V1 단일후보10000rounds/4workers·SLO100ms·ratio1.5다. 세부 fault·fixture는 candidate 그대로다. P/M 결과를 본 뒤 목표를 유리하게 바꾸지 않는다. M이 정상이어도 유효한 결과로 보고한다.
 
@@ -86,6 +90,8 @@ make graduation-fresh-report CAMPAIGN=/absolute/release/bed-a/s1-pilot-v1
 
 한 case씩 실행해 독립 판정·정리와 다음 case 예산을 확인한다. 예상되는 M/off 미회복 때문에 자동 retry하거나 다음 유효 case를 영구 중단하지 않는다. cleanup 실패면 다음 case를 막고 `graduation-fresh-resume-cleanup CAMPAIGN=... CASE=...`로 소유 자원 정리만 재개한다.
 
+동일 계약의 pilot는 infra-invalid일 때만 추가 attempt1회가 가능하다. 유효하지만 P/on 미회복 또는 V1 미재현이면 해당 시나리오 pilot no-go로 기록한다. 코드·계약 변경 없이 새 preparation campaign을 만들어 성공한 결과를 고르지 않는다. 실제 원인을 수정하면 변경 이유와 예산을 기록하고 새pilot을 검증한다. 동일 시나리오에서 clock 검증 실패 attempt가 연속2회면 원인 조사 전 추가 주입을 중지하고 bound를 자동 완화하지 않는다.
+
 전체 pilot의 유효성·안전·cleanup·fault 재현과 P/on의 H 내 회복, V1 조건과 정상 보류를 확인한다. S1 주입 오프셋≤570초, S2 조정 완료 후 안정창, S3 MHC/seed/fencing, S4 pause/Node/capacity/복원을 확인한다. 정상 baseline이 목표를 못 지키면 원인을 조사하며 목표 자동 완화는 하지 않는다. 목표 수정에는 사전 amendment와 새 pilot이 필요하다.
 
 정책/공통 판정 코드를 바꾸면 변경 전 pilot을 그대로 이용하지 않는다. 적합한 새 release/pilot을 수행하고 예산을 다시 계산한다. 수정 전 raw와 실패를 보존한다.
@@ -100,7 +106,7 @@ make graduation-fresh-report CAMPAIGN=/absolute/release/bed-a/s1-pilot-v1
 - S3: M3600/P3600, P3600/M3600, M3600/P3600 = 6개.
 - S4: off/on, on/off, off/on = 6개, 마지막.
 
-case ID·seed·순서는 candidate의 schedule 그대로다. 다른 시나리오를 동시에 같은 bed에 주입하지 않는다. 세션 사이 전체 health/placement gate를 통과하고 host 수명10시간·headroom2시간을 유지한다. 재기동 후 `cpuPlatform` 변화 등 identity 불일치를 우회하지 않는다. 실제 재기동 때 달라지면 cohort를 이어 붙이지 않고 원인·남은 선택지를 보고한다.
+case ID·seed·순서는 candidate의 schedule 그대로다. 다른 시나리오를 동시에 같은 bed에 주입하지 않는다. 세션 사이 전체 health/placement gate를 통과하고 host 수명10시간·headroom**3시간**을 유지한다. S1 main 두 세션 계획 합계는10시간53.2분으로 한 host 수명에 억지로 붙이지 않는다. 재기동 후 `cpuPlatform` 변화 등 identity 불일치를 우회하지 않고 같은 플랫폼이 나올 때까지 재기동하지 않는다. 달라지면 원래 cohort/미완료를 보존하고 새 동일조건 cohort에 필요한 시간·비용과 선택지를 보고한다.
 
 모든 case는 회복해도 H까지 관측한다. 미회복은 recovery time null이며 H로 대체하지 않는다. safety, validity, fault/impact 재현, recovery, cleanup을 분리한다. A의 `intervention_delivered=false`를 삭제하지 않으며 그 비교는 배정 정책 비교이지 실제 restart 효과가 아니다.
 

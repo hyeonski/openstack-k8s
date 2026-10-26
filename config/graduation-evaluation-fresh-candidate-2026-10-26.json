@@ -12,7 +12,7 @@
   "target_compute": "osk8s-compute01",
   "control_plane_compute": "osk8s-compute01",
   "max_case_seconds": 5400,
-  "host_headroom_seconds": 7200,
+  "host_headroom_seconds": 10800,
   "schema_version": 3,
   "scope": "F-repeated",
   "readiness": "draft",
@@ -74,7 +74,13 @@
       "required_complete_healthy_bins": 3,
       "slo_and_bad_fraction": "same as scenario (V1 uses v1_condition)",
       "scope": "pre-injection; preserve arrival/start/completion raw and await final request deadlines",
-      "implementation_status_at_registration": "executor must implement and verify before first pilot freeze"
+      "implementation_status_at_registration": "executor must implement and verify before first pilot freeze",
+      "start_rule": "index 0 of the registered probe stream after probe readiness; never first observed row",
+      "first_arrival_index": 0,
+      "bin_assignment": "arrival index ranges of 20 * scenario rate; validate UTC/monotonic schedule consistency separately",
+      "window_selection": "first 60 * rate scheduled arrivals; no sliding or success-based window selection",
+      "completion_grace_seconds": 5,
+      "policy_baseline": "preserve existing policy window and record both windows; S1 policy last 60 seconds after its existing 90-second wait"
     }
   },
   "s1": {
@@ -190,7 +196,24 @@
     "execution_checkout": "/Users/hyeonseungkim/workspace/openstack-k8s",
     "artifact_root": "/Users/hyeonseungkim/workspace/openstack-k8s/artifacts/fresh-evaluation-2026-10-26/bed-a",
     "tool_change_allowlist": [],
-    "impact_analysis": null
+    "impact_analysis": null,
+    "environment_ensure_timeout_seconds": 3600,
+    "fixture_prepare_timeout_seconds": 1800,
+    "host_shutdown_timeout_seconds": 1800,
+    "last_case_start_utc": "2026-10-28T12:00:00+00:00",
+    "drain_utc": "2026-10-28T14:00:00+00:00",
+    "shutdown_start_utc": "2026-10-28T14:30:00+00:00",
+    "hard_stop_utc": "2026-10-28T15:00:00+00:00",
+    "bed_uptime_limit_seconds": 172800,
+    "bed_uptime_soft_limit_seconds": 158400,
+    "credit_budget_krw": 200000,
+    "new_work_budget_krw": 160000,
+    "cleanup_reserve_krw": 40000,
+    "clock_failure_stop_after_attempts": 2,
+    "preregistered_documents": [
+      "docs/graduation/fresh-execution-settings-2026-10-26.md",
+      "docs/graduation/fresh-evaluation-execution-prompt-2026-10-26.md"
+    ]
   },
   "cases": [
     {
