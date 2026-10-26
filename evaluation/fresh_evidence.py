@@ -74,12 +74,12 @@ class OpenLoopProbe:
             def one(index, scheduled):
                 begin, mono = time.time(), time.monotonic()
                 row = dict(request_id=str(index), index=index, scheduled_utc=utc(scheduled),
-                           started_utc=utc(begin), clock_id=self.clock_id, started_monotonic=mono,
+                           scheduled_monotonic=anchor+index/self.rate, started_utc=utc(begin), clock_id=self.clock_id, started_monotonic=mono,
                            deadline_seconds=self.deadline, ok=False, correct=False, bytes=0, generator_rejection=False)
                 active_rows[index] = row
                 try:
                     result = self.probe()
-                    protected={'request_id','index','scheduled_utc','started_utc','started_monotonic','clock_id','deadline_seconds','generator_rejection','completed_utc','completed_monotonic'}
+                    protected={'request_id','index','scheduled_monotonic','scheduled_utc','started_utc','started_monotonic','clock_id','deadline_seconds','generator_rejection','completed_utc','completed_monotonic'}
                     row.update({k:v for k,v in result.items() if k not in protected})
                     row['correct'] = result.get('correct', result['ok'])
                 except Exception as exc:
@@ -100,7 +100,7 @@ class OpenLoopProbe:
                     emit(future.result()); del pending[future]
                 if len(pending) >= self.max_inflight:
                     emit(dict(request_id=str(i), index=i, scheduled_utc=utc(scheduled), started_utc=None,
-                              completed_utc=None, deadline_seconds=self.deadline, ok=False, correct=False,
+                              scheduled_monotonic=anchor+i/self.rate, completed_utc=None, deadline_seconds=self.deadline, ok=False, correct=False,
                               bytes=0, generator_rejection=True, error='inflight_limit', clock_id=self.clock_id))
                 else:
                     pending[pool.submit(one, i, scheduled)] = (i, scheduled)
@@ -109,7 +109,7 @@ class OpenLoopProbe:
                 emit(future.result())
             for future in unfinished:
                 i, scheduled = pending[future]
-                incomplete=dict(active_rows.get(i,dict(request_id=str(i),index=i,scheduled_utc=utc(scheduled),started_utc=None,deadline_seconds=self.deadline,clock_id=self.clock_id)))
+                incomplete=dict(active_rows.get(i,dict(request_id=str(i),index=i,scheduled_utc=utc(scheduled),scheduled_monotonic=anchor+i/self.rate,started_utc=None,deadline_seconds=self.deadline,clock_id=self.clock_id)))
                 incomplete.update(completed_utc=None,ok=False,correct=False,bytes=0,generator_rejection=False,error='unfinished')
                 emit(incomplete)
             pool.shutdown(wait=False, cancel_futures=True)

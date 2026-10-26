@@ -20,6 +20,8 @@ SUPPORTED_FIXTURE = {
     's3_volume_seed': {'records':1000,'volume':'new-cinder-pvc','seed':'profile-seed-and-block'},
     's4_capacity': {'workers':2,'http_replicas':1},
 }
+BASELINE_CONTRACT = {'duration_seconds': 60, 'bin_seconds': 20, 'required_complete_healthy_bins': 3, 'slo_and_bad_fraction': 'same as scenario (V1 uses v1_condition)', 'scope': 'pre-injection; preserve arrival/start/completion raw and await final request deadlines', 'implementation_status_at_registration': 'executor must implement and verify before first pilot freeze', 'start_rule': 'index 0 of the registered probe stream after probe readiness; never first observed row', 'first_arrival_index': 0, 'bin_assignment': 'arrival index ranges of 20 * scenario rate; validate UTC/monotonic schedule consistency separately', 'window_selection': 'first 60 * rate scheduled arrivals; no sliding or success-based window selection', 'completion_grace_seconds': 5, 'policy_baseline': 'preserve existing policy window and record both windows; S1 policy last 60 seconds after its existing 90-second wait'}
+
 STATES = ('PREPARED', 'BASELINE', 'INJECTED', 'OBSERVING', 'HORIZON_END', 'CLEANUP', 'VERIFIED')
 
 
@@ -175,6 +177,33 @@ def validate(p, live=False):
             epoch(ops['last_injection_utc'])
         except (KeyError,TypeError,ValueError,AttributeError):
             errors.append('operations.last_injection_utc: timezone-aware timestamp required')
+        from fresh_operations import PHASE_LIMITS, TIME_KEYS
+        extended = (*PHASE_LIMITS, 'bed_uptime_limit_seconds', 'bed_uptime_soft_limit_seconds',
+                    'credit_budget_krw', 'new_work_budget_krw', 'cleanup_reserve_krw', 'clock_failure_stop_after_attempts')
+        require(all(type(ops.get(k)) is int and ops[k]>0 for k in extended), 'operations: positive integer phase/budget limits required')
+        require(all(isinstance(ops.get(k),str) and ops[k] for k in (*TIME_KEYS,'bed_ledger_path','development_artifact_root')), 'operations: deadline and ledger/DEV paths required')
+        try:
+            times=[epoch(ops[k]) for k in TIME_KEYS]
+            require(times==sorted(set(times)), 'operational deadlines must be strictly ordered')
+            require(ops['environment_ensure_timeout_seconds']<=3600 and ops['fixture_prepare_timeout_seconds']<=1800 and ops['cleanup_seconds']<=1800 and ops['host_shutdown_timeout_seconds']<=1800 and p['max_case_seconds']<=5400, 'phase limits exceed approved bounds')
+            require(p['host_headroom_seconds']>=ops['fixture_prepare_timeout_seconds']+p['max_case_seconds']+ops['cleanup_seconds']+ops['host_shutdown_timeout_seconds'], 'host headroom must cover fixture, adapter, cleanup and shutdown')
+            require(ops['bed_uptime_soft_limit_seconds']<=158400 and ops['bed_uptime_limit_seconds']<=172800 and ops['bed_uptime_soft_limit_seconds']<ops['bed_uptime_limit_seconds'], 'bed uptime limits exceed approved 44/48 hours')
+            require(ops['new_work_budget_krw']<=160000 and ops['cleanup_reserve_krw']>=40000 and ops['new_work_budget_krw']+ops['cleanup_reserve_krw']<=ops['credit_budget_krw'], 'cost gate/reserve invalid')
+            credit=ops['credit_evidence']
+            require(credit['remaining_krw']>=ops['credit_budget_krw'] and epoch(credit['expires_utc'])>times[-1] and credit['source'] in ('user-reported','billing-console') and bool(credit['confirmed_utc']), 'credit evidence does not cover registered work')
+            basis=ops['cost_estimate']
+            require(all(type(basis[k]) in (int,float) and math.isfinite(basis[k]) and basis[k]>0 for k in ('bed_hour_krw','calendar_day_krw','other_usage_reserve_krw')), 'cost estimate must cover compute, retained resources and other usage')
+            require(ops['clock_failure_stop_after_attempts']==2, 'clock failures must stop after two consecutive attempts')
+            for key in ('artifact_root','development_artifact_root','bed_ledger_path'):
+                require(Path(ops[key]).is_absolute(), key+': absolute path required')
+            require(not Path(ops['development_artifact_root']).is_relative_to(Path(ops['artifact_root'])) and not Path(ops['artifact_root']).is_relative_to(Path(ops['development_artifact_root'])), 'DEV must be outside campaign artifact root')
+        except (KeyError,TypeError,ValueError,AttributeError):
+            errors.append('operations: incomplete/invalid deadline, credit or phase contract')
+        documents=ops.get('preregistered_documents')
+        require(isinstance(documents,list) and len(documents)>=2 and len(documents)==len(set(documents)) and all(isinstance(n,str) and not Path(n).is_absolute() and '..' not in Path(n).parts for n in documents), 'operations.preregistered_documents: explicit safe relative documents required')
+        require(p['analysis'].get('baseline_contract')==BASELINE_CONTRACT, 'analysis.baseline_contract: unsupported or missing fixed first-arrival contract')
+        secondary=p['analysis'].get('secondary_metrics',{}).get('scheduled_latency_p95_ms_difference',{})
+        require(secondary.get('scenarios')==['s1','s2'] and bool(secondary.get('interpretation')), 'analysis.secondary_metrics: registered S1/S2 conditional p95 difference required')
         require(p.get('max_attempts') == 2, 'register one additional retry at most')
         require(p.get('analysis', {}).get('contrasts') == [['s1', 'P', 'M'], ['s1', 'P', 'A'], ['s2', 'P', 'M'], ['s3', 'P3600', 'M3600'], ['s4', 'on', 'off']], 'primary contrasts changed')
         require((p.get('s2', {}).get('uploader_seconds') or 0) >= (p.get('s2', {}).get('horizon_seconds') or math.inf) + 600,

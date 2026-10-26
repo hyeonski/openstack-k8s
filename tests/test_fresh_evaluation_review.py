@@ -45,6 +45,10 @@ class AgreementReviewTests(unittest.TestCase):
         p['s1']['max_clock_offset_seconds']=1;p['s2']['max_clock_offset_seconds']=1
         p['s2']['uploader_seconds']=1200;p['timers']['mhc_policy']={'s3_specs':[]}
         p['operations'].update(operator='offline schema only',budget_seconds=100000,cleanup_seconds=900,last_injection_utc='2026-10-27T00:00:00Z',environment_override='/unused',execution_checkout=str(ROOT),artifact_root='/unused')
+        candidate=json.loads((ROOT/'config/graduation-evaluation-fresh-candidate-2026-10-26.json').read_text())
+        from fresh_fake import operational_fixture
+        p['operations']=operational_fixture(candidate['operations'])
+        p['analysis']=candidate['analysis'];p['host_headroom_seconds']=10800
         self.assertEqual(validate(p,live=True)['main'],29)
         p['initial_fixture']['s4_capacity']['workers']=3
         with self.assertRaisesRegex(ValueError,'initial fixture'):validate(p,live=True)

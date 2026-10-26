@@ -310,6 +310,21 @@ def _judge(directory, case, profile):
     cfg = profile[case['scenario']]
     if case['mode']=='V1':
         cfg={**cfg,**profile['v1_condition']}
+    if profile['analysis'].get('baseline_contract'):
+        from fresh_baseline import baseline_metrics
+        requested=next((e for e in events if e['kind']=='injection_requested'),None)
+        baseline=baseline_metrics(rows(directory/'baseline-gate-requests.jsonl'),cfg,
+                                  before=epoch(requested['utc']) if requested else None)
+        baseline_raw=rows(directory/'baseline-gate-requests.jsonl')
+        if case['scenario'] in ('s1','s3','s4'):
+            by_index={r.get('index'):r for r in requests}
+            if any(any(r.get(k)!=by_index.get(r['index'],{}).get(k) for k in r) for r in baseline_raw):
+                errors.append('baseline_stream_mismatch')
+        if not requested or not baseline['passed']:
+            errors.extend(baseline['errors'] or ['baseline_not_verified_before_injection'])
+    clock_rows=rows(directory/'clock-checks.jsonl')
+    if case['scenario'] in ('s1','s2') and any(max(abs(r['offset_lower_seconds']),abs(r['offset_upper_seconds']))>cfg['max_clock_offset_seconds'] for r in clock_rows):
+        errors.append('clock_alignment_unverified')
     if sum(e['kind']=='injection_applied' for e in events)!=1 or sum(e['kind']=='horizon_end' for e in events)!=1:
         errors.append('semantic_event_missing_or_duplicate')
     metrics = {}

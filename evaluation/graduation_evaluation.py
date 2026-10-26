@@ -169,6 +169,10 @@ class Campaign:
             self.make('graduation-env-down', 'environment.log', timeout=1800)
             self.make('graduation-env-ensure', 'environment.log', timeout=3000)
             record = read(self.state / 'graduation-environment.json')
+        return self.verify_ready_environment(record)
+
+    def verify_ready_environment(self, record):
+        # Readiness only: fresh runner must explicitly ensure/down outside a case.
         # The tunnel processes must survive the environment command's lifetime.
         for script in ('gcp-management-cluster.sh', 'gcp-workload-api-tunnel.sh'):
             action = 'tunnel' if 'management' in script else 'ensure'

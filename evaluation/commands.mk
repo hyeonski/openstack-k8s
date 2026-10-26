@@ -38,3 +38,16 @@ graduation-fresh-report:
 
 graduation-fresh-status:
 	@python3 evaluation/fresh_campaign.py status --campaign "$(CAMPAIGN)"
+
+.PHONY: graduation-fresh-dev-freeze graduation-fresh-environment-ensure graduation-fresh-environment-down graduation-fresh-environment-rotate
+graduation-fresh-dev-freeze:
+	@bash evaluation/graduation-evaluation.sh --fresh freeze --profile "$(FRESH_PROFILE)" --stage development --campaign "$(CAMPAIGN)"
+
+graduation-fresh-environment-ensure:
+	@bash evaluation/graduation-evaluation.sh --fresh environment-ensure --profile "$(FRESH_PROFILE)" --campaign "$(CAMPAIGN)"
+
+graduation-fresh-environment-down:
+	@bash evaluation/graduation-evaluation.sh --fresh environment-down --profile "$(FRESH_PROFILE)" --campaign "$(CAMPAIGN)"
+
+graduation-fresh-environment-rotate:
+	@bash evaluation/graduation-evaluation.sh --fresh environment-rotate --profile "$(FRESH_PROFILE)" --campaign "$(CAMPAIGN)"

@@ -7,11 +7,13 @@ import os
 from pathlib import Path
 import shutil
 import sys
+import time
 
 from lib.state import atomic_json
 from graduation_evaluation import Campaign
 from graduation_recovery import RecoveryLab
-from fresh_evidence import epoch
+from fresh_evidence import epoch, utc
+from fresh_operations import phase, case_time_gate, BedLedger
 
 
 class LiveBackend:
@@ -41,6 +43,81 @@ class LiveBackend:
         if record.exists() and json.loads(record.read_text()).get('phase') not in ('completed','completed_with_gap') and (not prep.exists() or json.loads(prep.read_text()).get('phase')!='restored'):
             raise RuntimeError('unfinished S4 experiment requires owned cleanup before environment changes')
 
+    def admit(self, case, profile):
+        from workload_state import command
+        self.require_clean_state()
+        ops=profile['operations']
+        for key in ('artifact_root','development_artifact_root'):
+            for saved in Path(ops[key]).rglob('campaign.json'):
+                data=json.loads(saved.read_text())
+                if data.get('synthetic'):continue
+                for prior in data.get('cases',[]):
+                    if prior.get('attempts') and prior['attempts'][-1]['state']!='VERIFIED':
+                        raise RuntimeError('unfinished attempt blocks admission; resume-cleanup: '+str(saved.parent)+' '+prior['id'])
+                    result=prior.get('judgement',{})
+                    if result.get('trial_valid') and result.get('safety') is not True:
+                        raise RuntimeError('prior safety violation blocks environment; preserve evidence and investigate')
+        reserved=case_time_gate(profile)
+        ledger=BedLedger(profile)
+        ledger.require_active()
+        ledger.gate(reserved)
+        with phase('admission readback',min(120,ops['fixture_prepare_timeout_seconds'])):
+            record=json.loads((self.state/'graduation-environment.json').read_text())
+            if record.get('phase')!='ready':
+                raise RuntimeError('environment not ready; explicit down/ensure required before attempt')
+            hosts=json.loads(command(['gcloud','compute','instances','list','--project='+profile['project'],
+                                      '--format=json(name,id,status,machineType,cpuPlatform,lastStartTimestamp,scheduling)']))
+            hosts={h['name']:h for h in hosts if h['name'] in profile['hosts']}
+            if set(hosts)!=set(profile['hosts']) or any(h['status']!='RUNNING' for h in hosts.values()):
+                raise RuntimeError('case admission: hosts are not all RUNNING; no internal ensure')
+            identity={n:dict(id=str(h['id']),machine_type=h['machineType'].split('/')[-1],cpuPlatform=h['cpuPlatform']) for n,h in hosts.items()}
+            expected=profile.get('observed_environment',{}).get('host_identity')
+            if not expected or identity!=expected:
+                raise RuntimeError('case admission: actual host identity/platform differs from registered readback')
+            for name,host in hosts.items():
+                saved=record['final_hosts'][name]
+                deadline=epoch(host['lastStartTimestamp'])+int(host['scheduling']['maxRunDuration']['seconds'])
+                if saved['id']!=str(host['id']) or abs(epoch(saved['last_start'])-epoch(host['lastStartTimestamp']))>.001:
+                    raise RuntimeError('case admission: environment host start changed')
+                if deadline-time.time()<profile['host_headroom_seconds']:
+                    raise RuntimeError('case admission: host lifetime insufficient; explicit down/ensure required')
+
+    def environment_action(self, profile, action):
+        from fresh_evidence import Evidence
+        from workload_state import command
+        self.require_clean_state()
+        ops=profile['operations']
+        ledger=BedLedger(profile)
+        if action=='rotate':
+            reserved=case_time_gate(profile,rotate=True)
+            ledger.gate(reserved)
+            down=self.environment_action(profile,'down')
+            ensure=self.environment_action(profile,'ensure')
+            return {'down':str(down),'ensure':str(ensure)}
+        ev=Evidence(self.directory/('environment-'+action+'-'+str(time.time_ns())))
+        h=self.helper(profile,ev)
+        if action=='ensure':
+            reserved=case_time_gate(profile,cold=True)
+            ledger.gate(reserved)
+            # This records the entire ensure interval even if the process crashes.
+            ledger.begin()
+            seconds=ops['environment_ensure_timeout_seconds']
+            until=epoch(ops['hard_stop_utc'])-reserved+seconds
+        else:
+            seconds=ops['host_shutdown_timeout_seconds']
+            until=epoch(ops['hard_stop_utc'])
+        with phase('environment '+action,seconds,ev.directory/'phases.jsonl',until):
+            h.make('graduation-env-'+action,'environment.log',timeout=seconds)
+            record=json.loads((self.state/'graduation-environment.json').read_text())
+            atomic_json(ev.directory/'environment-record.json',record)
+            if action=='down':
+                hosts=json.loads(command(['gcloud','compute','instances','list','--project='+profile['project'],
+                    '--format=json(name,id,status,machineType)']))
+                selected={r['name']:r for r in hosts if r['name'] in profile['hosts']}
+                if set(selected)!=set(profile['hosts']):raise RuntimeError('shutdown verification hosts missing')
+                ledger.stopped(selected)
+        return ev.directory
+
     def execute(self, case, profile, ev):
         from workload_state import ROOT
         self.require_clean_state()
@@ -50,17 +127,32 @@ class LiveBackend:
         prep_path=self.state/'s4-preparation.json'
         prep=json.loads(prep_path.read_text()) if prep_path.exists() else {}
         atomic_json(ev.directory/'prior-state.json',{'run_id':prior.get('run_id') if prior else None,'preparation_run_id':prep.get('run_id')})
-        environment=h.environment()
-        case['environment_run_id']=environment['run_id']
-        atomic_json(self.directory/'runtime-environment.json',{k:h.data[k] for k in ('host_identity','flavors')})
-        atomic_json(ev.directory/'runtime-environment.json',{k:h.data[k] for k in ('host_identity','flavors')})
-        h.prepare_workers(case)
-        if case['scenario']=='s1':h.make('graduation-s1-prepare','prepare.log')
+        ops=profile['operations']
+        deadline=time.time()+ops['fixture_prepare_timeout_seconds']
+        with phase('fixture readiness/workers',ops['fixture_prepare_timeout_seconds'],ev.directory/'phases.jsonl'):
+            record=json.loads((self.state/'graduation-environment.json').read_text())
+            if record.get('phase')!='ready':raise RuntimeError('environment lost readiness after admission')
+            environment=h.verify_ready_environment(record)
+            case['environment_run_id']=environment['run_id']
+            observed={k:h.data[k] for k in ('host_identity','flavors')}
+            if observed['host_identity']!=profile['observed_environment']['host_identity']:
+                raise RuntimeError('host identity changed during preparation')
+            atomic_json(self.directory/'runtime-environment.json',observed)
+            atomic_json(ev.directory/'runtime-environment.json',observed)
+            h.prepare_workers(case)
+            if case['scenario']=='s1':h.make('graduation-s1-prepare','prepare.log')
         atomic_json(ev.directory/'case-contract.json',case)
         atomic_json(ev.directory/'profile-contract.json',profile)
-        h.call([sys.executable,ROOT/'evaluation/fresh_scenarios.py',
-                '--case',ev.directory/'case-contract.json','--profile',ev.directory/'profile-contract.json',
-                '--evidence',ev.directory], 'run.log',timeout=profile['max_case_seconds'])
+        old=os.environ.get('FRESH_FIXTURE_DEADLINE_UTC')
+        os.environ['FRESH_FIXTURE_DEADLINE_UTC']=str(deadline)
+        try:
+            with phase('adapter',profile['max_case_seconds'],ev.directory/'phases.jsonl',epoch(ops['drain_utc'])):
+                h.call([sys.executable,ROOT/'evaluation/fresh_scenarios.py',
+                        '--case',ev.directory/'case-contract.json','--profile',ev.directory/'profile-contract.json',
+                        '--evidence',ev.directory], 'run.log',timeout=profile['max_case_seconds'])
+        finally:
+            if old is None:os.environ.pop('FRESH_FIXTURE_DEADLINE_UTC',None)
+            else:os.environ['FRESH_FIXTURE_DEADLINE_UTC']=old
 
     def cleanup(self, case, profile, ev):
         h=self.helper(profile,ev)

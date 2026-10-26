@@ -47,7 +47,7 @@ def run(url, rate, warmup_seconds, measure_seconds, timeout, max_inflight):
     pending = set()
     def scheduled_request(phase, index, scheduled):
         result = request(url, phase, index, timeout)
-        result.update(scheduled_utc=scheduled, clock_id=clock_id)
+        result.update(scheduled_utc=scheduled, scheduled_monotonic=started+index/rate, clock_id=clock_id)
         return result
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_inflight) as pool:
         for index in range(count):
@@ -67,7 +67,7 @@ def run(url, rate, warmup_seconds, measure_seconds, timeout, max_inflight):
                                   'time': dt.datetime.now(dt.timezone.utc).isoformat(),
                                   'ok': False, 'status': None, 'latency_ms': 0,
                                   'error': 'inflight_limit', 'request_id': str(index),
-                                  'scheduled_utc': scheduled, 'started_utc': None, 'completed_utc': None,
+                                  'scheduled_utc': scheduled, 'scheduled_monotonic': started+index/rate, 'started_utc': None, 'completed_utc': None,
                                   'deadline_seconds': timeout, 'correct': False,
                                   'generator_rejection': True, 'clock_id': clock_id}), flush=True)
             else:

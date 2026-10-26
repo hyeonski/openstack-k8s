@@ -19,6 +19,7 @@ from lib.state import atomic_json
 from fresh_contract import digest, load, schedule, validate
 from fresh_evidence import Evidence, append, utc, epoch
 from fresh_analysis import judge, read, rows
+from fresh_operations import PHASE_LIMITS, TIME_KEYS, phase, case_time_gate
 
 
 def source_hashes(root=ROOT):
@@ -31,13 +32,13 @@ def source_hashes(root=ROOT):
     for d in ('evaluation','experiments','scripts','config','kubernetes','make','ansible','kolla','systemd','infra/gcp','observability','tests'):
         paths += [p for p in (root / d).rglob('*') if p.is_file() and '__pycache__' not in p.parts
                   and '.terraform' not in p.parts and p.suffix in ('.py','.sh','.json','.yaml','.yml','.mk','.env','.tf','.j2','.tpl','.service')]
-    paths += [root/'docs/graduation'/name for name in ('fresh-evaluation-build-plan-2026-10-26.md','fresh-evaluation-run-plan-2026-10-26.md','consensus-research-plan-2026-10-26.md','consensus-discussion-2026-10-26/README.md')]
+    paths += [root/'docs/graduation'/name for name in ('fresh-evaluation-build-plan-2026-10-26.md','fresh-evaluation-run-plan-2026-10-26.md','consensus-research-plan-2026-10-26.md','consensus-discussion-2026-10-26/README.md','fresh-execution-settings-2026-10-26.md','fresh-evaluation-execution-prompt-2026-10-26.md')]
     return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in sorted(set(paths)) if str(p.relative_to(root)) in eligible}
 
 
 def policy_manifest(source):
-    return {name: value for name, value in source.items() if name.startswith(('experiments/','scripts/','kubernetes/')) or name in ('evaluation/fresh_scenarios.py','evaluation/fresh_live.py','evaluation/fresh_contract.py','evaluation/fresh_campaign.py','evaluation/graduation_evaluation_case.py')}
+    return {name: value for name, value in source.items() if name.startswith(('experiments/','scripts/','kubernetes/')) or name in ('evaluation/fresh_scenarios.py','evaluation/fresh_live.py','evaluation/fresh_contract.py','evaluation/fresh_campaign.py','evaluation/fresh_baseline.py','evaluation/fresh_operations.py','evaluation/fresh_analysis.py','evaluation/fresh_evidence.py','evaluation/graduation_evaluation_case.py')}
 
 
 def pilot_contract(profile, scenario):
@@ -45,7 +46,10 @@ def pilot_contract(profile, scenario):
     common=('seed','environment','project','zone','hosts','kubernetes_version',
             'source_compute','target_compute','control_plane_compute','analysis')
     result={key:profile[key] for key in common}
+    result['observed_environment']=profile.get('observed_environment')
     result.update(measurement=profile[scenario],fault=profile['fault'][scenario])
+    result['execution_limits']={k:profile.get(k) for k in ('max_case_seconds','host_headroom_seconds')}
+    result['execution_limits'].update({k:profile['operations'].get(k) for k in (*PHASE_LIMITS,*TIME_KEYS,'bed_uptime_limit_seconds','bed_uptime_soft_limit_seconds','clock_failure_stop_after_attempts')})
     fixture={'s2':'s2_port_qos_workload_progress','s3':'s3_volume_seed','s4':'s4_capacity'}
     if scenario in fixture:result['fixture']=profile['initial_fixture'][fixture[scenario]]
     if scenario=='s1':
@@ -60,7 +64,9 @@ def freeze(profile_path, destination, stage, scenario=None, policy_path=None, sy
     destination = Path(destination).resolve()
     if destination == ROOT or ROOT.is_relative_to(destination):
         raise ValueError('campaign must have a dedicated artifact directory')
-    selected = [c for c in schedule(profile) if (c['purpose'] == 'main') == (stage == 'main') and (not scenario or c['scenario'] == scenario)]
+    if stage not in ('main','preparation','development'):raise ValueError('unknown stage')
+    selected = ([dict(id='dev-s1-a',scenario='s1',mode='A',purpose='development',block='dev01',seed=profile['seed'],session='DEVELOPMENT',order=1,depends_on=[],status='pending',negative=False)] if stage=='development' else
+                [c for c in schedule(profile) if (c['purpose'] == 'main') == (stage == 'main') and (not scenario or c['scenario'] == scenario)])
     selected_ids={c['id'] for c in selected}
     if any(dep not in selected_ids for c in selected for dep in c.get('depends_on',[])):
         raise ValueError('selected campaign does not include its explicit dependencies')
@@ -81,8 +87,10 @@ def freeze(profile_path, destination, stage, scenario=None, policy_path=None, sy
         override = Path(os.environ.get('ENV_OVERRIDE_FILE', ''))
         if not override.is_file() or override.resolve() != Path(ops['environment_override']).resolve():
             raise ValueError('explicit environment override path does not match profile')
-        if not destination.is_relative_to(Path(ops['artifact_root']).resolve()):
+        root_key='development_artifact_root' if stage=='development' else 'artifact_root'
+        if not destination.is_relative_to(Path(ops[root_key]).resolve()):
             raise ValueError('campaign must be inside registered artifact root')
+        case_time_gate(profile)
     pilot_manifest = check_frozen(pilot_campaign) if pilot_campaign else None
     if not synthetic and stage=='main':
         if not pilot_campaign:
@@ -99,11 +107,30 @@ def freeze(profile_path, destination, stage, scenario=None, policy_path=None, sy
         for selected_scenario in {c['scenario'] for c in selected}:
             if pilot_contract(profile,selected_scenario)!=pilot_contract(pilot_manifest['profile'],selected_scenario):
                 raise ValueError('main contract differs from validated pilot: '+selected_scenario+'; run a new pilot')
+        # The first main waits for the complete registered wave, even with per-scenario freezes.
+        wave_valid=set(valid)
+        for saved in Path(profile['operations']['artifact_root']).rglob('campaign.json'):
+            previous=read(saved,{})
+            if previous.get('schema_version')!=3 or previous.get('synthetic') or previous.get('stage')!='preparation':continue
+            if previous['policy_sha256']!=digest(policy):continue
+            check_frozen(saved.parent,current=True)
+            previous_report=report(saved.parent)
+            for row in previous_report['run_results']:
+                s=row['scenario']
+                if pilot_contract(profile,s)!=pilot_contract(previous['profile'],s):continue
+                if row['trial_valid'] and row.get('safety') is True and row.get('cleanup') is True and row.get('fault_realized') is True and (row['mode'] not in ('P','P3600','on') or row.get('recovered') is True) and (row['mode']!='V1' or row.get('v1_outcome')=='held'):
+                    wave_valid.add(row['case_id'])
+        if not {c['id'] for c in profile['cases'] if c['purpose']!='main'}.issubset(wave_valid):
+            raise ValueError('all four scenario pilot go/no-go decisions required before the first main')
     if not synthetic:
         for saved in Path(profile['operations']['artifact_root']).rglob('campaign.json'):
             existing=read(saved,{})
             if existing.get('status')=='running' or any(c.get('status')=='running' for c in existing.get('cases',[])):
                 raise ValueError('active campaign exists; use its frozen execution checkout: '+str(saved))
+            if stage=='preparation' and existing.get('stage')=='preparation' and not existing.get('synthetic') and existing.get('policy_sha256')==digest(policy):
+                for selected_scenario in {c['scenario'] for c in selected}&{c['scenario'] for c in existing['cases']}:
+                    if pilot_contract(profile,selected_scenario)==pilot_contract(existing['profile'],selected_scenario):
+                        raise ValueError('same pilot contract already frozen; resume existing campaign/retry, never select a new successful pilot')
             if stage=='main' and existing.get('schema_version')==3 and not existing.get('synthetic') and existing.get('stage')=='main':
                 if existing['policy_sha256']!=digest(policy):
                     raise ValueError('policy differs from existing main research release; isolate a new artifact root/release')
@@ -126,6 +153,13 @@ def freeze(profile_path, destination, stage, scenario=None, policy_path=None, sy
     if json.loads(profile_blob)!=profile:
         raise ValueError('selected profile changed while freezing')
     destination.mkdir(parents=True, exist_ok=False)
+    documents={}
+    for name in profile['operations'].get('preregistered_documents',[]):
+        original=ROOT/name
+        documents[name]=hashlib.sha256(original.read_bytes()).hexdigest()
+        target=destination/'preregistered-documents'/name
+        target.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copyfile(original,target)
     for name in source:
         target = destination / 'source' / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -140,7 +174,7 @@ def freeze(profile_path, destination, stage, scenario=None, policy_path=None, sy
                     synthetic=synthetic, stage=stage, scope='F-repeated', profile=profile,
                     profile_path=str(profile_path), profile_sha256=hashlib.sha256(profile_blob).hexdigest(),
                     analysis_sha256=digest(profile['analysis']), policy_sha256=digest(policy),
-                    source_sha256=source, cases=selected, status='frozen',
+                    source_sha256=source, preregistered_documents_sha256=documents, cases=selected, status='frozen',
                     schedule_counts=validate(profile), historical_results='excluded')
     override = os.environ.get('ENV_OVERRIDE_FILE')
     if not synthetic:
@@ -179,6 +213,11 @@ def check_frozen(directory, current=False):
     for name, expected in frozen['source_sha256'].items():
         if hashlib.sha256((directory / 'source' / name).read_bytes()).hexdigest() != expected:
             raise ValueError('source snapshot changed: ' + name)
+    for name,expected in frozen.get('preregistered_documents_sha256',{}).items():
+        if hashlib.sha256((directory/'preregistered-documents'/name).read_bytes()).hexdigest()!=expected:
+            raise ValueError('preregistered document snapshot changed: '+name)
+        if current and hashlib.sha256((ROOT/name).read_bytes()).hexdigest()!=expected:
+            raise ValueError('preregistered document changed: '+name)
     if frozen.get('tool_change_audit_sha256') and digest(read(directory/'tool-change-audit.json'))!=frozen['tool_change_audit_sha256']:
         raise ValueError('tool change audit changed')
     if current:
@@ -253,10 +292,23 @@ class FreshCampaign:
                 if retry_case and case['id'] != retry_case or not retry_case and case['status'] != 'pending':
                     continue
                 if not self.data['synthetic']:
-                    consumed=spent_budget_seconds(self.profile['operations']['artifact_root'],self.data['policy_sha256'])
+                    consumed=sum(spent_budget_seconds(self.profile['operations'][k],self.data['policy_sha256']) for k in ('artifact_root','development_artifact_root'))
                     ops=self.profile['operations']
                     if consumed+self.profile['max_case_seconds']+ops['cleanup_seconds']>ops['budget_seconds']:
                         raise RuntimeError('remaining registered budget cannot cover another bounded case and cleanup')
+                    case_time_gate(self.profile)
+                    # No attempt or case-specific mutation exists until admission succeeds.
+                    self.backend.admit(case,self.profile)
+                    clock_failures=[]
+                    for saved in [p for k in ('artifact_root','development_artifact_root') for p in Path(ops[k]).rglob('judgement.json')]:
+                        identity=read(saved.parent/'identity.json',{})
+                        contract=read(saved.parent/'case-contract.json',{})
+                        if identity.get('synthetic') is False and contract.get('scenario')==case['scenario']:
+                            result=read(saved,{})
+                            clock_failures.append((saved.stat().st_mtime,any('clock' in error for error in result.get('missing',[]))))
+                    clock_failures.sort()
+                    if len(clock_failures)>=2 and all(v for _,v in clock_failures[-2:]):
+                        raise RuntimeError('two consecutive clock-invalid attempts; investigate before further injection')
                 for dependency in case.get('depends_on',[]):
                     prior=next((c for c in self.data['cases'] if c['id']==dependency),None)
                     if not prior or prior['status']!='finished' or not prior.get('judgement',{}).get('trial_valid') or not prior['judgement'].get('safety'):
@@ -287,7 +339,11 @@ class FreshCampaign:
                     attempt['state'] = 'CLEANUP'; self.save()
                     ev.state('CLEANUP')
                     try:
-                        cleanup = self.backend.cleanup(case, self.profile, ev)
+                        if self.data['synthetic']:
+                            cleanup = self.backend.cleanup(case, self.profile, ev)
+                        else:
+                            with phase('cleanup',ops['cleanup_seconds'],path/'phases.jsonl',epoch(ops['hard_stop_utc'])-ops['host_shutdown_timeout_seconds']):
+                                cleanup = self.backend.cleanup(case, self.profile, ev)
                         save_cleanup(path,cleanup)
                         if not cleanup.get('checks') or not all(v is True for v in cleanup['checks'].values()):
                             raise RuntimeError('cleanup readback failed')
@@ -339,7 +395,12 @@ class FreshCampaign:
             attempt['state']='CLEANUP';self.save()
             self.ledger(case,attempt,'cleanup_resuming')
             try:
-                cleanup = self.backend.cleanup(case,self.profile,ev)
+                if self.data['synthetic']:
+                    cleanup = self.backend.cleanup(case,self.profile,ev)
+                else:
+                    ops=self.profile['operations']
+                    with phase('cleanup',ops['cleanup_seconds'],ev.directory/'phases.jsonl',epoch(ops['hard_stop_utc'])-ops['host_shutdown_timeout_seconds']):
+                        cleanup = self.backend.cleanup(case,self.profile,ev)
                 save_cleanup(ev.directory,cleanup)
                 if not cleanup.get('checks') or not all(value is True for value in cleanup['checks'].values()):
                     raise RuntimeError('cleanup still incomplete')
@@ -419,6 +480,10 @@ def report(directory, allow_synthetic=False):
                 **{name:r['metrics'].get(name) if r else None for name in metric_names}) for mode,r in zip((left,right),pair)]
             for metric in ('violation_seconds_lower_bound','service_slo_violation_fraction','upload_goodput_Bps'):
                 contrast[metric+'_difference']=(pair[0]['metrics'][metric]-pair[1]['metrics'][metric]) if all(r and r['trial_valid'] and r['fault_realized'] and r['metrics'].get(metric) is not None for r in pair) else None
+            if scenario in ('s1','s2'):
+                metric='scheduled_latency_p95_ms'
+                contrast[metric+'_difference']=(pair[0]['metrics'][metric]-pair[1]['metrics'][metric]) if all(r and r['trial_valid'] and r['fault_realized'] and r['metrics'].get(metric) is not None for r in pair) else None
+                contrast['secondary_latency_interpretation']='conditional on successful, correct, within-deadline requests; alongside failure, SLO violation and missingness; not co-primary'
             contrast['claim_limitations']=[]
             if right=='A' and pair[1] and pair[1]['metrics'].get('intervention_delivered') is not True:
                 contrast['claim_limitations'].append('A intervention not delivered: assignment-policy comparison only, not the effect of an actual restart')
@@ -452,10 +517,10 @@ def report(directory, allow_synthetic=False):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=('schedule','validate','freeze','run','status','report','resume-cleanup'))
+    parser.add_argument('action',choices=('schedule','validate','freeze','run','status','report','resume-cleanup','environment-ensure','environment-down','environment-rotate'))
     parser.add_argument('--profile',type=Path,default=ROOT/'config/graduation-evaluation-fresh.json')
     parser.add_argument('--campaign',type=Path)
-    parser.add_argument('--stage',choices=('main','preparation'),default='preparation')
+    parser.add_argument('--stage',choices=('main','preparation','development'),default='preparation')
     parser.add_argument('--scenario',choices=('s1','s2','s3','s4'))
     parser.add_argument('--policy-manifest',type=Path)
     parser.add_argument('--pilot-campaign',type=Path)
@@ -477,6 +542,13 @@ def main():
             print(json.dumps(dict(counts=validate(p),cases=schedule(p),bin_contracts=bins),indent=2));return
         if not args.campaign:
             parser.error('--campaign required')
+        if args.action.startswith('environment-'):
+            # Explicit operational work may precede final observed-identity confirmation.
+            p=load(args.profile)
+            from fresh_live import LiveBackend
+            args.campaign.mkdir(parents=True,exist_ok=True)
+            backend=LiveBackend(args.campaign)
+            print(backend.environment_action(p,args.action.split('-')[1]));return
         if args.action=='freeze':
             print(freeze(args.profile,args.campaign,args.stage,args.scenario,args.policy_manifest,args.synthetic,args.pilot_campaign,args.previous_campaign));return
         if args.action=='report':

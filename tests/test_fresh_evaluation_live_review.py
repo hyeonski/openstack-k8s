@@ -17,7 +17,7 @@ from fresh_evidence import Evidence
 from fresh_scenarios import FreshS3, injection_guard, remote_tail_seconds, run_s4
 from fresh_campaign import source_hashes, freeze, check_frozen, FreshCampaign, report, pilot_contract
 from fresh_fake import synthetic_profile, FakeBackend
-from fresh_evidence import utc
+from fresh_evidence import utc, epoch
 from fresh_analysis import event_metrics, judge, request_metrics, rows, read
 from lib.state import atomic_json
 import test_fresh_evaluation as fixtures
@@ -61,7 +61,7 @@ class LiveReviewTests(unittest.TestCase):
                  patch('fresh_scenarios.FreshS4Run',return_value=runner), \
                  patch('fresh_scenarios.RecoveryLab',return_value=lab), \
                  patch('fresh_scenarios.OpenLoopProbe',return_value=sampler), \
-                 patch('fresh_scenarios.injection_guard'),patch('fresh_scenarios.nova'), \
+                 patch('fresh_scenarios.baseline_gate'),patch('fresh_scenarios.injection_guard'),patch('fresh_scenarios.nova'), \
                  patch('fresh_scenarios.nova_status',return_value={'status':'SHUTOFF','id':'v1'}), \
                  patch('fresh_scenarios.wait_for',side_effect=lambda fn,**kw:fn()), \
                  patch('fresh_scenarios.time.monotonic',side_effect=[0,100]), \
@@ -166,7 +166,8 @@ class LiveReviewTests(unittest.TestCase):
             p['s1']['slo_ms']=1 # Heavy workload SLO must not determine the V1 condition.
             self.assertEqual(judge(root,c,p)['v1_outcome'],'held')
             data=rows(Path(root)/'requests.jsonl')
-            for row in data:row['latency_ms']=20 # Own absolute SLO still passes, baseline ratio does not.
+            for row in data:
+                if epoch(row['scheduled_utc'])>=1792972800:row['latency_ms']=20 # Absolute SLO passes, relative condition fails.
             (Path(root)/'requests.jsonl').write_text(''.join(json.dumps(r)+'\n' for r in data))
             self.assertEqual(judge(root,c,p)['v1_outcome'],'condition_not_realized')
 
@@ -216,7 +217,7 @@ class LiveReviewTests(unittest.TestCase):
         self.assertEqual(len(metrics['observed_event_timeline']), 7)
 
     def test_host_budget_is_rechecked_after_long_preparation(self):
-        profile = {'operations': {'last_injection_utc': utc(10000), 'cleanup_seconds': 900}}
+        profile = {'operations': {'last_injection_utc': utc(10000), 'cleanup_seconds': 900,'host_shutdown_timeout_seconds':100,'drain_utc':utc(10000),'shutdown_start_utc':utc(12000)}}
         environment = {'final_hosts': {'compute': {'last_start': utc(0), 'max_run_seconds': 5000}}}
         with patch('fresh_scenarios.time.time', return_value=2000):
             injection_guard(profile, 1200, environment)

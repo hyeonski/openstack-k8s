@@ -59,7 +59,7 @@ class FreshTests(unittest.TestCase):
             self.assertEqual(j['metrics']['recovery_seconds'],10)
             raw=rows(Path(root)/'requests.jsonl')
             # Late relapse removes an earlier healthy recovery.
-            raw[175]['ok']=raw[175]['correct']=False
+            raw[next(i for i,r in enumerate(raw) if epoch(r['scheduled_utc'])>=1792972800+35)]['ok']=False
             (Path(root)/'requests.jsonl').write_text(''.join(json.dumps(r)+'\n' for r in raw))
             self.assertFalse(judge(root,c,p)['recovered'])
         for s,m in [('s1','M'),('s2','M'),('s3','M3600'),('s4','off')]:
@@ -265,7 +265,7 @@ class FreshTests(unittest.TestCase):
             atomic_json(base/'existing/campaign.json',dict(schema_version=3,status='batch-complete',synthetic=False,stage='main',policy_sha256=digest(policy),cases=[{'scenario':'s1'}]))
             preparation=[dict(case_id=c['id'],trial_valid=True,mode=c['mode'],v1_outcome='held',safety=True,cleanup=True,fault_realized=True,recovered=True) for c in p['cases'] if c['purpose']!='main']
             env={'ENVIRONMENT_NAME':p['environment'],'GCP_PROJECT_ID':p['project'],'GCP_ZONE':p['zone'],'ENV_OVERRIDE_FILE':str(override)}
-            with patch('fresh_campaign.load',return_value=p),patch.dict('os.environ',env),patch('fresh_campaign.report',return_value=dict(stage='preparation',missingness=[],run_results=preparation)),patch('fresh_campaign.check_frozen',return_value={'policy_sha256':digest(policy),'profile':p}):
+            with patch('fresh_campaign.load',return_value=p),patch('fresh_campaign.case_time_gate'),patch.dict('os.environ',env),patch('fresh_campaign.report',return_value=dict(stage='preparation',missingness=[],run_results=preparation)),patch('fresh_campaign.check_frozen',return_value={'policy_sha256':digest(policy),'profile':p}):
                 with self.assertRaisesRegex(ValueError,'same existing freeze'):
                     freeze(base/'profile.json',base/'new','main',policy_path=policy_path,pilot_campaign=base/'pilot')
             self.assertFalse((base/'new').exists())

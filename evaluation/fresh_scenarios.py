@@ -25,6 +25,14 @@ from graduation_recovery import RecoveryLab, wait_for
 from workload_state import condition
 from fresh_evidence import Evidence, OpenLoopProbe, append, clock_check, utc
 from fresh_contract import digest
+from fresh_baseline import baseline_gate
+
+
+def fixture_ready(ev):
+    """End the shared fixture deadline only when the probe fixture is ready."""
+    import signal
+    signal.setitimer(signal.ITIMER_REAL, 0)
+    ev.state('PREPARED');ev.state('BASELINE')
 
 
 def injection_guard(profile, needed, environment):
@@ -32,12 +40,14 @@ def injection_guard(profile, needed, environment):
     now = time.time()
     if now >= epoch(ops['last_injection_utc']):
         raise RuntimeError('registered last injection time passed')
+    if now+needed >= epoch(ops['drain_utc']) or now+needed+ops['cleanup_seconds'] >= epoch(ops['shutdown_start_utc']):
+        raise RuntimeError('injection cannot complete H/evidence and cleanup before drain/down')
     hosts = environment.get('final_hosts', {})
     if not hosts:
         raise RuntimeError('host auto-stop evidence unavailable before injection')
     deadline = min(epoch(host['last_start']) + int(host['max_run_seconds'])
                    for host in hosts.values())
-    if deadline - now < needed + ops['cleanup_seconds']:
+    if deadline - now < needed + ops['cleanup_seconds'] + ops['host_shutdown_timeout_seconds']:
         raise RuntimeError('host auto-stop headroom no longer covers H and cleanup')
 
 
@@ -61,8 +71,12 @@ class FreshS1(EvaluationS1):
         return super().write(record,phase,**values)
 
     def run_locked(self,record,probe_node):
-        self.ev.state('PREPARED');self.ev.state('BASELINE')
         return super().run_locked(record,probe_node)
+
+    def wait_probe_samples(self,job_name):
+        result=super().wait_probe_samples(job_name)
+        fixture_ready(self.ev)
+        return result
 
     def event(self,record,item):
         result=super().event(record,item)
@@ -77,6 +91,11 @@ class FreshS1(EvaluationS1):
         return clock_check(self.ev,phase,lambda:float(self.s1.k('-n',S1_NS,'exec',pods[0]['metadata']['name'],'--','python','-c','import time; print(time.time())').strip()),self.profile['s1']['max_clock_offset_seconds'],'loadgen Pod wall clock; diagnostic subprocess')
 
     def create_competitor(self, record):
+        def collect():
+            text=self.s1.k('-n',S1_NS,'logs','job/'+record['job_name'],timeout=10)
+            return [json.loads(line) for line in text.splitlines() if line]
+        end=epoch(record['baseline_end_at'])
+        baseline_gate(self.ev,{**self.profile['s1'],**(self.profile['v1_condition'] if self.case['mode']=='V1' else {})},collect,source='loadgen job first registered arrivals',policy_window={'interval_utc':[utc(end-60),utc(end)],'existing_wait_seconds':90})
         self.check_clock(record,'before-injection')
         injection_guard(self.profile,self.profile['s1']['horizon_seconds'],self.s1.environment())
         before=self.s1.verify()
@@ -356,8 +375,10 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
                         'spec': {'type': 'NodePort', 'externalTrafficPolicy': 'Local', 'selector': {'app': 'api'},
                                  'ports': [{'port': 8080, 'targetPort': 8080, 'nodePort': 30080}]}})
             wait_for(lambda: self.ready('api', a['node']))
-            self.ev.state('PREPARED');self.ev.state('BASELINE')
+            fixture_ready(self.ev)
             baseline = self.window('baseline')
+            sample=json.loads((Path(self.record['evidence'])/'baseline.json').read_text())
+            baseline_gate(self.ev,self.profile['s2'],lambda:sample['rows'],wait=False,source='raw/baseline.json rows; registered external receiver stream')
             if not baseline['complete'] or baseline['failures'] or not baseline['p95_ms']:
                 raise RuntimeError('invalid S2 baseline')
             base = baseline['p95_ms']
@@ -509,10 +530,7 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
             durability = self.sql("select current_setting('fsync') || ':' || current_setting('synchronous_commit') || ':' || current_setting('full_page_writes') || ':' || current_setting('data_directory')")
             if not durability.startswith('on:on:on:/var/lib/postgresql/data/pgdata'):
                 raise RuntimeError('DB durability settings differ from the experiment contract')
-            self.ev.state('PREPARED');self.ev.state('BASELINE')
-            baseline = self.sample('baseline')
-            if len(baseline) != 30 or not all(r['ok'] for r in baseline):
-                raise RuntimeError('invalid DB baseline')
+            fixture_ready(self.ev)
             self.write('baseline-ready', committed_digest=committed_digest, durability=durability)
             # Scoped transient rules: old PostgreSQL remains running, its client path and
             # kubelet API traffic fail. Rules disappear on VM restart and have owned chains.
@@ -535,7 +553,7 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
                 return dict(ok=answer=='1000',correct=answer=='1000',body=answer)
             sampler=OpenLoopProbe(self.ev.directory/'requests.jsonl',probe,cfg['rate'],cfg['horizon_seconds']+300,cfg['deadline_seconds'])
             with sampler:
-                time.sleep(2)
+                baseline_gate(self.ev,cfg,lambda:list(sampler.rows),source='OpenLoopProbe SQL first registered arrivals')
                 injection_guard(self.profile,cfg['horizon_seconds'],self.runtime.environment())
                 self.ev.event('injection_requested',target=source['node_uid'])
                 self.write('fault-intent',fault_at=utc_now())
@@ -646,7 +664,7 @@ def run_s4(case,profile,ev):
     if during['metadata']['uid']!=before['metadata']['uid'] or during['spec']!=before['spec'] or ('cluster.x-k8s.io/paused' in during['metadata'].get('annotations',{}))!=(case['mode']=='off'):
         raise RuntimeError('MHC arm readback failed before injection')
     initial_image_id=prep.object('w','pod',target['pod'],S4_NS)['status']['containerStatuses'][0]['imageID']
-    ev.state('PREPARED');ev.state('BASELINE')
+    fixture_ready(ev)
     cfg=profile['s4']
     record=dict(version=2,horizon_seconds=cfg['horizon_seconds'],fresh_attempt=str(ev.directory.resolve()),run_id='s4-'+__import__('uuid').uuid4().hex[:12],environment_run_id=prepared['environment_run_id'],
                 created=utc_now(),preparation_run_id=prepared['run_id'],evidence=str(evidence),target=target,
@@ -658,9 +676,7 @@ def run_s4(case,profile,ev):
     sampler=OpenLoopProbe(ev.directory/'requests.jsonl',probe,cfg['rate'],cfg['horizon_seconds']+600,cfg['deadline_seconds'])
     try:
         with sampler:
-            wait_for(lambda:len(sampler.rows)>=3,seconds=3/cfg['rate']+cfg['deadline_seconds']+10,interval=.5)
-            if not all(r['ok'] for r in sampler.rows[-3:]):
-                raise RuntimeError('S4 continuous baseline invalid')
+            baseline_gate(ev,cfg,lambda:list(sampler.rows),source='OpenLoopProbe HTTP first registered arrivals')
             injection_guard(profile,cfg['horizon_seconds'],prep.environment_record())
             ev.event('injection_requested',target=target['nova_id'])
             runner.write(record,'stop-intent',stop_intent_at=utc_now())
@@ -714,6 +730,12 @@ def main():
     from fresh_contract import validate
     validate(profile,live=True)
     ev=Evidence(args.evidence,'scenario')
+    import os, signal
+    remaining=float(os.environ['FRESH_FIXTURE_DEADLINE_UTC'])-time.time()
+    if remaining<=0:raise TimeoutError('fixture whole-phase deadline expired before adapter')
+    def fixture_timeout(*_):raise TimeoutError('fixture whole-phase timeout')
+    signal.signal(signal.SIGALRM,fixture_timeout)
+    signal.setitimer(signal.ITIMER_REAL,remaining)
     atomic_json(ev.directory/'environment.json',{'scenario':case['scenario'],'mode':case['mode'],
                 'probe_path':{'s1':'control-plane loadgen Pod','s2':'receiver network namespace','s3':'control-plane SQL probe via Kubernetes exec','s4':'Kubernetes API service proxy'}[case['scenario']],
                 'source_profile':'profile-contract.json','state_dir':str(__import__('os').environ['STATE_DIR'])})

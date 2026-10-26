@@ -113,7 +113,7 @@ def probe(url, seconds, rate, stop_file=None, progress_file=None):
     def one(index):
         at, begin = time.time(), time.monotonic()
         result = {'time': at, 'index': index, 'request_id': str(index),
-                  'scheduled_utc': stamp(wall + index / rate), 'started_utc': stamp(at),
+                  'scheduled_utc': stamp(wall + index / rate), 'scheduled_monotonic': started+index/rate, 'started_utc': stamp(at),
                   'started_monotonic': begin, 'clock_id': clock, 'deadline_seconds': 5,
                   'generator_rejection': False}
         try:
@@ -151,7 +151,7 @@ def probe(url, seconds, rate, stop_file=None, progress_file=None):
                     pending.remove(task)
                 if len(pending) >= 16:
                     print(json.dumps(dict(time=time.time(),index=index,request_id=str(index),
-                        scheduled_utc=stamp(wall+index/rate),started_utc=None,completed_utc=None,
+                        scheduled_utc=stamp(wall+index/rate),scheduled_monotonic=started+index/rate,started_utc=None,completed_utc=None,
                         ok=False,correct=False,bytes=0,latency_ms=0,error='inflight_limit',
                         generator_rejection=True,clock_id=clock,deadline_seconds=5)),flush=True)
                 else:

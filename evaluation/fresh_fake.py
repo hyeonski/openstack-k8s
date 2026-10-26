@@ -8,12 +8,22 @@ import sys
 import uuid
 
 from fresh_evidence import append, utc
-from fresh_contract import STATES, digest
+from fresh_contract import STATES, digest, BASELINE_CONTRACT
+
+
+def operational_fixture(operations):
+    """Offline schema fixture only; never a live credit/host assertion."""
+    ops=copy.deepcopy(operations)
+    ops.update(bed_ledger_path='/unused/bed-ledger.json',development_artifact_root='/unused/development',
+        credit_evidence=dict(remaining_krw=200000,source='user-reported',confirmed_utc=utc(),expires_utc='2026-11-19T00:00:00Z'),
+        cost_estimate=dict(bed_hour_krw=2500,calendar_day_krw=4000,other_usage_reserve_krw=20000))
+    return ops
 
 
 def synthetic_profile(profile):
     p=copy.deepcopy(profile)
     p['readiness']='synthetic-only'
+    p['analysis']['baseline_contract']=copy.deepcopy(BASELINE_CONTRACT)
     for s in ('s1','s2','s3','s4'):
         p[s].update(horizon_seconds=40,stable_seconds=10,bin_seconds=5,min_samples=2,
                     deadline_seconds=2,slo_ms=100,bin_max_bad_fraction=0)
@@ -44,7 +54,7 @@ class FakeBackend:
             append(ev.directory/'events.jsonl',dict(event_id=uuid.uuid4().hex,kind=kind,utc=utc(t+offset),
                 monotonic_ns=int((1000+offset)*1e9),clock_id='synthetic-clock',observer='synthetic',**{'target_uid':'source','actor':'observer',**fields}))
         self.event=event
-        event('phase',-3,phase='PREPARED');event('phase',-2,phase='BASELINE')
+        event('phase',-63,phase='PREPARED');event('phase',-62,phase='BASELINE')
         event('injection_requested',-1)
         event('injection_applied',0)
         event('phase',0,phase='INJECTED');event('phase',0,phase='OBSERVING')
@@ -58,15 +68,17 @@ class FakeBackend:
             if case['scenario']=='s3':event('fence_confirmed',5,actor='policy');event('out_of_service_applied',6,actor='policy')
             event('action_applied',7,actor='policy',target_uid='old')
         H=cfg['horizon_seconds']
-        count=int(profile['s1']['seconds']*cfg['rate']) if case['scenario']=='s1' else int(H*cfg['rate'])
+        count=int(profile['s1']['seconds']*cfg['rate']) if case['scenario']=='s1' else int((H+61)*cfg['rate'])
         for i in range(count):
-            offset=i/cfg['rate']
-            good=v1 or (not control and not self.unrecovered and offset>=10) or offset>=H
+            offset=i/cfg['rate']-61
+            good=offset<0 or v1 or (not control and not self.unrecovered and offset>=10) or offset>=H
             append(ev.directory/'requests.jsonl',dict(request_id=str(i),index=i,scheduled_utc=utc(t+offset),
                 time=utc(t+offset),latency_ms=10,
                 started_utc=utc(t+offset+.001),completed_utc=utc(t+offset+.011),ok=good,correct=good,bytes=128 if good else 0,
                 generator_rejection=False,deadline_seconds=cfg['deadline_seconds'],clock_id='synthetic-request',
-                started_monotonic=1000+offset+.001,completed_monotonic=1000+offset+.011))
+                scheduled_monotonic=1000+offset,started_monotonic=1000+offset+.001,completed_monotonic=1000+offset+.011))
+        all_rows=[json.loads(line) for line in (ev.directory/'requests.jsonl').read_text().splitlines()]
+        (ev.directory/'baseline-gate-requests.jsonl').write_text(''.join(json.dumps(r)+'\n' for r in all_rows if r['index']<60*cfg['rate']))
         if case['scenario'] in ('s1','s2'):
             for phase,offset in (('before-injection',-1),('horizon-end',H)):
                 append(ev.directory/'clock-checks.jsonl',{'phase':phase,'utc':utc(t+offset),'source':'synthetic clock only','offset_lower_seconds':0,'offset_upper_seconds':0,'round_trip_seconds':0})
