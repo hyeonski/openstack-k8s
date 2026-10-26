@@ -4,11 +4,32 @@ from __future__ import annotations
 import concurrent.futures
 import datetime as dt
 import json
+import http.client
 import os
 import uuid
 import time
 import urllib.error
 import urllib.request
+
+
+class TimedConnection(http.client.HTTPConnection):
+    def connect(self):
+        started = time.monotonic()
+        super().connect()
+        self.dns_tcp_ms = (time.monotonic() - started) * 1000
+
+
+class TimedHTTPHandler(urllib.request.HTTPHandler):
+    def __init__(self, timings):
+        super().__init__()
+        self.timings = timings
+
+    def http_open(self, req):
+        def connection(*args, **kwargs):
+            conn = TimedConnection(*args, **kwargs)
+            self.timings['connection'] = conn
+            return conn
+        return self.do_open(connection, req)
 
 
 def request(url, phase, index, timeout):
@@ -20,7 +41,13 @@ def request(url, phase, index, timeout):
               'started_monotonic': started, 'clock_id': 'assigned-by-generator',
               'deadline_seconds': timeout, 'generator_rejection': False}
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as response:
+        timings = {}
+        opener = urllib.request.build_opener(TimedHTTPHandler(timings))
+        with opener.open(url, timeout=timeout) as response:
+            result['response_headers_ms'] = (time.monotonic() - started) * 1000
+            conn = timings.get('connection')
+            result['dns_tcp_ms'] = getattr(conn, 'dns_tcp_ms', None)
+            result['server_timing'] = response.headers.get('Server-Timing')
             body = json.loads(response.read(512))
             result['status'] = response.status
             result['ok'] = response.status == 200 and isinstance(body.get('digest'), str)

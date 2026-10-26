@@ -4,11 +4,13 @@ from __future__ import annotations
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import time
 from urllib.parse import parse_qs, urlsplit
 
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        processing_started = time.monotonic()
         parsed = urlsplit(self.path)
         if parsed.path == '/healthz':
             body = b'ok\n'
@@ -33,6 +35,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type', content_type)
         self.send_header('Content-Length', str(len(body)))
+        # Handler entry through response construction, excluding socket write and
+        # request dispatch. This is not end-to-end server residence time.
+        self.send_header('Server-Timing', f'handler;dur={(time.monotonic()-processing_started)*1000:.3f}')
         self.end_headers()
         self.wfile.write(body)
 

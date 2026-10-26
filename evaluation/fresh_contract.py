@@ -213,6 +213,9 @@ def validate(p, live=False):
         require(p.get('timers', {}).get('toleration_seconds') == 3600, 'S3 both arms require 3600s toleration')
     if errors:
         raise ValueError('; '.join(errors))
+    if live and 's1_calibration' in p.get('analysis', {}):
+        from fresh_calibration import validate_binding
+        validate_binding(p)
     return {'main': counts['main'], 'preparation': counts['pilot'] + counts['smoke'], 'development': 'separate'}
 
 
