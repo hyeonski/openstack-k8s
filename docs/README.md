@@ -15,6 +15,8 @@
 | [최종 평가 결과](graduation/final-evaluation-results-2026-10-03.md) | 2026-10-04 마감된 34건의 시도·수용 여부·예외·남은 과제 |
 | [테스트 보완·새 평가](graduation/retest-2026-10-23.md) | 2026-10-23 검증 보완과 별도 캠페인. 진행·완료 상태는 해당 문서 참조 |
 | [새 평가 구현 시작 프롬프트](graduation/fresh-evaluation-implementation-prompt-2026-10-26.md) | 시작점. 기존 결과 제외·S1~S4 F-repeated 확정, 구현할 작업·검증·인계 조건 |
+| [새 평가 실행 설정과 운영 결정](graduation/fresh-execution-settings-2026-10-26.md) | Claude 합의 수치·수요일 자정 마감·직렬 시간표·무료 체험 및 새 프로젝트 quota 확인. 현재는 기존 bed 1개로 진행 |
+| [GPT 6.1 sol 평가 수행 프롬프트](graduation/fresh-evaluation-execution-prompt-2026-10-26.md) | 사전 보완·DEV·8 pilot/preparation·29 main·분석·정리를 새 세션에 맡기는 실행 인계 |
 | [새 평가 체계 구축 상세안](graduation/fresh-evaluation-build-plan-2026-10-26.md) | 현행 구축 계획. 기존 결과를 새 primary에서 제외하고 파일별 B01~B11 작업·증거 계약·독립 판정·검증·freeze를 명세. Claude 7라운드 승인, 미구현 |
 | [새 평가 실행 상세안](graduation/fresh-evaluation-run-plan-2026-10-26.md) | 현행 실행 계획. 사용자 선택은 S1~S4 F-repeated. run 목록·SOP·세션별 비용·실패/재실행 규칙, 축소안은 대안 이력. Claude 7라운드 승인, 미실행 |
 | [연구 평가 합의안](graduation/consensus-research-plan-2026-10-26.md) | Codex·Claude가 4회 토론 후 승인한 연구 설계. 주장·통제·계측·전체 실험·확장 모듈·통계·한계의 현행 계획 기준 |

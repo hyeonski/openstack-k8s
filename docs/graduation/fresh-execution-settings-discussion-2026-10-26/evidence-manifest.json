@@ -1,0 +1,22 @@
+{
+  "session_id": "0effb442-3fcd-4249-a986-8281729d054c",
+  "consensus_rounds": 3,
+  "final_consensus_file": "round-03-consensus.md",
+  "raw_archive": "artifacts/fresh-execution-settings-2026-10-26",
+  "sha256": {
+    "round-01-prompt.txt": "5950ac9d17a816a426993371af3078b7403530e4f23a668e7fdabf7fa207f1d0",
+    "round-01-response.json": "ff6384e5febfce06640fc9ea6ec62abf642461054184da4faaaa18fbf3292d60",
+    "round-02-prompt.txt": "1a9aa6a9719ef99cdcbd999df0bc3767f42d6665ff45130469e3c11f97efa030",
+    "round-02-response.json": "4805ffe73a3634c3527212fa6ebf6ac77091de00ea29e2c7fc93d0130cc50dea",
+    "round-03-prompt.txt": "37e8fd5653bd93b91606812bafe8dcfb7c791f1cb5c78c85a0c8e289b0c3d89e",
+    "round-03-response.json": "764c05eb7ba0a6592ef981f14b0cbd6c3869e878f8a6055ae018c549643e691b",
+    "gcp-catalog-prices.json": "822c413c778d5243b0a9e8c6a2e2ce5e84b6948e5e90380fef1f700a63c295f5",
+    "gcp-region-quotas.json": "5fce3c8ef1cfb9e922083f6b7946506a7114937672ef83d501a042174cc55049",
+    "gcp-instances.json": "ffddf900494a6edc71f22db56f487c0640c4fb6763382e3deb294a072881183c",
+    "bed-b-project-preflight.json": "5dc1babc8066d379e950c274387e188a87767f90aa69f4006c187dfceca5a15b",
+    "local-validation.json": "6d6e1f6cef5c2f3c9fca6f5b5b75d09008b73e82ec54343b7cd5c769bf406e6b",
+    "bed-b-empty-resource-check.json": "df969afc0ab25023cbd3f0934457d7ebd2249b105777ad9e85fc00e9f86f23ff"
+  },
+  "subsequent_user_confirmation": "Free Trial billing account; quota increase unavailable; serial execution under current requirements",
+  "cloud_execution": "preflight project created and linked to existing billing; no experiment, VM or disk creation"
+}
