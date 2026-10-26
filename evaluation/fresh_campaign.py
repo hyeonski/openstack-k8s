@@ -39,7 +39,7 @@ def source_hashes(root=ROOT):
 
 
 def policy_manifest(source):
-    return {name: value for name, value in source.items() if name.startswith(('experiments/','scripts/','kubernetes/')) or name in ('evaluation/fresh_scenarios.py','evaluation/fresh_live.py','evaluation/fresh_contract.py','evaluation/fresh_campaign.py','evaluation/fresh_baseline.py','evaluation/fresh_operations.py','evaluation/fresh_identity.py','evaluation/fresh_analysis.py','evaluation/fresh_evidence.py','evaluation/graduation_evaluation.py','evaluation/graduation_evaluation_case.py')}
+    return {name: value for name, value in source.items() if name.startswith(('experiments/','scripts/','kubernetes/')) or name in ('evaluation/fresh_collection.py','evaluation/fresh_scenarios.py','evaluation/fresh_live.py','evaluation/fresh_contract.py','evaluation/fresh_campaign.py','evaluation/fresh_baseline.py','evaluation/fresh_operations.py','evaluation/fresh_identity.py','evaluation/fresh_analysis.py','evaluation/fresh_evidence.py','evaluation/graduation_evaluation.py','evaluation/graduation_evaluation_case.py')}
 
 
 def pilot_contract(profile, scenario):

@@ -107,7 +107,7 @@ class LiveReviewTests(unittest.TestCase):
             h.cleanup_case.side_effect=cleanup
             def wait(fn,**kw):
                 value=fn();self.assertTrue(value);return value
-            with patch('graduation_s4_run.nova_status',return_value={'status':'ACTIVE'}),patch('graduation_recovery.wait_for',side_effect=wait):
+            with patch('graduation_s4_run.nova_status',return_value={'status':'ACTIVE'}),patch('graduation_recovery.wait_for',side_effect=wait),patch('fresh_calibration.TransportWatch'):
                 proof=backend.cleanup(case,fixtures.profile(),ev)
             self.assertTrue(proof['checks']['clean'])
             self.assertEqual(operations,['start','ready','unpause','cleanup'])
@@ -118,7 +118,7 @@ class LiveReviewTests(unittest.TestCase):
             h.lab.admin_json.return_value=[{'ID':'v1','Status':'ACTIVE'}]
             def becomes_ready(fn,**kw):
                 ready[0]=True;return wait(fn,**kw)
-            with patch('graduation_s4_run.nova_status',return_value={'status':'ACTIVE'}),patch('graduation_recovery.wait_for',side_effect=becomes_ready):
+            with patch('graduation_s4_run.nova_status',return_value={'status':'ACTIVE'}),patch('graduation_recovery.wait_for',side_effect=becomes_ready),patch('fresh_calibration.TransportWatch'):
                 backend.cleanup(case,fixtures.profile(),ev)
             self.assertEqual(operations,['ready','unpause','cleanup'])
 

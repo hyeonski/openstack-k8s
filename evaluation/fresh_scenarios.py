@@ -26,6 +26,7 @@ from workload_state import condition
 from fresh_evidence import Evidence, OpenLoopProbe, append, clock_check, utc
 from fresh_contract import digest
 from fresh_baseline import baseline_gate
+from fresh_collection import durable_host_stat, remote_file, preserve_s1_partial, checkpoint_text
 
 
 def fixture_ready(ev):
@@ -71,7 +72,26 @@ class FreshS1(EvaluationS1):
         return super().write(record,phase,**values)
 
     def run_locked(self,record,probe_node):
-        return super().run_locked(record,probe_node)
+        original = self.s1.host_stat
+        original_k = self.s1.k
+        sequence = 0
+        def collect(host):
+            nonlocal sequence
+            sequence += 1
+            from lib.runtime import LabRuntime
+            return durable_host_stat(self.ev, LabRuntime(self.client), host, sequence)
+        self.s1.host_stat = collect
+        def query(*args, **kwargs):
+            result = original_k(*args, **kwargs)
+            if 'logs' in args and 'job/'+record.get('job_name','') in args:
+                checkpoint_text(self.ev.directory/'requests-checkpoint.jsonl', result)
+            return result
+        self.s1.k = query
+        try:
+            return super().run_locked(record,probe_node)
+        finally:
+            self.s1.host_stat = original
+            self.s1.k = original_k
 
     def wait_probe_samples(self,job_name):
         result=super().wait_probe_samples(job_name)
@@ -197,32 +217,40 @@ class FreshS1(EvaluationS1):
                 raise ValueError('current stress fixture supports exactly cpu_workers=4; register a supported candidate')
             rounds=selected['workload_rounds']
         else:rounds=cfg['rounds']
-        self.run(rate=cfg['rate'],rounds=rounds,seconds=cfg['seconds'])
-        record=self.read();source=record['service_before']
-        self.raw['application_image_ids']={'http':record['service_before']['image_id']}
-        current=self.s1.verify()
-        self.raw.update(service_after=current,service_after_action=record['service_after'],node_after=self.s1.obj('node',source['node'],None),
-                        vm_after=self.server(source['nova_id']),compute_after=self.s1.placement(current['nova_id'])['compute_host'],
-                        contender_after=json.loads((Path(record['evidence'])/'contender-after.json').read_text()))
-        samples=json.loads((Path(record['evidence'])/'hosts-stress-start.json').read_text())
-        end=json.loads((Path(record['evidence'])/'hosts-post-relocation.json').read_text())
-        self.raw['host_metrics']=interval(samples[self.raw['source_compute']],end[self.raw['source_compute']])
-        completion_start=json.loads((Path(record['evidence'])/'hosts-completion-start.json').read_text())
-        completion_end=json.loads((Path(record['evidence'])/'hosts-completion-end.json').read_text())
-        self.raw['completion_host_metrics']=interval(completion_start[self.raw['source_compute']],completion_end[self.raw['source_compute']])
-        self.raw['provenance']={'file':'raw/run.json','fields':['service_before','service_after'],'transform':'fresh-S1 identity snapshots; host interval from raw/hosts-*.json'}
-        if self.case['mode']=='V1':
-            end=epoch(record['baseline_end_at'])
-            self.raw['baseline_interval_utc']=[utc(end-60),utc(end)]
-            source_rows=[json.loads(line) for line in (Path(record['evidence'])/'http.jsonl').read_text().splitlines() if line]
-            baseline=[row for row in source_rows if end-60<=epoch(row['time'])<end]
-            (self.ev.directory/'baseline-requests.jsonl').write_text(''.join(json.dumps(row)+'\n' for row in baseline))
-            decisions=[json.loads(line) for line in (Path(record['evidence'])/'decisions.jsonl').read_text().splitlines() if line]
-            self.raw['policy_windows_utc']=[[d['window']['start'],d['window']['end']] for d in decisions if d.get('kind')=='diagnosis']
-        atomic_json(self.ev.directory/'observations/contract.json',self.raw)
-        # Source loadgen contains canonical arrivals as well as legacy fields.
-        (self.ev.directory/'requests.jsonl').write_bytes((Path(record['evidence'])/'http.jsonl').read_bytes())
-        (self.ev.directory/'decisions.jsonl').write_bytes((Path(record['evidence'])/'decisions.jsonl').read_bytes())
+        error = None
+        try:
+            self.run(rate=cfg['rate'],rounds=rounds,seconds=cfg['seconds'])
+            record=self.read();source=record['service_before']
+            self.raw['application_image_ids']={'http':record['service_before']['image_id']}
+            current=self.s1.verify()
+            self.raw.update(service_after=current,service_after_action=record['service_after'],node_after=self.s1.obj('node',source['node'],None),
+                            vm_after=self.server(source['nova_id']),compute_after=self.s1.placement(current['nova_id'])['compute_host'],
+                            contender_after=json.loads((Path(record['evidence'])/'contender-after.json').read_text()))
+            samples=json.loads((Path(record['evidence'])/'hosts-stress-start.json').read_text())
+            end=json.loads((Path(record['evidence'])/'hosts-post-relocation.json').read_text())
+            self.raw['host_metrics']=interval(samples[self.raw['source_compute']],end[self.raw['source_compute']])
+            completion_start=json.loads((Path(record['evidence'])/'hosts-completion-start.json').read_text())
+            completion_end=json.loads((Path(record['evidence'])/'hosts-completion-end.json').read_text())
+            self.raw['completion_host_metrics']=interval(completion_start[self.raw['source_compute']],completion_end[self.raw['source_compute']])
+            self.raw['provenance']={'file':'raw/run.json','fields':['service_before','service_after'],'transform':'fresh-S1 identity snapshots; host interval from raw/hosts-*.json'}
+            if self.case['mode']=='V1':
+                end=epoch(record['baseline_end_at'])
+                self.raw['baseline_interval_utc']=[utc(end-60),utc(end)]
+                source_rows=[json.loads(line) for line in (Path(record['evidence'])/'http.jsonl').read_text().splitlines() if line]
+                baseline=[row for row in source_rows if end-60<=epoch(row['time'])<end]
+                (self.ev.directory/'baseline-requests.jsonl').write_text(''.join(json.dumps(row)+'\n' for row in baseline))
+                decisions=[json.loads(line) for line in (Path(record['evidence'])/'decisions.jsonl').read_text().splitlines() if line]
+                self.raw['policy_windows_utc']=[[d['window']['start'],d['window']['end']] for d in decisions if d.get('kind')=='diagnosis']
+            atomic_json(self.ev.directory/'observations/contract.json',self.raw)
+            # Source loadgen contains canonical arrivals as well as legacy fields.
+            (self.ev.directory/'requests.jsonl').write_bytes((Path(record['evidence'])/'http.jsonl').read_bytes())
+            (self.ev.directory/'decisions.jsonl').write_bytes((Path(record['evidence'])/'decisions.jsonl').read_bytes())
+        except BaseException as exc:
+            error = exc
+            raise
+        finally:
+            preserve_s1_partial(self.ev, self.read(), self.raw, error)
+
 
 
 def restore_mhc(lab, ownership, ev):
@@ -270,8 +298,7 @@ class RemoteProbe:
             self.pool.shutdown(wait=False,cancel_futures=True)
             for source,destination in ((self.raw_path,'requests.jsonl'),(self.raw_path+'.progress','uploader-progress.jsonl')):
                 try:
-                    text=self.runner.remote('sudo cat '+shlex.quote(source),timeout=30)
-                    (self.runner.ev.directory/destination).write_text(text)
+                    remote_file(self.runner.ev, self.runner.remote, source, destination)
                 except Exception as exc:
                     self.runner.ev.event('evidence_capture_error',source=source,detail=str(exc))
 
@@ -415,6 +442,7 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
                     windows.append(dict(time=utc_now(),before=previous,after=progress));previous=progress
                     if time.monotonic()>=next_decision:
                         text=self.remote('sudo cat '+shlex.quote(raw_path))
+                        checkpoint_text(self.ev.directory/'requests-checkpoint.jsonl',text)
                         samples=[json.loads(l) for l in text.splitlines() if l]
                         tail=[r for r in samples if r['time']>=time.time()-60]
                         from lib.runtime import percentile
@@ -449,10 +477,8 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
                 # the analyser still selects only the original runner-clock interval.
                 time.sleep(remote_tail_seconds(cfg))
             self.check_clock('horizon-end')
-            text=self.remote('sudo cat '+shlex.quote(raw_path))
-            (self.ev.directory/'requests.jsonl').write_text(text)
-            progress_text=self.remote('sudo cat '+shlex.quote(progress_path))
-            (self.ev.directory/'uploader-progress.jsonl').write_text(progress_text)
+            text=remote_file(self.ev,self.remote,raw_path,'requests.jsonl')
+            progress_text=remote_file(self.ev,self.remote,progress_path,'uploader-progress.jsonl')
             from fresh_analysis import uploader_metrics
             upload=uploader_metrics([json.loads(l) for l in progress_text.splitlines() if l],epoch(injection['utc']),epoch(injection['utc'])+cfg['horizon_seconds'])
             windows=upload['windows']

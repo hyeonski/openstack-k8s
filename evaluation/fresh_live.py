@@ -124,6 +124,7 @@ class LiveBackend:
 
     def execute(self, case, profile, ev):
         from workload_state import ROOT
+        from fresh_calibration import TransportWatch
         self.require_clean_state()
         h=self.helper(profile,ev)
         h.data['cases']=[case]
@@ -133,7 +134,7 @@ class LiveBackend:
         atomic_json(ev.directory/'prior-state.json',{'run_id':prior.get('run_id') if prior else None,'preparation_run_id':prep.get('run_id')})
         ops=profile['operations']
         deadline=time.time()+ops['fixture_prepare_timeout_seconds']
-        with phase('fixture readiness/workers',ops['fixture_prepare_timeout_seconds'],ev.directory/'phases.jsonl'):
+        with phase('fixture readiness/workers',ops['fixture_prepare_timeout_seconds'],ev.directory/'phases.jsonl'), TransportWatch(h,ev.directory/'preparation-transport'):
             record=json.loads((self.state/'graduation-environment.json').read_text())
             if record.get('phase')!='ready':raise RuntimeError('environment lost readiness after admission')
             environment=h.verify_ready_environment(record)
@@ -223,7 +224,9 @@ class LiveBackend:
             if fresh_record and record.get('phase') not in ('completed','completed_with_gap'):
                 # Explicit rescue/cleanup can close a failed observation without claiming recovery.
                 h.make('graduation-s4-cleanup','cleanup-rescue.log')
-        h.cleanup_case(case)
+        from fresh_calibration import TransportWatch
+        with TransportWatch(h,ev.directory/'cleanup-transport'):
+            h.cleanup_case(case)
         # Preserve scenario raw as produced; normalized contract keeps its field-level provenance.
         if fresh_record and Path(record['evidence']).is_dir():
             target=ev.directory/'raw'
