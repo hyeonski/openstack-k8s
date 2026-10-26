@@ -14,6 +14,7 @@ from graduation_evaluation import Campaign
 from graduation_recovery import RecoveryLab
 from fresh_evidence import epoch, utc
 from fresh_operations import phase, case_time_gate, BedLedger
+from fresh_identity import validate_controller_policy, read_controller_architecture, identity_matches
 
 
 class LiveBackend:
@@ -45,6 +46,7 @@ class LiveBackend:
 
     def admit(self, case, profile):
         from workload_state import command
+        validate_controller_policy(profile,live=True)
         self.require_clean_state()
         ops=profile['operations']
         for key in ('artifact_root','development_artifact_root'):
@@ -72,7 +74,8 @@ class LiveBackend:
                 raise RuntimeError('case admission: hosts are not all RUNNING; no internal ensure')
             identity={n:dict(id=str(h['id']),machine_type=h['machineType'].split('/')[-1],cpuPlatform=h['cpuPlatform']) for n,h in hosts.items()}
             expected=profile.get('observed_environment',{}).get('host_identity')
-            if not expected or identity!=expected:
+            architecture=read_controller_architecture(profile,RecoveryLab('s3'),self.directory/'controller-architecture-readbacks.jsonl')
+            if not expected or not identity_matches(profile,expected,identity,architecture):
                 raise RuntimeError('case admission: actual host identity/platform differs from registered readback')
             for name,host in hosts.items():
                 saved=record['final_hosts'][name]
@@ -86,6 +89,7 @@ class LiveBackend:
         from fresh_evidence import Evidence
         from workload_state import command
         self.require_clean_state()
+        validate_controller_policy(profile,live=True)
         ops=profile['operations']
         ledger=BedLedger(profile)
         if action=='rotate':
@@ -135,7 +139,9 @@ class LiveBackend:
             environment=h.verify_ready_environment(record)
             case['environment_run_id']=environment['run_id']
             observed={k:h.data[k] for k in ('host_identity','flavors')}
-            if observed['host_identity']!=profile['observed_environment']['host_identity']:
+            if h.data.get('controller_architecture') is not None:
+                observed['controller_architecture']=h.data['controller_architecture']
+            if not identity_matches(profile,profile['observed_environment']['host_identity'],observed['host_identity'],observed.get('controller_architecture')):
                 raise RuntimeError('host identity changed during preparation')
             atomic_json(self.directory/'runtime-environment.json',observed)
             atomic_json(ev.directory/'runtime-environment.json',observed)

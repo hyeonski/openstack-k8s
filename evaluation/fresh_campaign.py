@@ -20,6 +20,7 @@ from fresh_contract import digest, load, schedule, validate
 from fresh_evidence import Evidence, append, utc, epoch
 from fresh_analysis import judge, read, rows
 from fresh_operations import PHASE_LIMITS, TIME_KEYS, phase, case_time_gate
+from fresh_identity import validate_controller_policy
 
 
 def source_hashes(root=ROOT):
@@ -38,7 +39,7 @@ def source_hashes(root=ROOT):
 
 
 def policy_manifest(source):
-    return {name: value for name, value in source.items() if name.startswith(('experiments/','scripts/','kubernetes/')) or name in ('evaluation/fresh_scenarios.py','evaluation/fresh_live.py','evaluation/fresh_contract.py','evaluation/fresh_campaign.py','evaluation/fresh_baseline.py','evaluation/fresh_operations.py','evaluation/fresh_analysis.py','evaluation/fresh_evidence.py','evaluation/graduation_evaluation_case.py')}
+    return {name: value for name, value in source.items() if name.startswith(('experiments/','scripts/','kubernetes/')) or name in ('evaluation/fresh_scenarios.py','evaluation/fresh_live.py','evaluation/fresh_contract.py','evaluation/fresh_campaign.py','evaluation/fresh_baseline.py','evaluation/fresh_operations.py','evaluation/fresh_identity.py','evaluation/fresh_analysis.py','evaluation/fresh_evidence.py','evaluation/graduation_evaluation.py','evaluation/graduation_evaluation_case.py')}
 
 
 def pilot_contract(profile, scenario):
@@ -50,6 +51,7 @@ def pilot_contract(profile, scenario):
     result.update(measurement=profile[scenario],fault=profile['fault'][scenario])
     result['execution_limits']={k:profile.get(k) for k in ('max_case_seconds','host_headroom_seconds')}
     result['execution_limits'].update({k:profile['operations'].get(k) for k in (*PHASE_LIMITS,*TIME_KEYS,'bed_uptime_limit_seconds','bed_uptime_soft_limit_seconds','clock_failure_stop_after_attempts')})
+    result['controller_platform_policy']=profile['operations'].get('controller_platform_policy')
     fixture={'s2':'s2_port_qos_workload_progress','s3':'s3_volume_seed','s4':'s4_capacity'}
     if scenario in fixture:result['fixture']=profile['initial_fixture'][fixture[scenario]]
     if scenario=='s1':
@@ -61,6 +63,7 @@ def pilot_contract(profile, scenario):
 def freeze(profile_path, destination, stage, scenario=None, policy_path=None, synthetic=False, pilot_campaign=None, previous_campaign=None):
     profile_path = Path(profile_path).resolve()
     profile = load(profile_path, live=not synthetic)
+    validate_controller_policy(profile, live=not synthetic)
     destination = Path(destination).resolve()
     if destination == ROOT or ROOT.is_relative_to(destination):
         raise ValueError('campaign must have a dedicated artifact directory')
@@ -533,6 +536,7 @@ def main():
     try:
         if args.action in ('schedule','validate'):
             p=load(args.profile,live=args.action=='validate')
+            validate_controller_policy(p,live=args.action=='validate')
             import math
             bins={}
             for name,cfg in [(s,p[s]) for s in ('s1','s2','s3','s4')]+[('v1',{**p['s1'],**p['v1_condition']})]:
@@ -545,6 +549,7 @@ def main():
         if args.action.startswith('environment-'):
             # Explicit operational work may precede final observed-identity confirmation.
             p=load(args.profile)
+            validate_controller_policy(p,live=True)
             from fresh_live import LiveBackend
             args.campaign.mkdir(parents=True,exist_ok=True)
             backend=LiveBackend(args.campaign)
@@ -564,6 +569,7 @@ def main():
             backend=FakeBackend()
         else:
             validate(frozen['profile'],live=True)
+            validate_controller_policy(frozen['profile'],live=True)
             from fresh_live import LiveBackend
             backend=LiveBackend(args.campaign)
         campaign=FreshCampaign(args.campaign,backend)

@@ -189,10 +189,15 @@ class Campaign:
             if observed[name]['machine_type'] != expected or row['status'] != 'RUNNING':
                 raise RuntimeError('frozen host configuration differs: ' + name)
         identity = {n: {'id': str(v['id']), 'machine_type': v['machine_type'], 'cpuPlatform': v['cpuPlatform']} for n, v in observed.items()}
-        if self.data.get('host_identity') and identity != self.data['host_identity']:
+        from fresh_identity import read_controller_architecture, identity_matches
+        architecture = read_controller_architecture(self.profile, self.lab, self.directory / 'controller-architecture-readbacks.jsonl')
+        if self.data.get('host_identity') and not identity_matches(self.profile, self.data['host_identity'], identity, architecture):
             raise RuntimeError('host identity/platform changed between evaluation trials')
         self.data['host_identity'] = identity
         self.data.setdefault('environments', {})[record['run_id']] = {'observed': utc_now(), 'hosts': observed}
+        if architecture is not None:
+            self.data['controller_architecture'] = architecture
+            self.data['environments'][record['run_id']]['controller_architecture'] = architecture
         self.save()
         atomic_json(self.directory / ('environment-' + record['run_id'] + '.json'), record)
         self.call(['kubectl', '--kubeconfig', self.state / 'kubeconfigs' / (self.lab.client.cluster + '.yaml'),
