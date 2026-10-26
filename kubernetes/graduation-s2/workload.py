@@ -9,6 +9,9 @@ import os
 from pathlib import Path
 import sqlite3
 import time
+import datetime as dt
+import uuid
+import threading
 import urllib.request
 
 CHUNK = 1024 * 1024
@@ -102,28 +105,72 @@ def upload(url, seconds):
             time.sleep(1)
 
 
-def probe(url, seconds, rate):
-    started = time.monotonic()
+def probe(url, seconds, rate, stop_file=None, progress_file=None):
+    started, wall = time.monotonic(), time.time()
+    clock = 's2:' + uuid.uuid4().hex
+    def stamp(t):
+        return dt.datetime.fromtimestamp(t, dt.timezone.utc).isoformat()
     def one(index):
-        stamp, begin = time.time(), time.monotonic()
-        result = {'time': stamp, 'index': index}
+        at, begin = time.time(), time.monotonic()
+        result = {'time': at, 'index': index, 'request_id': str(index),
+                  'scheduled_utc': stamp(wall + index / rate), 'started_utc': stamp(at),
+                  'started_monotonic': begin, 'clock_id': clock, 'deadline_seconds': 5,
+                  'generator_rejection': False}
         try:
             body = request(url + '/bulk', timeout=5)
             result.update(ok=body == b'a' * (256 * 1024), bytes=len(body))
         except Exception as exc:
             result.update(ok=False, bytes=0, error=type(exc).__name__)
-        result['latency_ms'] = (time.monotonic() - begin) * 1000
-        print(json.dumps(result), flush=True)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as pool:
-        for index in range(int(seconds * rate)):
-            time.sleep(max(0, started + index / rate - time.monotonic()))
-            pool.submit(one, index)
+        result.update(latency_ms=(time.monotonic() - begin) * 1000,
+                      completed_utc=stamp(time.time()), completed_monotonic=time.monotonic(),
+                      correct=result['ok'])
+        return result
+    stop = threading.Event()
+    def monitor_progress():
+        with Path(progress_file).open('a') as stream:
+            while True:
+                row={'utc':stamp(time.time()),'monotonic':time.monotonic(),'clock_id':clock}
+                try:
+                    row['progress']=json.loads(request('http://198.18.0.2:8090/progress',timeout=5))
+                except Exception as exc:
+                    row['error']=type(exc).__name__
+                stream.write(json.dumps(row)+'\n');stream.flush();os.fsync(stream.fileno())
+                if stop.wait(1):break
+    monitor=None
+    if progress_file:
+        monitor=threading.Thread(target=monitor_progress,daemon=True);monitor.start()
+    try:
+        pending = set()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=16) as pool:
+            for index in range(int(seconds * rate)):
+                time.sleep(max(0, started + index / rate - time.monotonic()))
+                if stop_file and Path(stop_file).exists():
+                    break
+                for task in [t for t in pending if t.done()]:
+                    print(json.dumps(task.result()), flush=True)
+                    pending.remove(task)
+                if len(pending) >= 16:
+                    print(json.dumps(dict(time=time.time(),index=index,request_id=str(index),
+                        scheduled_utc=stamp(wall+index/rate),started_utc=None,completed_utc=None,
+                        ok=False,correct=False,bytes=0,latency_ms=0,error='inflight_limit',
+                        generator_rejection=True,clock_id=clock,deadline_seconds=5)),flush=True)
+                else:
+                    pending.add(pool.submit(one,index))
+            for task in concurrent.futures.as_completed(pending):
+                print(json.dumps(task.result()),flush=True)
+    finally:
+        stop.set()
+        if monitor:
+            monitor.join(timeout=7)
+            if monitor.is_alive():raise RuntimeError('uploader progress observer did not finish')
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('role', choices=('api', 'sink', 'upload', 'probe'))
     parser.add_argument('--root', type=Path)
+    parser.add_argument('--stop-file', type=Path)
+    parser.add_argument('--progress-file', type=Path)
     parser.add_argument('--url')
     parser.add_argument('--seconds', type=int, default=1800)
     parser.add_argument('--rate', type=float, default=2)
@@ -131,7 +178,7 @@ def main():
     if args.role == 'upload':
         upload(args.url, args.seconds)
     elif args.role == 'probe':
-        probe(args.url, args.seconds, args.rate)
+        probe(args.url, args.seconds, args.rate, args.stop_file, args.progress_file)
     else:
         server = ThreadingHTTPServer(('0.0.0.0', 8080 if args.role == 'api' else 8090), Handler)
         if args.role == 'sink':

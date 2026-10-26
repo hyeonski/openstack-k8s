@@ -214,16 +214,21 @@ class S1Automatic(S1Contention):
         self.write(record, 'deferred', defer_reason='sustained_service_and_host_evidence_missing')
         raise RuntimeError('S1 automatic recovery deferred: sustained evidence missing')
 
+    def check_source_placement(self, record, source_place):
+        # Historical live contract: the fresh adapter overrides this harness check
+        # so policy does not read the contender's injected identity.
+        contender = self.server(record['server_id'])
+        if source_place['compute_host'] != record['service_compute_host'] or\
+                contender.get('status') != 'ACTIVE' or contender.get('OS-EXT-SRV-ATTR:host') != source_place['compute_host']:
+            raise RuntimeError('S1 source/competitor placement changed')
+
     def move_service(self, record):
         source = self.s1.verify()
         if any(source[k] != record['service_before'][k] for k in
                ('pod_uid', 'nova_id', 'image_id', 'container_id', 'restart_count')):
             raise RuntimeError('S1 source changed before automatic action')
         source_place = self.s1.placement(source['nova_id'])
-        contender = self.server(record['server_id'])
-        if source_place['compute_host'] != record['service_compute_host'] or\
-                contender.get('status') != 'ACTIVE' or contender.get('OS-EXT-SRV-ATTR:host') != source_place['compute_host']:
-            raise RuntimeError('S1 source/competitor placement changed')
+        self.check_source_placement(record, source_place)
         deployment = self.s1.obj('deployment', 'http')
         original = record['deployment_before']
         if deployment['metadata']['uid'] != original['metadata']['uid'] or deployment['spec'] != original['spec']:

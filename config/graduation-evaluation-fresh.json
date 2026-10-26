@@ -1,0 +1,548 @@
+{
+  "environment": "cloud-gcp-amd64-greenfield",
+  "project": "openstack-k8s",
+  "zone": "asia-northeast3-a",
+  "hosts": {
+    "osk8s-controller": "e2-standard-4",
+    "osk8s-compute01": "n2-standard-8",
+    "osk8s-compute02": "n2-standard-4"
+  },
+  "kubernetes_version": "v1.35.7",
+  "source_compute": "osk8s-compute02",
+  "target_compute": "osk8s-compute01",
+  "control_plane_compute": "osk8s-compute01",
+  "max_case_seconds": 5400,
+  "host_headroom_seconds": 7200,
+  "schema_version": 3,
+  "scope": "F-repeated",
+  "readiness": "draft",
+  "seed": 20261026,
+  "historical_results": "excluded",
+  "prior_knowledge": "Historical raw informed this design; excluded from fresh primary.",
+  "max_attempts": 2,
+  "analysis": {
+    "version": 1,
+    "contrasts": [
+      [
+        "s1",
+        "P",
+        "M"
+      ],
+      [
+        "s1",
+        "P",
+        "A"
+      ],
+      [
+        "s2",
+        "P",
+        "M"
+      ],
+      [
+        "s3",
+        "P3600",
+        "M3600"
+      ],
+      [
+        "s4",
+        "on",
+        "off"
+      ]
+    ],
+    "latency": "scheduled-to-completion",
+    "missing": "unknown; observed violation lower bound",
+    "recovery": "final healthy tail; unrecovered time remains null",
+    "attempt_selection": "first attempt; disclose all retries",
+    "claims": [
+      "fixed fixture, n=3; no general reliability claim",
+      "S3 read availability and seed only; no ACK-loss/write durability claim",
+      "S4 existing MHC/CAPI/CAPO recovery; no novel recovery algorithm",
+      "No human comparison"
+    ]
+  },
+  "s1": {
+    "horizon_seconds": null,
+    "stable_seconds": null,
+    "bin_seconds": null,
+    "min_samples": null,
+    "deadline_seconds": null,
+    "slo_ms": null,
+    "rate": 5,
+    "seconds": 1800,
+    "warmup_seconds": 0,
+    "rounds": 100000,
+    "max_clock_offset_seconds": null
+  },
+  "s2": {
+    "horizon_seconds": null,
+    "stable_seconds": null,
+    "bin_seconds": null,
+    "min_samples": null,
+    "deadline_seconds": null,
+    "slo_ms": null,
+    "rate": 2,
+    "uploader_seconds": null,
+    "max_clock_offset_seconds": null
+  },
+  "s3": {
+    "horizon_seconds": null,
+    "stable_seconds": null,
+    "bin_seconds": null,
+    "min_samples": null,
+    "deadline_seconds": null,
+    "slo_ms": null,
+    "rate": 1
+  },
+  "s4": {
+    "horizon_seconds": null,
+    "stable_seconds": null,
+    "bin_seconds": null,
+    "min_samples": null,
+    "deadline_seconds": null,
+    "slo_ms": null,
+    "rate": 1
+  },
+  "fault": {
+    "s1": null,
+    "s2": null,
+    "s3": null,
+    "s4": null
+  },
+  "v1_candidates": [
+    {
+      "cpu_workers": null,
+      "workload_rounds": null
+    }
+  ],
+  "v1_selected": null,
+  "initial_fixture": {
+    "s2_port_qos_workload_progress": null,
+    "s3_volume_seed": null,
+    "s4_capacity": null
+  },
+  "timers": {
+    "toleration_seconds": 3600,
+    "disable_force_detach": true,
+    "mhc_policy": null
+  },
+  "operations": {
+    "operator": null,
+    "budget_seconds": null,
+    "last_injection_utc": null,
+    "cleanup_seconds": null,
+    "environment_override": null,
+    "execution_checkout": null,
+    "artifact_root": null,
+    "tool_change_allowlist": [],
+    "impact_analysis": null
+  },
+  "cases": [
+    {
+      "id": "s1-smoke01-p",
+      "scenario": "s1",
+      "mode": "P",
+      "block": "smoke01",
+      "purpose": "smoke",
+      "seed": 20261026,
+      "session": "SESSION-A",
+      "order": 1,
+      "depends_on": []
+    },
+    {
+      "id": "s1-pilot01-v1",
+      "scenario": "s1",
+      "mode": "V1",
+      "block": "pilot01",
+      "purpose": "pilot",
+      "seed": 20261026,
+      "session": "SESSION-A",
+      "order": 2,
+      "depends_on": []
+    },
+    {
+      "id": "s1-v1-main01-v1",
+      "scenario": "s1",
+      "mode": "V1",
+      "block": "v1-main01",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-A",
+      "order": 3,
+      "depends_on": []
+    },
+    {
+      "id": "s1-v1-main02-v1",
+      "scenario": "s1",
+      "mode": "V1",
+      "block": "v1-main02",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-A",
+      "order": 4,
+      "depends_on": []
+    },
+    {
+      "id": "s1-b01-m",
+      "scenario": "s1",
+      "mode": "M",
+      "block": "b01",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-A",
+      "order": 5,
+      "depends_on": []
+    },
+    {
+      "id": "s1-b01-a",
+      "scenario": "s1",
+      "mode": "A",
+      "block": "b01",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-A",
+      "order": 6,
+      "depends_on": []
+    },
+    {
+      "id": "s1-b01-p",
+      "scenario": "s1",
+      "mode": "P",
+      "block": "b01",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-A",
+      "order": 7,
+      "depends_on": []
+    },
+    {
+      "id": "s1-b02-a",
+      "scenario": "s1",
+      "mode": "A",
+      "block": "b02",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-B",
+      "order": 8,
+      "depends_on": []
+    },
+    {
+      "id": "s1-b02-p",
+      "scenario": "s1",
+      "mode": "P",
+      "block": "b02",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-B",
+      "order": 9,
+      "depends_on": []
+    },
+    {
+      "id": "s1-b02-m",
+      "scenario": "s1",
+      "mode": "M",
+      "block": "b02",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-B",
+      "order": 10,
+      "depends_on": []
+    },
+    {
+      "id": "s1-b03-p",
+      "scenario": "s1",
+      "mode": "P",
+      "block": "b03",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-B",
+      "order": 11,
+      "depends_on": []
+    },
+    {
+      "id": "s1-b03-m",
+      "scenario": "s1",
+      "mode": "M",
+      "block": "b03",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-B",
+      "order": 12,
+      "depends_on": []
+    },
+    {
+      "id": "s1-b03-a",
+      "scenario": "s1",
+      "mode": "A",
+      "block": "b03",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-B",
+      "order": 13,
+      "depends_on": []
+    },
+    {
+      "id": "s2-pilot01-p",
+      "scenario": "s2",
+      "mode": "P",
+      "block": "pilot01",
+      "purpose": "pilot",
+      "seed": 20261026,
+      "session": "SESSION-C",
+      "order": 14,
+      "depends_on": []
+    },
+    {
+      "id": "s2-pilot01-m",
+      "scenario": "s2",
+      "mode": "M",
+      "block": "pilot01",
+      "purpose": "pilot",
+      "seed": 20261026,
+      "session": "SESSION-C",
+      "order": 15,
+      "depends_on": []
+    },
+    {
+      "id": "s2-b01-p",
+      "scenario": "s2",
+      "mode": "P",
+      "block": "b01",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-C",
+      "order": 16,
+      "depends_on": []
+    },
+    {
+      "id": "s2-b01-m",
+      "scenario": "s2",
+      "mode": "M",
+      "block": "b01",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-C",
+      "order": 17,
+      "depends_on": []
+    },
+    {
+      "id": "s2-b02-m",
+      "scenario": "s2",
+      "mode": "M",
+      "block": "b02",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-C",
+      "order": 18,
+      "depends_on": []
+    },
+    {
+      "id": "s2-b02-p",
+      "scenario": "s2",
+      "mode": "P",
+      "block": "b02",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-C",
+      "order": 19,
+      "depends_on": []
+    },
+    {
+      "id": "s2-b03-p",
+      "scenario": "s2",
+      "mode": "P",
+      "block": "b03",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-C",
+      "order": 20,
+      "depends_on": []
+    },
+    {
+      "id": "s2-b03-m",
+      "scenario": "s2",
+      "mode": "M",
+      "block": "b03",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-C",
+      "order": 21,
+      "depends_on": []
+    },
+    {
+      "id": "s3-pilot01-p3600",
+      "scenario": "s3",
+      "mode": "P3600",
+      "block": "pilot01",
+      "purpose": "pilot",
+      "seed": 20261026,
+      "session": "SESSION-D",
+      "order": 22,
+      "depends_on": []
+    },
+    {
+      "id": "s3-pilot01-m3600",
+      "scenario": "s3",
+      "mode": "M3600",
+      "block": "pilot01",
+      "purpose": "pilot",
+      "seed": 20261026,
+      "session": "SESSION-D",
+      "order": 23,
+      "depends_on": []
+    },
+    {
+      "id": "s3-b01-m3600",
+      "scenario": "s3",
+      "mode": "M3600",
+      "block": "b01",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-D",
+      "order": 24,
+      "depends_on": []
+    },
+    {
+      "id": "s3-b01-p3600",
+      "scenario": "s3",
+      "mode": "P3600",
+      "block": "b01",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-D",
+      "order": 25,
+      "depends_on": []
+    },
+    {
+      "id": "s3-b02-p3600",
+      "scenario": "s3",
+      "mode": "P3600",
+      "block": "b02",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-D",
+      "order": 26,
+      "depends_on": []
+    },
+    {
+      "id": "s3-b02-m3600",
+      "scenario": "s3",
+      "mode": "M3600",
+      "block": "b02",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-D",
+      "order": 27,
+      "depends_on": []
+    },
+    {
+      "id": "s3-b03-m3600",
+      "scenario": "s3",
+      "mode": "M3600",
+      "block": "b03",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-D",
+      "order": 28,
+      "depends_on": []
+    },
+    {
+      "id": "s3-b03-p3600",
+      "scenario": "s3",
+      "mode": "P3600",
+      "block": "b03",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-D",
+      "order": 29,
+      "depends_on": []
+    },
+    {
+      "id": "s4-pilot01-on",
+      "scenario": "s4",
+      "mode": "on",
+      "block": "pilot01",
+      "purpose": "pilot",
+      "seed": 20261026,
+      "session": "SESSION-E",
+      "order": 30,
+      "depends_on": []
+    },
+    {
+      "id": "s4-pilot01-off",
+      "scenario": "s4",
+      "mode": "off",
+      "block": "pilot01",
+      "purpose": "pilot",
+      "seed": 20261026,
+      "session": "SESSION-E",
+      "order": 31,
+      "depends_on": []
+    },
+    {
+      "id": "s4-b01-off",
+      "scenario": "s4",
+      "mode": "off",
+      "block": "b01",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-E",
+      "order": 32,
+      "depends_on": []
+    },
+    {
+      "id": "s4-b01-on",
+      "scenario": "s4",
+      "mode": "on",
+      "block": "b01",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-E",
+      "order": 33,
+      "depends_on": []
+    },
+    {
+      "id": "s4-b02-on",
+      "scenario": "s4",
+      "mode": "on",
+      "block": "b02",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-E",
+      "order": 34,
+      "depends_on": []
+    },
+    {
+      "id": "s4-b02-off",
+      "scenario": "s4",
+      "mode": "off",
+      "block": "b02",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-E",
+      "order": 35,
+      "depends_on": []
+    },
+    {
+      "id": "s4-b03-off",
+      "scenario": "s4",
+      "mode": "off",
+      "block": "b03",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-E",
+      "order": 36,
+      "depends_on": []
+    },
+    {
+      "id": "s4-b03-on",
+      "scenario": "s4",
+      "mode": "on",
+      "block": "b03",
+      "purpose": "main",
+      "seed": 20261026,
+      "session": "SESSION-E",
+      "order": 37,
+      "depends_on": []
+    }
+  ]
+}

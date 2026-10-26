@@ -67,3 +67,5 @@ help-evaluation:
 	@echo "  make graduation-evaluation-run CAMPAIGN=<absolute-path>"
 	@echo "  make graduation-evaluation-verify CAMPAIGN=<absolute-path>"
 	@echo "Code: evaluation/. Existing frozen campaigns retain their original code hashes."
+	@echo "Fresh F-repeated: make graduation-fresh-schedule (offline; main29 + preparation8)."
+	@echo "Read docs/graduation/fresh-evaluation-implementation.md; draft parameters block live freeze."

@@ -75,7 +75,10 @@ def host_metrics(before, after):
 
 def verify_s1(path, mode):
     summary, record, samples = read(path / 'summary.json'), read(path / 'run.json'), rows(path / 'http.jsonl')
-    checks = {'request_indexes_complete': len(samples) == 5400 and {r['index'] for r in samples} == set(range(5400)),
+    contract = read(path / 'run.json') or read(Path(__file__).resolve().parents[1] / 'config/graduation-evaluation.json')['s1']
+    legacy = read(Path(__file__).resolve().parents[1] / 'config/graduation-evaluation.json')['s1']
+    expected = int(contract.get('rate', legacy['rate']) * contract.get('seconds', legacy['seconds']))
+    checks = {'request_indexes_complete': len(samples) == expected and {r['index'] for r in samples} == set(range(expected)),
               'source_compute': record['service_compute_host'] == 'osk8s-compute02',
               'target_compute': record['target_compute_host'] == 'osk8s-compute01'}
     calculated = {}

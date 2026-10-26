@@ -63,6 +63,9 @@ def interruption_ready(record, previous_run_id, environment_run_id, started):
 
 
 def schedule(profile):
+    if profile.get('schema_version') == 3:
+        from fresh_contract import schedule as fresh_schedule
+        return fresh_schedule(profile)
     cases = []
     for i in range(profile['repetitions']):
         s1 = ['automatic', 'no-action'] if i % 2 == 0 else ['no-action', 'automatic']
@@ -445,11 +448,24 @@ class Campaign:
 
 
 def main():
+    if '--fresh' in sys.argv:
+        sys.argv.remove('--fresh')
+        from fresh_campaign import main as fresh_main
+        return fresh_main()
+    for index, value in enumerate(sys.argv[1:], 1):
+        selected = sys.argv[index + 1] if value == '--profile' and index + 1 < len(sys.argv) else value.split('=', 1)[1] if value.startswith('--profile=') else None
+        if selected and (read(selected) or {}).get('schema_version') == 3:
+            from fresh_campaign import main as fresh_main
+            return fresh_main()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=('freeze', 'run', 'status'))
     parser.add_argument('--campaign')
+    parser.add_argument('--profile', type=Path, default=PROFILE)
     parser.add_argument('--limit', type=int)
     args = parser.parse_args()
+    if args.profile.resolve() != PROFILE.resolve():
+        from fresh_campaign import main as fresh_main
+        return fresh_main()
     if args.action == 'freeze':
         freeze(args.campaign)
         return

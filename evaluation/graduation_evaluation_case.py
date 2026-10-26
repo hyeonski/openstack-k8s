@@ -295,6 +295,7 @@ def main():
     parser.add_argument('scenario', choices=('s1', 's2', 's3', 's4', 's3-step'))
     parser.add_argument('--mode', required=True)
     parser.add_argument('--run-id')
+    parser.add_argument('--profile', type=Path, default=ROOT / 'config/graduation-evaluation.json')
     parser.add_argument('--lock-fd', type=int)
     args = parser.parse_args()
     if args.scenario == 's3-step':
@@ -313,7 +314,7 @@ def main():
         parser.error('invalid evaluation mode')
     runner = {'s1': EvaluationS1, 's2': EvaluationS2, 's3': EvaluationS3}[args.scenario](args.mode)
     try:
-        result = runner.run(seconds=1080) if args.scenario == 's1' else runner.run()
+        result = runner.run(**{k: json.loads(args.profile.read_text())['s1'][k] for k in ('rate', 'rounds', 'seconds')}) if args.scenario == 's1' else runner.run()
         print(json.dumps(result, indent=2))
         good = result.get('state') in ('passed', 'control_valid') if args.scenario == 's1' else result['passed']
         if not good:
