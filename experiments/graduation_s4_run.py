@@ -79,7 +79,8 @@ def s4_host_budget(preparation_record):
             raise RuntimeError('GCP host identity/state/budget mismatch: ' + name)
         from lib.host_lifetime import operational_host_deadline
         deadlines.append(operational_host_deadline(row))
-    return min(deadlines)
+    finite=[d for d in deadlines if d is not None]
+    return min(finite) if finite else None
 
 
 def http_probe(kubeconfig):
@@ -290,7 +291,7 @@ class S4Run:
         verified = self.preparation.verify()
         prep = self.preparation.read()
         budget = s4_host_budget(self.preparation.environment_record())
-        if budget - time.time() < OBSERVE_SECONDS + 1200:
+        if budget is not None and budget - time.time() < OBSERVE_SECONDS + 1200:
             raise RuntimeError('GCP auto-stop headroom is too short for S4 observation and cleanup')
         evidence = artifact_dir('graduation-s4-experiment')
         baseline = self.client.snapshot(evidence / 'baseline.json')
@@ -374,8 +375,9 @@ class S4Run:
         evidence = Path(record['evidence'])
         snapshots = evidence / 'observations'
         snapshots.mkdir(exist_ok=True)
-        deadline = min(time.monotonic() + OBSERVE_SECONDS,
-                       time.monotonic() + max(0, record['host_deadline_epoch'] - time.time() - 600))
+        deadline = time.monotonic() + OBSERVE_SECONDS
+        if record['host_deadline_epoch'] is not None:
+            deadline = min(deadline,time.monotonic() + max(0, record['host_deadline_epoch'] - time.time() - 600))
         capacity_since = None
         capacity_wall_since = None
         index = len(list(snapshots.glob('[0-9][0-9][0-9][0-9].json')))

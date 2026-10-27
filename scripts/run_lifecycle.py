@@ -79,7 +79,8 @@ def host_budget(client):
             raise RuntimeError('host is stopped or its automatic STOP deadline is unknown: ' + name)
         from lib.host_lifetime import operational_host_deadline
         deadlines.append(operational_host_deadline(row))
-    return min(deadlines), rows
+    finite=[d for d in deadlines if d is not None]
+    return min(finite) if finite else None, rows
 
 
 def cleanup_integrity(baseline, before, after):
@@ -206,7 +207,7 @@ class RunLifecycle:
         try:
             stop, _ = host_budget(self.client)
             # Cleanup has an independent bound and must finish before host STOP.
-            deadline = min(time.time() + 2400, stop - 120)
+            deadline = min(time.time() + 2400, stop - 120) if stop is not None else time.time()+2400
             def check_cleanup():
                 remaining = deadline - time.time()
                 if remaining <= 0:
@@ -273,7 +274,7 @@ class RunLifecycle:
             if not 60 <= seconds <= 28800:
                 raise ValueError('RUN_TIMEOUT_SECONDS must be 60..28800')
             stop, hosts = host_budget(self.client)
-            if stop - time.time() < seconds + 900:
+            if stop is not None and stop - time.time() < seconds + 900:
                 raise RuntimeError('insufficient host runtime for the requested run plus 15 minute reserve')
             self.path = artifact_dir('autoscaler-run')
             self.record = {'version': 1, 'run_id': self.path.name, 'owner_id': uuid.uuid4().hex[:12],

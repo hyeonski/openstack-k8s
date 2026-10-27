@@ -21,6 +21,7 @@ from fresh_evidence import Evidence, append, utc, epoch
 from fresh_analysis import judge, read, rows
 from fresh_operations import PHASE_LIMITS, TIME_KEYS, phase, case_time_gate
 from fresh_identity import validate_controller_policy
+from fresh_host_lifetime import time_targets_only
 
 
 def source_hashes(root=ROOT):
@@ -298,7 +299,7 @@ class FreshCampaign:
                 if not self.data['synthetic']:
                     consumed=sum(spent_budget_seconds(self.profile['operations'][k],self.data['policy_sha256']) for k in ('artifact_root','development_artifact_root'))
                     ops=self.profile['operations']
-                    if consumed+self.profile['max_case_seconds']+ops['cleanup_seconds']>ops['budget_seconds']:
+                    if not time_targets_only(self.profile) and consumed+self.profile['max_case_seconds']+ops['cleanup_seconds']>ops['budget_seconds']:
                         raise RuntimeError('remaining registered budget cannot cover another bounded case and cleanup')
                     case_time_gate(self.profile)
                     # No attempt or case-specific mutation exists until admission succeeds.
@@ -346,7 +347,7 @@ class FreshCampaign:
                         if self.data['synthetic']:
                             cleanup = self.backend.cleanup(case, self.profile, ev)
                         else:
-                            with phase('cleanup',ops['cleanup_seconds'],path/'phases.jsonl',epoch(ops['hard_stop_utc'])-ops['host_shutdown_timeout_seconds']):
+                            with phase('cleanup',ops['cleanup_seconds'],path/'phases.jsonl',None if time_targets_only(self.profile) else epoch(ops['hard_stop_utc'])-ops['host_shutdown_timeout_seconds']):
                                 cleanup = self.backend.cleanup(case, self.profile, ev)
                         save_cleanup(path,cleanup)
                         if not cleanup.get('checks') or not all(v is True for v in cleanup['checks'].values()):
@@ -403,7 +404,7 @@ class FreshCampaign:
                     cleanup = self.backend.cleanup(case,self.profile,ev)
                 else:
                     ops=self.profile['operations']
-                    with phase('cleanup',ops['cleanup_seconds'],ev.directory/'phases.jsonl',epoch(ops['hard_stop_utc'])-ops['host_shutdown_timeout_seconds']):
+                    with phase('cleanup',ops['cleanup_seconds'],ev.directory/'phases.jsonl',None if time_targets_only(self.profile) else epoch(ops['hard_stop_utc'])-ops['host_shutdown_timeout_seconds']):
                         cleanup = self.backend.cleanup(case,self.profile,ev)
                 save_cleanup(ev.directory,cleanup)
                 if not cleanup.get('checks') or not all(value is True for value in cleanup['checks'].values()):

@@ -50,6 +50,8 @@ def case_time_gate(profile, now=None, cold=False, rotate=False):
     now = time.time() if now is None else now
     ops = profile['operations']
     reserved = reservation(profile, cold, rotate)
+    from fresh_host_lifetime import time_targets_only
+    if time_targets_only(profile):return reserved
     if now >= epoch(ops['last_case_start_utc']) or now+reserved >= epoch(ops['hard_stop_utc']):
         raise RuntimeError('case admission rejected: case-start/hard-stop reservation')
     execution = reserved-ops['cleanup_seconds']-ops['host_shutdown_timeout_seconds']
@@ -92,12 +94,14 @@ class BedLedger:
 
     def gate(self, reserved):
         usage = self.usage()
-        if usage['bed_seconds'] >= self.ops['bed_uptime_soft_limit_seconds'] or usage['bed_seconds']+reserved > self.ops['bed_uptime_limit_seconds']:
+        from fresh_host_lifetime import time_targets_only
+        targets=time_targets_only(self.profile)
+        if not targets and (usage['bed_seconds'] >= self.ops['bed_uptime_soft_limit_seconds'] or usage['bed_seconds']+reserved > self.ops['bed_uptime_limit_seconds']):
             raise RuntimeError('bed uptime gate rejected new work')
         estimate = usage['estimated_cost_krw']+reserved/3600*self.data['cost_basis']['bed_hour_krw']
         if estimate > self.ops['new_work_budget_krw']:
             raise RuntimeError('cost estimate gate rejected new work')
-        if epoch(self.ops['hard_stop_utc']) >= epoch(self.ops['credit_evidence']['expires_utc']):
+        if (time.time()+reserved if targets else epoch(self.ops['hard_stop_utc'])) >= epoch(self.ops['credit_evidence']['expires_utc']):
             raise RuntimeError('credit expires before operational completion')
         self.save()
 

@@ -63,7 +63,9 @@ class LiveBackend:
         ledger=BedLedger(profile)
         ledger.require_active()
         ledger.gate(reserved)
-        with phase('admission readback',min(120,ops['fixture_prepare_timeout_seconds'])):
+        admission_until=os.environ.get('FRESH_ADMISSION_DEADLINE_UTC')
+        with phase('admission readback',min(120,ops['fixture_prepare_timeout_seconds']),
+                   until=float(admission_until) if admission_until else None):
             record=json.loads((self.state/'graduation-environment.json').read_text())
             if record.get('phase')!='ready':
                 raise RuntimeError('environment not ready; explicit down/ensure required before attempt')
@@ -83,7 +85,7 @@ class LiveBackend:
                 deadline=effective_host_deadline(profile,host)
                 if saved['id']!=str(host['id']) or abs(epoch(saved['last_start'])-epoch(host['lastStartTimestamp']))>.001:
                     raise RuntimeError('case admission: environment host start changed')
-                if deadline-time.time()<profile['host_headroom_seconds']:
+                if deadline is not None and deadline-time.time()<profile['host_headroom_seconds']:
                     raise RuntimeError('case admission: host lifetime insufficient; explicit down/ensure required')
 
     def environment_action(self, profile, action):
@@ -111,6 +113,8 @@ class LiveBackend:
         else:
             seconds=ops['host_shutdown_timeout_seconds']
             until=epoch(ops['hard_stop_utc'])
+        from fresh_host_lifetime import time_targets_only
+        if time_targets_only(profile):until=None
         with phase('environment '+action,seconds,ev.directory/'phases.jsonl',until):
             h.make('graduation-env-'+action,'environment.log',timeout=seconds)
             record=json.loads((self.state/'graduation-environment.json').read_text())
@@ -153,12 +157,14 @@ class LiveBackend:
         atomic_json(ev.directory/'profile-contract.json',profile)
         old=os.environ.get('FRESH_FIXTURE_DEADLINE_UTC')
         os.environ['FRESH_FIXTURE_DEADLINE_UTC']=str(deadline)
-        lifetime_keys=('FRESH_HOST_RUNTIME_LIMIT','FRESH_OPERATIONAL_HARD_STOP_UTC')
+        lifetime_keys=('FRESH_HOST_RUNTIME_LIMIT','FRESH_OPERATIONAL_HARD_STOP_UTC','FRESH_TIME_POLICY')
         prior_lifetime={key:os.environ.get(key) for key in lifetime_keys}
         os.environ['FRESH_HOST_RUNTIME_LIMIT']='disabled' if ops.get('host_lifetime_policy') else 'bounded'
         os.environ['FRESH_OPERATIONAL_HARD_STOP_UTC']=ops['hard_stop_utc']
+        from fresh_host_lifetime import time_targets_only
+        os.environ['FRESH_TIME_POLICY']='cost-bounded-targets-only' if time_targets_only(profile) else 'bounded'
         try:
-            with phase('adapter',profile['max_case_seconds'],ev.directory/'phases.jsonl',epoch(ops['drain_utc'])):
+            with phase('adapter',profile['max_case_seconds'],ev.directory/'phases.jsonl',None if time_targets_only(profile) else epoch(ops['drain_utc'])):
                 h.call([sys.executable,ROOT/'evaluation/fresh_scenarios.py',
                         '--case',ev.directory/'case-contract.json','--profile',ev.directory/'profile-contract.json',
                         '--evidence',ev.directory], 'run.log',timeout=profile['max_case_seconds'])

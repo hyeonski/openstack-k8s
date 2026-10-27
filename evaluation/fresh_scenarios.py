@@ -39,16 +39,19 @@ def fixture_ready(ev):
 def injection_guard(profile, needed, environment):
     ops=profile['operations']
     now = time.time()
-    if now >= epoch(ops['last_injection_utc']):
+    from fresh_host_lifetime import time_targets_only
+    targets=time_targets_only(profile)
+    if not targets and now >= epoch(ops['last_injection_utc']):
         raise RuntimeError('registered last injection time passed')
-    if now+needed >= epoch(ops['drain_utc']) or now+needed+ops['cleanup_seconds'] >= epoch(ops['shutdown_start_utc']):
+    if not targets and (now+needed >= epoch(ops['drain_utc']) or now+needed+ops['cleanup_seconds'] >= epoch(ops['shutdown_start_utc'])):
         raise RuntimeError('injection cannot complete H/evidence and cleanup before drain/down')
     hosts = environment.get('final_hosts', {})
     if not hosts:
         raise RuntimeError('host auto-stop evidence unavailable before injection')
     from fresh_host_lifetime import effective_host_deadline
-    deadline = min(effective_host_deadline(profile,host) for host in hosts.values())
-    if deadline - now < needed + ops['cleanup_seconds'] + ops['host_shutdown_timeout_seconds']:
+    deadlines=[effective_host_deadline(profile,host) for host in hosts.values()]
+    finite=[d for d in deadlines if d is not None]
+    if finite and min(finite) - now < needed + ops['cleanup_seconds'] + ops['host_shutdown_timeout_seconds']:
         raise RuntimeError('host auto-stop headroom no longer covers H and cleanup')
 
 

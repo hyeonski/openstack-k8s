@@ -1,6 +1,6 @@
 # 자동정지 해제·실험 중지/재개와 최종08시 종료 계약
 
-사용자는10/27 기존 세 호스트의10시간 자동정지 제거를 명시적으로 요청했다.13:30에는 실험만 안전하게 멈추고 기존 호스트를 RUNNING으로 대기,17:30 재개하며 그 사이 재기동으로 시간을 쓰지 않는 것이 목적이다. 이전10시간 수명 유지·17:30 수명 부족 회전 지시는 대체됐다. 이어 최종 실행·소유 cleanup·호스트 정지 확인 기한을 **2026-10-29 08:00 KST(`2026-10-28T23:00:00Z`)**로 연장했다. 누적44h 신규 중지/48h 상한, 신규146234원·정리40000원, 기존reserve20000원1회와8 preparation/29 main·관측·안전 조건은 유지한다.
+사용자는10/27 기존 세 호스트의10시간 자동정지 제거를 명시적으로 요청했다.13:30에는 실험만 안전하게 멈추고 기존 호스트를 RUNNING으로 대기,17:30 재개하며 그 사이 재기동으로 시간을 쓰지 않는 것이 목적이다. 이전10시간 수명 유지·17:30 수명 부족 회전 지시는 대체됐다. 이어 완료 목표를 **2026-10-29 08:00 KST(`2026-10-28T23:00:00Z`)**로 연장한 뒤, 이를 hard deadline으로 삼지 말고 기존44/48h도 시간만을 이유로 자동 중단하지 말라고 명시적으로 승인했다. 따라서 달력/누적시간은 목표·추적 지표이며 비용·크레딧·신규146234원·정리40000원·reserve20000원1회와8 preparation/29 main·관측·안전·정해진 재시도 조건을 유지한다.
 
 ## 실제 클라우드 변경과 경계
 
@@ -12,13 +12,15 @@ IaC의 평가용 세 호스트 `max_run_duration_seconds` 기본값은null, `max
 
 ## 달력·가동 안전 계약
 
-새 profile의 `operations.host_lifetime_policy`는 이 문서 SHA와 정확한 세 호스트 범위·최종 UTC 기한을 묶는다. live validator는 실제 cloud cap/terminationTime이 남아 있으면 거절한다. 명시적 정책이 없는 과거 profile은 여전히 cloud deadline을 요구한다. max_run_seconds가None 또는0일 때도 무한대나즉시만료로 간주하지 않고, 승인된 정책 아래 **최종 hard-stop을 유한 effective deadline**으로 사용한다. 실제 더 이른 cloud cap이 있는 과거 계약은 그 cap과hard-stop 중 이른 값을 사용한다.
+새 profile의 `operations.host_lifetime_policy`는 이 문서 SHA·정확한 세 호스트 범위·완료 목표·`cost-bounded-targets-only` 모드를 묶는다. live validator는 실제 cloud cap/terminationTime이 남아 있으면 거절한다. 명시적 정책이 없는 과거 profile은 여전히 기존 cloud/time/uptime guard를 유지한다. max_run_seconds가None/0이고 새 승인이 있을 때 effective deadline은None이다. 이를즉시만료나Infinity JSON 값으로 만들지 않는다.
 
-필수 단계 상한은 cold ensure3600초, fixture1800초, adapter5400초, cleanup1800초, down1800초, case 예약10800초를 유지한다. deadline은 last-case10/29 05:00 KST 이전·last-injection06:00 이전·drain07:00·down-start07:30·hard-stop08:00으로 역산했다. 더 이른 합산 예약 gate가 우선하며, case의 H/stream/clock·안정창을 줄이지 않는다. 실제 누적44h부터 신규 case를 막고48h와 비용 예약을 보존한다.
+`calendar_targets_only=true`, `uptime_targets_only=true`는 문서 SHA와 비용·reserve 조건을 검증해야만 유효하다. legacy schema의 hard_stop/last-case/last-injection/drain/down 시각과44/48h 숫자는 목표 참조로 남지만 시간만으로 admission·주입·정리·자동down을 막지 않는다. campaign budget_seconds의44h 누적 시간 차단도 적용하지 않는다. 08시 목표에서 역산한05시/06시/07시/07:30 시각은 계획 정보이며 자동 종료 명령이 아니다.
+
+개별 명령의 timeout과 fixture1800/adapter5400/cleanup1800/down1800초는 작업이 영구 정체되지 않게 하는 기존 운영 오류 경계로 유지한다. H/stream/필수 증거를 축소하지 않으며 시간 목표를 맞추기 위한 중단 수단으로 쓰지 않는다. phase에 옛 달력until을 추가 적용하지 않는다. case에 필요한 준비·관측·정리 비용 예약은 그대로 비용 gate에 전달한다. 비용 원장 gate와 실제 크레딧 만료 시각은 계속 강제한다. 유효 미회복을 timeout 실패로 재분류하거나 성공할 때까지 반복하지 않는다.
 
 고정10시간 회전과 S1 논리 SESSION-A/B 또는 시나리오별 강제 down/ensure는 제거한다. 순서·block·논리 session label은 보존하되 독립된 host 환경이라고 주장하지 않는다. case별 서비스·경쟁·QoS·volume·taint·controller·worker auto/1 소유 cleanup과 identity 검증은 그대로다. 준비 전체 go/no-go 뒤 가능한 즉시 main에 들어간다.
 
-전체 완료 추정은 운영 참고·조기 경고용이다. 옛24시간/자정 목표 또는 보수적 전체 합계만으로 불필요한 stop·재승인 요청을 하지 않는다. 실제 case의 필수 예약, 유한 최종 기한, 실제44/48h와 비용 gate는 계속 강제한다. 예상 가동/비용 한도가 먼저 제한할 가능성은 예상 시각·필수 남은 범위와 함께 알린다.
+전체 완료 추정은 운영 참고·조기 경고용이다. 옛24시간/자정 목표 또는 보수적 전체 합계만으로 불필요한 stop·재승인 요청을 하지 않는다. 실제 case의 필수 비용 예약·크레딧/정리reserve·안전 gate는 계속 강제한다.08시 또는44/48h 목표를 넘을 것으로 보이는 의미 있는 변화는 남은 범위·예상시각·예상비용과 함께 조기에 알리되 시간만으로 중단하지 않는다.
 
 ## 13:30 안전 대기와17:30 재개
 

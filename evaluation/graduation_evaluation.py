@@ -165,7 +165,8 @@ class Campaign:
         record = read(self.state / 'graduation-environment.json')
         from fresh_host_lifetime import effective_host_deadline
         deadlines = [effective_host_deadline(self.profile,h) for h in record['final_hosts'].values()]
-        if min(deadlines) - time.time() < self.profile['host_headroom_seconds']:
+        finite=[d for d in deadlines if d is not None]
+        if finite and min(finite) - time.time() < self.profile['host_headroom_seconds']:
             self.make('graduation-env-down', 'environment.log', timeout=1800)
             self.make('graduation-env-ensure', 'environment.log', timeout=3000)
             record = read(self.state / 'graduation-environment.json')

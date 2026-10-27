@@ -13,7 +13,7 @@ def epoch(value):
     return parsed.timestamp()
 
 
-def host_deadline(host, *, hard_stop=None, allow_unlimited=False):
+def host_deadline(host, *, hard_stop=None, allow_unlimited=False, targets_only=False):
     scheduling = host.get('scheduling', {})
     raw = host.get('max_run_seconds', scheduling.get('maxRunDuration', {}).get('seconds'))
     try:
@@ -28,6 +28,8 @@ def host_deadline(host, *, hard_stop=None, allow_unlimited=False):
     termination = host.get('termination_time', scheduling.get('terminationTime'))
     if termination:
         bounds.append(epoch(termination))
+    if not bounds and allow_unlimited and targets_only:
+        return None  # Explicit cost-bounded policy; never serialize Infinity.
     if not bounds and not (allow_unlimited and hard_stop):
         raise RuntimeError('automatic STOP deadline unknown; explicit bounded no-timer policy required')
     if hard_stop:
@@ -38,5 +40,6 @@ def host_deadline(host, *, hard_stop=None, allow_unlimited=False):
 
 
 def operational_host_deadline(host):
-    return host_deadline(host, hard_stop=os.environ.get('FRESH_OPERATIONAL_HARD_STOP_UTC'),
-                         allow_unlimited=os.environ.get('FRESH_HOST_RUNTIME_LIMIT')=='disabled')
+    targets=os.environ.get('FRESH_TIME_POLICY')=='cost-bounded-targets-only'
+    return host_deadline(host, hard_stop=None if targets else os.environ.get('FRESH_OPERATIONAL_HARD_STOP_UTC'),
+                         allow_unlimited=os.environ.get('FRESH_HOST_RUNTIME_LIMIT')=='disabled',targets_only=targets)

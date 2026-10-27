@@ -311,7 +311,8 @@ class S1Contention:
             environment = self.s1.environment()
             from lib.host_lifetime import operational_host_deadline
             deadlines = [operational_host_deadline(host) for host in environment['final_hosts'].values()]
-            if min(deadlines) - time.time() < seconds + 1800:
+            finite=[d for d in deadlines if d is not None]
+            if finite and min(finite) - time.time() < seconds + 1800:
                 raise RuntimeError('GCP host auto-stop headroom is too short for S1 contention')
             record = {'version': 1, 'run_id': 's1c-' + uuid.uuid4().hex[:12],
                       'created': utc_now(), 'evidence': str(evidence),
