@@ -21,7 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 NAMESPACE = 'graduation-s1'
 SOURCE = ROOT / 'kubernetes/graduation-s1'
 MANIFEST = SOURCE / 'service.yaml'
-IMAGE = 'python:3.12-alpine'
+# Preserve the independently validated load-generator runtime, not a moving tag.
+IMAGE = 'python@sha256:4c47124a8391cb7a9f571164147d154777cf012a4ece5f86097130d7a4478111'
 CPU_COUNTERS = ('usage_usec', 'user_usec', 'system_usec',
                 'nr_periods', 'nr_throttled', 'throttled_usec')
 
