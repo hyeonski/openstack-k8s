@@ -35,6 +35,16 @@ def append(path, row):
         os.fsync(stream.fileno())
 
 
+def wait_for_arrival(scheduled_wall, scheduled_monotonic):
+    """Keep both registered clocks; a wall-clock slew must not send early."""
+    while True:
+        remaining = max(scheduled_wall-time.time(), scheduled_monotonic-time.monotonic())
+        if remaining <= 0:
+            return
+        # Recheck instead of assuming sleep or either clock stayed exact.
+        time.sleep(min(remaining, 1.0))
+
+
 class Evidence:
     def __init__(self, directory, observer='runner'):
         self.directory = Path(directory)
@@ -62,8 +72,12 @@ class OpenLoopProbe:
         self.clock_id = 'probe:' + uuid.uuid4().hex
         self.error = None
         self.until = None
+        self.until_utc = None
         self.rows = []
         self.thread = threading.Thread(target=self.loop, daemon=True)
+
+    def outside_horizon(self, scheduled_wall, scheduled_monotonic):
+        return self.until is not None and scheduled_monotonic >= self.until and (self.until_utc is None or scheduled_wall >= self.until_utc)
 
     def loop(self):
         try:
@@ -72,6 +86,7 @@ class OpenLoopProbe:
             active_rows = {}
             pool = concurrent.futures.ThreadPoolExecutor(max_workers=self.max_inflight)
             def one(index, scheduled):
+                wait_for_arrival(scheduled, anchor+index/self.rate)
                 begin, mono = time.time(), time.monotonic()
                 row = dict(request_id=str(index), index=index, scheduled_utc=utc(scheduled),
                            scheduled_monotonic=anchor+index/self.rate, started_utc=utc(begin), clock_id=self.clock_id, started_monotonic=mono,
@@ -91,10 +106,10 @@ class OpenLoopProbe:
                 self.rows.append(row)
             for i in range(int(self.seconds * self.rate)):
                 scheduled = wall + i / self.rate
-                if self.until is not None and anchor + i / self.rate >= self.until:
+                if self.outside_horizon(scheduled, anchor+i/self.rate):
                     break
-                time.sleep(max(0, anchor + i / self.rate - time.monotonic()))
-                if self.until is not None and anchor + i / self.rate >= self.until:
+                wait_for_arrival(scheduled, anchor+i/self.rate)
+                if self.outside_horizon(scheduled, anchor+i/self.rate):
                     break
                 for future in [f for f in pending if f.done()]:
                     emit(future.result()); del pending[future]
@@ -121,7 +136,8 @@ class OpenLoopProbe:
         return self
 
     def __exit__(self, *exception):
-        if exception and exception[0] is not None:self.until=time.monotonic()
+        if exception and exception[0] is not None:
+            self.until=time.monotonic();self.until_utc=time.time()
         self.thread.join(timeout=self.seconds + self.deadline + 10)
         if self.thread.is_alive() or self.error:
             raise RuntimeError('continuous probe incomplete: ' + str(self.error))

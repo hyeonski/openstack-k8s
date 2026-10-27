@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import concurrent.futures
 import hashlib
 import json
 from pathlib import Path
@@ -19,7 +20,7 @@ from graduation_s1_auto import interval
 from graduation_s1_contention import epoch
 from graduation_s1 import NAMESPACE as S1_NS
 from graduation_s3 import SKIP, OUT
-from graduation_s4 import MHC_NAME, NAMESPACE as S4_NS, LABEL_KEY, EXPERIMENT
+from graduation_s4 import MHC_NAME, HTTP_NAME, NAMESPACE as S4_NS, LABEL_KEY, EXPERIMENT
 from graduation_s4_run import S4Run, nova, nova_status, summarize_capacity
 from graduation_recovery import RecoveryLab, wait_for
 from workload_state import condition
@@ -619,8 +620,9 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
                             c.get('state') == 'CONTAINER_RUNNING']
                 if len(matching) != 1:
                     raise RuntimeError('old DB process was not running after fault')
-                self.ev.event('injection_applied',target=source['node_uid'])
+                injected=self.ev.event('injection_applied',target=source['node_uid'])
                 start=time.monotonic();sampler.until=start+cfg['horizon_seconds']
+                sampler.until_utc=epoch(injected['utc'])+cfg['horizon_seconds']
                 self.ev.state('INJECTED');self.ev.state('OBSERVING')
                 not_ready=False;diagnosed=False;last_snapshot=None
                 while time.monotonic()<start+cfg['horizon_seconds']:
@@ -666,6 +668,44 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
 
 
 class FreshS4Run(S4Run):
+    def snapshot(self,directory,index):
+        """Read independent APIs concurrently; keep all original identity evidence."""
+        obs={'time':utc_now(),'errors':{},'collection_timing':{}}
+        queries={
+            'md':('m','machinedeployment',self.preparation.md_name,'-n',self.client.ns),
+            'mhc':('m','machinehealthcheck',MHC_NAME,'-n',self.client.ns),
+            'machines':('m','machines','-n',self.client.ns,'-l','cluster.x-k8s.io/cluster-name='+self.client.cluster),
+            'osmachines':('m','openstackmachines','-n',self.client.ns,'-l','cluster.x-k8s.io/cluster-name='+self.client.cluster),
+            'nodes':('w','nodes'),'pods':('w','pods','-n',S4_NS),
+            'deployment':('w','deployment',HTTP_NAME,'-n',S4_NS),
+            'events':('m','events','-n',self.client.ns),
+        }
+        def collect(name):
+            began=utc_now();start=time.monotonic()
+            try:
+                value=nova('list') if name=='nova' else self.client.get(*queries[name])
+                return name,value,None,{'started_utc':began,'ended_utc':utc_now(),'seconds':time.monotonic()-start}
+            except (RuntimeError,subprocess.TimeoutExpired,ValueError,OSError) as exc:
+                return name,None,f'{type(exc).__name__}: {exc}',{'started_utc':began,'ended_utc':utc_now(),'seconds':time.monotonic()-start}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+            for name,value,error,timing in pool.map(collect,[*queries,'nova']):
+                obs['collection_timing'][name]=timing
+                if error is None:obs[name]=value
+                else:obs['errors'][name]=error
+        obs['collected_utc']=utc_now()
+        atomic_json(directory/f'{index:04d}.json',obs)
+        return obs
+
+    def replacement_evidence(self,record,node,lab):
+        # The full snapshot still verifies identity/readiness every cycle.
+        # Expensive physical binding and probe creation are needed once per node.
+        cached=getattr(self,'_replacement_evidence',None)
+        if cached is None or cached[0]!=node:
+            self.create_probe(record,node)
+            binding=lab.binding(lab.obj('node',node,False))
+            cached=(node,binding);self._replacement_evidence=cached
+        return cached[1]
+
     def create_probe(self,record,node):
         # Require scheduler placement on the replacement; nodeName would bypass schedulability.
         name=record['probe_name']
@@ -722,26 +762,26 @@ def run_s4(case,profile,ev):
             wait_for(lambda:nova_status(target['nova_id'])['status']=='SHUTOFF',seconds=90)
             stopped_vm=nova_status(target['nova_id'])
             runner.write(record,'injected',injected_at=utc_now())
-            ev.event('injection_applied',target=target['nova_id'])
+            injected=ev.event('injection_applied',target=target['nova_id'])
             start=time.monotonic();sampler.until=start+cfg['horizon_seconds']
+            sampler.until_utc=epoch(injected['utc'])+cfg['horizon_seconds']
             ev.state('INJECTED');ev.state('OBSERVING')
             snapshots=evidence/'observations';snapshots.mkdir(exist_ok=True)
             index=0;capacity={'state':'pending'};binding=None;capacity_probe=None;observation=None
             while time.monotonic()<start+cfg['horizon_seconds']:
+                cycle_started=time.monotonic()
                 observation=runner.snapshot(snapshots,index);index+=1
-                observation['collected_utc']=utc_now()
                 workers=[m for m in observation.get('machines',{}).get('items',[]) if m['metadata']['uid'] not in originals and m['metadata'].get('labels',{}).get('cluster.x-k8s.io/deployment-name')==prep.md_name]
                 if len(workers)==1 and condition(workers[0],'Ready'):
                     node=workers[0].get('status',{}).get('nodeRef',{}).get('name')
                     if node:
-                        runner.create_probe(record,node)
-                        # Re-read actual Node/Machine/VM and physical compute mapping after replacement.
-                        binding=lab.binding(lab.obj('node',node,False))
-                        capacity_probe=prep.object('w','pod',record['probe_name'],S4_NS)
+                        binding=runner.replacement_evidence(record,node,lab)
+                        capacity_probe=next((p for p in observation.get('pods',{}).get('items',[])
+                                             if p['metadata']['name']==record['probe_name']),None)
                 append(ev.directory/'decisions.jsonl',dict(utc=utc_now(),observer='external MHC/CAPI/CAPO',source='observations/capacity-'+f'{index:04}'+'.json',limitation='internal controller decisions are not instrumented; raw controller events retained'))
                 capacity=summarize_capacity(observation,target,originals,record['probe_name'])
                 atomic_json(ev.directory/'observations'/f'capacity-{index:04}.json',observation)
-                time.sleep(min(5,max(0,start+cfg['horizon_seconds']-time.monotonic())))
+                time.sleep(max(0,min(cycle_started+5,start+cfg['horizon_seconds'])-time.monotonic()))
             horizon(ev,start,cfg['horizon_seconds'])
         # Keep off paused until cleanup has restarted the owned VM and observed
         # Node Ready. Unpausing an unhealthy target races native remediation.
