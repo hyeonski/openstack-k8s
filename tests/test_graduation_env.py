@@ -5,10 +5,11 @@ import sys
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 sys.path[:0] = [str(Path(__file__).resolve().parents[1] / d) for d in ('experiments', 'evaluation')]
-from graduation_env import Environment
+from graduation_env import Environment, Commands
 
 
 def config(root, hosts=('controller', 'compute1', 'compute2')):
@@ -89,6 +90,19 @@ class ReadyEnvironment(Environment):
 
 
 class EnvironmentTests(unittest.TestCase):
+    def test_runtime_recovery_error_classifies_without_exposing_remote_output(self):
+        for text, expected in [
+            ('SSL UNEXPECTED_EOF credential=hidden', 'SSH/IAP TLS EOF'),
+            ('Placement did not become ready credential=hidden', 'placement readiness timeout'),
+            ('credential=hidden', 'unclassified runtime recovery failure'),
+        ]:
+            result = subprocess.CompletedProcess([], 1, '', text)
+            with patch('graduation_env.subprocess.run', return_value=result):
+                with self.assertRaisesRegex(RuntimeError, expected) as caught:
+                    Commands().run(['scripts/gcp-openstack-recover.sh'])
+                self.assertNotIn('credential', str(caught.exception))
+                self.assertNotIn('hidden', str(caught.exception))
+
     def test_active_s3_prevents_general_guest_restart_before_any_cloud_call(self):
         with tempfile.TemporaryDirectory() as directory:
             commands = FakeCommands({})

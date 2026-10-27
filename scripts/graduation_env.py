@@ -31,6 +31,24 @@ class Commands:
                             if line.startswith('ERROR: workload guest') or
                             line.startswith('ERROR: no current workload Machine')]
                 diagnostic = '; ' + messages[-1] if messages else ''
+            elif Path(args[0]).name == 'gcp-openstack-recover.sh':
+                # Retain a fixed classification only: raw remote stderr can
+                # contain credentials. This never retries recovery mutations.
+                categories = (
+                    ('Keystone did not become ready', 'keystone readiness timeout'),
+                    ('Placement did not become ready', 'placement readiness timeout'),
+                    ('Nova compute and hypervisors did not become ready', 'nova/hypervisor readiness timeout'),
+                    ('UNEXPECTED_EOF', 'SSH/IAP TLS EOF'),
+                    ('Connection reset', 'SSH connection reset'),
+                    ('Connection refused', 'SSH connection refused'),
+                    ('Permission denied', 'SSH/SCP permission denied'),
+                    ('No such container', 'runtime container absent'),
+                    ('Cannot connect to the Docker daemon', 'Docker daemon unavailable'),
+                    ('timed out', 'transport timeout'),
+                )
+                matches = [safe for pattern, safe in categories
+                           if pattern in result.stderr or pattern in result.stdout]
+                diagnostic = '; ' + ', '.join(matches) if matches else '; unclassified runtime recovery failure'
             raise RuntimeError(f'{args[0]} exited {result.returncode}{diagnostic}')
         return result.stdout
 
