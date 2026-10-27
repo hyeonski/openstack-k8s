@@ -65,17 +65,18 @@ def review_dev():
 def save(stage,**fields):
  DATA['updated_utc']=utc();DATA['stage']=stage;DATA.update(fields);atomic_json(REG,DATA)
  progress=json.loads((BASE/'progress.json').read_text());ledger=BedLedger(P);ledger.save()
- results=[];injections=[]
+ results=[];injections=[];attempted=[]
  for campaign in BED.glob('*/campaign.json'):
   manifest=json.loads(campaign.read_text())
   for case in manifest['cases']:
    for attempt in case.get('attempts',[]):
+    attempted.append(case)
     path=campaign.parent/attempt['path']
     if (path/'judgement.json').exists():results.append((case,json.loads((path/'judgement.json').read_text())))
     for events in (path/'events.jsonl',):
      if events.exists():
       injections.extend(e['utc'] for e in map(json.loads,events.read_text().splitlines()) if e.get('kind')=='injection_applied')
- progress.update(preparation_attempted=sum(c['purpose']!='main' for c,j in results),preparation_valid=sum(c['purpose']!='main' and j['trial_valid'] is True for c,j in results),preparation_invalid=sum(c['purpose']!='main' and j['trial_valid'] is not True for c,j in results),main_attempted=sum(c['purpose']=='main' for c,j in results),first_injection_utc=min(injections) if injections else progress.get('first_injection_utc'))
+ progress.update(preparation_attempted=sum(c['purpose']!='main' for c in attempted),preparation_valid=sum(c['purpose']!='main' and j['trial_valid'] is True for c,j in results),preparation_invalid=sum(c['purpose']!='main' and j['trial_valid'] is not True for c,j in results),main_attempted=sum(c['purpose']=='main' for c in attempted),first_injection_utc=min(injections) if injections else progress.get('first_injection_utc'))
  progress.update(updated_utc=utc(),stage=stage,release_registry=str(REG),uptime_and_estimated_cost=ledger.data['usage'],**fields)
  atomic_json(BASE/'progress.json',progress)
  print(json.dumps({'utc':utc(),'stage':stage,**fields}),flush=True)
@@ -97,7 +98,14 @@ def cli(action,*extra,campaign=None):
    log=BASE/('driver-command-'+str(time.time_ns())+'.log')
    DATA['events'].append({'utc':utc(),'argv':args,'log':str(log),'step_attempt':attempt})
    save('CLI '+action,current_campaign=str(campaign) if campaign else None,last_command_log=str(log))
-   with log.open('w') as stream:rc=subprocess.call(args,stdout=stream,stderr=subprocess.STDOUT,cwd=ROOT)
+   with log.open('w') as stream:
+    with subprocess.Popen(args,stdout=stream,stderr=subprocess.STDOUT,cwd=ROOT) as process:
+     while True:
+      try:
+       rc=process.wait(timeout=30);break
+      except subprocess.TimeoutExpired:
+       save('CLI '+action+' in progress',child_pid=process.pid)
+   DATA['child_pid']=None
    if not rc:return
    text=log.read_text()
    transient=any(word in text for word in ('UNEXPECTED_EOF','Connection reset','Connection refused','Unable to connect','i/o timeout','TLS handshake','context deadline exceeded'))
@@ -140,7 +148,9 @@ def remaining_budget(label):
  projected=usage['estimated_cost_krw']+seconds/3600*P['operations']['cost_estimate']['bed_hour_krw']+seconds/86400*P['operations']['cost_estimate']['calendar_day_krw']
  DATA['observed_max_case_seconds']={k:v/1.2 for k,v in observed.items()}
  budget=dict(idle_seconds=idle,remaining_lifecycle_estimate_seconds=lifecycle,calendar_estimate_advisory=True,updated_utc=utc(),label=label,completed_registered_cases=len(completed),remaining_registered_cases=len(pending),remaining_plan_seconds=seconds,planned_finish_kst=dt.datetime.fromtimestamp(now+seconds,dt.timezone(dt.timedelta(hours=9))).isoformat(),calendar_margin_seconds=hard-now-seconds,soft_uptime_margin_after_plan_seconds=P['operations']['bed_uptime_soft_limit_seconds']-usage['bed_seconds']-seconds,projected_estimate_krw=projected,usage=usage,notes='case nominal or observed x1.2; one measured lifecycle25min, no fixed host rotation; scheduled idle included; total forecast advisory; phase deadlines and credit/cost gates remain; calendar/uptime advisory; completed work excluded; not Billing')
- atomic_json(BASE/('remaining-budget-'+str(time.time_ns())+'.json'),budget);save('remaining work budget checked',remaining_budget=budget)
+ prep_seconds=sum(max(nominal[c['scenario']]*72,observed.get(c['scenario'],0)) for c in pending if c['purpose']!='main')
+ budget['first_main_forecast_kst']=dt.datetime.fromtimestamp(now+prep_seconds+(lifecycle if completed==set() else 0),dt.timezone(dt.timedelta(hours=9))).isoformat() if prep_seconds else ('main in progress or admitted' if pending else None)
+ atomic_json(BASE/('remaining-budget-'+str(time.time_ns())+'.json'),budget);save('remaining work budget checked',remaining_budget=budget,first_main_forecast=budget['first_main_forecast_kst'],completion_forecast=budget['planned_finish_kst'])
  if usage['estimated_cost_krw']>=P['operations']['new_work_budget_krw']:
   raise RuntimeError('actual accumulated planning cost limit reached; preserve pending scope')
 
