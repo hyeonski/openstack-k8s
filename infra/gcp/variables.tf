@@ -29,7 +29,18 @@ variable "source_image" {
 }
 
 variable "max_run_duration_seconds" {
-  description = "Cost-control runtime limit retained on every GCE host."
+  description = "Optional runtime cap for the three evaluation hosts; null disables cloud automatic termination."
+  type        = number
+  default     = null
+  nullable    = true
+  validation {
+    condition     = var.max_run_duration_seconds == null ? true : var.max_run_duration_seconds > 0
+    error_message = "Use null for no automatic stop, or a positive optional runtime cap."
+  }
+}
+
+variable "image_builder_max_run_duration_seconds" {
+  description = "Separate disposable builder runtime cap; unaffected by evaluation-host approval."
   type        = number
   default     = 36000
 }

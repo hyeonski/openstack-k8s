@@ -12,6 +12,8 @@ KEY = 'controller_platform_policy'
 
 
 def validate_controller_policy(profile, live=False):
+    from fresh_host_lifetime import validate_host_lifetime_policy
+    validate_host_lifetime_policy(profile,live=live)
     policy = profile.get('operations', {}).get(KEY)
     if policy is None:
         return None  # Historical profiles retain strict CPU-platform equality.

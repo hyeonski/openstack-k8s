@@ -75,7 +75,8 @@ class Environment:
         return {'name': name, 'status': data.get('status'),
                 'id': str(data.get('id', '')),
                 'last_start': data.get('lastStartTimestamp'),
-                'max_run_seconds': data.get('scheduling', {}).get('maxRunDuration', {}).get('seconds')}
+                'max_run_seconds': data.get('scheduling', {}).get('maxRunDuration', {}).get('seconds'),
+                'termination_time': data.get('scheduling', {}).get('terminationTime')}
 
     def hosts(self):
         return {name: self.host(name) for name in self.config['hosts']}

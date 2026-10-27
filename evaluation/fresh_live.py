@@ -79,7 +79,8 @@ class LiveBackend:
                 raise RuntimeError('case admission: actual host identity/platform differs from registered readback')
             for name,host in hosts.items():
                 saved=record['final_hosts'][name]
-                deadline=epoch(host['lastStartTimestamp'])+int(host['scheduling']['maxRunDuration']['seconds'])
+                from fresh_host_lifetime import effective_host_deadline
+                deadline=effective_host_deadline(profile,host)
                 if saved['id']!=str(host['id']) or abs(epoch(saved['last_start'])-epoch(host['lastStartTimestamp']))>.001:
                     raise RuntimeError('case admission: environment host start changed')
                 if deadline-time.time()<profile['host_headroom_seconds']:
@@ -152,6 +153,10 @@ class LiveBackend:
         atomic_json(ev.directory/'profile-contract.json',profile)
         old=os.environ.get('FRESH_FIXTURE_DEADLINE_UTC')
         os.environ['FRESH_FIXTURE_DEADLINE_UTC']=str(deadline)
+        lifetime_keys=('FRESH_HOST_RUNTIME_LIMIT','FRESH_OPERATIONAL_HARD_STOP_UTC')
+        prior_lifetime={key:os.environ.get(key) for key in lifetime_keys}
+        os.environ['FRESH_HOST_RUNTIME_LIMIT']='disabled' if ops.get('host_lifetime_policy') else 'bounded'
+        os.environ['FRESH_OPERATIONAL_HARD_STOP_UTC']=ops['hard_stop_utc']
         try:
             with phase('adapter',profile['max_case_seconds'],ev.directory/'phases.jsonl',epoch(ops['drain_utc'])):
                 h.call([sys.executable,ROOT/'evaluation/fresh_scenarios.py',
@@ -160,6 +165,9 @@ class LiveBackend:
         finally:
             if old is None:os.environ.pop('FRESH_FIXTURE_DEADLINE_UTC',None)
             else:os.environ['FRESH_FIXTURE_DEADLINE_UTC']=old
+            for key,value in prior_lifetime.items():
+                if value is None:os.environ.pop(key,None)
+                else:os.environ[key]=value
 
     def cleanup(self, case, profile, ev):
         h=self.helper(profile,ev)

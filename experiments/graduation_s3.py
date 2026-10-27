@@ -93,7 +93,7 @@ class S3(RecoveryLab):
                             'matchExpressions': [{'key': 'kubernetes.io/hostname', 'operator': 'In', 'values': [workers[0]['node']]}]}}]}},
                     'tolerations': [{'key': key, 'operator': 'Exists', 'effect': 'NoExecute', 'tolerationSeconds': 3600}
                                     for key in ('node.kubernetes.io/not-ready', 'node.kubernetes.io/unreachable')],
-                    'containers': [{'name': 'db', 'image': 'postgres:16.10-alpine',
+                    'containers': [{'name': 'db', 'image': 'postgres@sha256:029660641a0cfc575b14f336ba448fb8a75fd595d42e1fa316b9fb4378742297',
                         'env': [{'name': 'POSTGRES_PASSWORD', 'valueFrom': {'secretKeyRef': {'name': 'db-auth', 'key': 'password'}}},
                                 {'name': 'PGDATA', 'value': '/var/lib/postgresql/data/pgdata'}],
                         'resources': {'requests': {'cpu': '100m', 'memory': '128Mi'}, 'limits': {'memory': '512Mi'}},
@@ -106,7 +106,7 @@ class S3(RecoveryLab):
         self.apply({'apiVersion': 'v1', 'kind': 'Pod', 'metadata': {'name': 'probe', 'namespace': self.ns},
                     'spec': {'nodeName': cp['node'], 'tolerations': [{'key': 'node-role.kubernetes.io/control-plane',
                         'operator': 'Exists', 'effect': 'NoSchedule'}],
-                        'containers': [{'name': 'probe', 'image': 'postgres:16.10-alpine', 'env': env,
+                        'containers': [{'name': 'probe', 'image': 'postgres@sha256:029660641a0cfc575b14f336ba448fb8a75fd595d42e1fa316b9fb4378742297', 'env': env,
                             'command': ['sleep', '7200'], 'resources': {'requests': {'cpu': '25m', 'memory': '32Mi'}}}]}})
         wait_for(lambda: condition(self.dbpod() or {}, 'Ready'), seconds=600)
         wait_for(lambda: condition(self.obj('pod', 'probe') or {}, 'Ready'), seconds=300)

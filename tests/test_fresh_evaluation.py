@@ -250,7 +250,8 @@ class FreshTests(unittest.TestCase):
             ev=Evidence(Path(root)/'attempt');h=Mock();h.state_record.return_value=None;h.lab.admin_json.return_value=[]
             r.helper=Mock(return_value=h)
             atomic_json(ev.directory/'cases/s4/cleanup-verification.json',{'checks':{'owned_resources_absent':True}})
-            result=r.cleanup({'id':'s4','scenario':'s4'},profile(),ev)
+            with patch('fresh_calibration.TransportWatch'):
+                result=r.cleanup({'id':'s4','scenario':'s4'},profile(),ev)
             self.assertTrue(result['checks']['owned_resources_absent'])
             h.lab.admin.assert_not_called()
             h.cleanup_case.assert_called_once()

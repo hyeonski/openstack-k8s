@@ -39,7 +39,7 @@ def source_hashes(root=ROOT):
 
 
 def policy_manifest(source):
-    return {name: value for name, value in source.items() if name.startswith(('experiments/','scripts/','kubernetes/')) or name in ('evaluation/fresh_collection.py','evaluation/fresh_scenarios.py','evaluation/fresh_live.py','evaluation/fresh_contract.py','evaluation/fresh_campaign.py','evaluation/fresh_baseline.py','evaluation/fresh_operations.py','evaluation/fresh_identity.py','evaluation/fresh_analysis.py','evaluation/fresh_evidence.py','evaluation/graduation_evaluation.py','evaluation/graduation_evaluation_case.py')}
+    return {name: value for name, value in source.items() if name.startswith(('experiments/','scripts/','kubernetes/')) or name in ('evaluation/fresh_pause.py','evaluation/fresh_host_lifetime.py','evaluation/fresh_collection.py','evaluation/fresh_scenarios.py','evaluation/fresh_live.py','evaluation/fresh_contract.py','evaluation/fresh_campaign.py','evaluation/fresh_baseline.py','evaluation/fresh_operations.py','evaluation/fresh_identity.py','evaluation/fresh_analysis.py','evaluation/fresh_evidence.py','evaluation/graduation_evaluation.py','evaluation/graduation_evaluation_case.py')}
 
 
 def pilot_contract(profile, scenario):
@@ -52,6 +52,7 @@ def pilot_contract(profile, scenario):
     result['execution_limits']={k:profile.get(k) for k in ('max_case_seconds','host_headroom_seconds')}
     result['execution_limits'].update({k:profile['operations'].get(k) for k in (*PHASE_LIMITS,*TIME_KEYS,'bed_uptime_limit_seconds','bed_uptime_soft_limit_seconds','clock_failure_stop_after_attempts')})
     result['controller_platform_policy']=profile['operations'].get('controller_platform_policy')
+    result['host_lifetime_policy']=profile['operations'].get('host_lifetime_policy')
     fixture={'s2':'s2_port_qos_workload_progress','s3':'s3_volume_seed','s4':'s4_capacity'}
     if scenario in fixture:result['fixture']=profile['initial_fixture'][fixture[scenario]]
     if scenario=='s1':

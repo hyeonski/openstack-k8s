@@ -74,11 +74,11 @@ def s4_host_budget(preparation_record):
     deadlines = []
     for name, row in current.items():
         initial = preparation_record['initial_hosts'][name]
-        seconds = int(row.get('scheduling', {}).get('maxRunDuration', {}).get('seconds', 0))
         if str(row.get('id')) != initial['id'] or row.get('status') != 'RUNNING' or\
-                not row.get('lastStartTimestamp') or seconds <= 0:
+                not row.get('lastStartTimestamp'):
             raise RuntimeError('GCP host identity/state/budget mismatch: ' + name)
-        deadlines.append(unix_time(row['lastStartTimestamp']) + seconds)
+        from lib.host_lifetime import operational_host_deadline
+        deadlines.append(operational_host_deadline(row))
     return min(deadlines)
 
 
@@ -278,7 +278,7 @@ class S4Run:
                     'metadata': {'name': name, 'namespace': NAMESPACE,
                                  'labels': {LABEL_KEY: EXPERIMENT}},
                     'spec': {'nodeName': node, 'restartPolicy': 'Never',
-                             'containers': [{'name': 'probe', 'image': 'busybox:1.37.0',
+                             'containers': [{'name': 'probe', 'image': 'busybox@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e',
                                              'command': ['sh', '-c', 'sleep 3600'],
                                              'resources': {'requests': {'cpu': '10m', 'memory': '16Mi'}},
                                              'readinessProbe': {'exec': {'command': [

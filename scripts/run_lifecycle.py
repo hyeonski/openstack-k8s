@@ -75,11 +75,10 @@ def host_budget(client):
     deadlines = []
     for name in names:
         row = rows[name]
-        seconds = int(row.get('scheduling', {}).get('maxRunDuration', {}).get('seconds', 0))
-        if row.get('status') != 'RUNNING' or seconds <= 0 or not row.get('lastStartTimestamp'):
+        if row.get('status') != 'RUNNING' or not row.get('lastStartTimestamp'):
             raise RuntimeError('host is stopped or its automatic STOP deadline is unknown: ' + name)
-        started = dt.datetime.fromisoformat(row['lastStartTimestamp'].replace('Z', '+00:00')).timestamp()
-        deadlines.append(started + seconds)
+        from lib.host_lifetime import operational_host_deadline
+        deadlines.append(operational_host_deadline(row))
     return min(deadlines), rows
 
 

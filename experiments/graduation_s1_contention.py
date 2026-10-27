@@ -309,8 +309,8 @@ class S1Contention:
                 raise RuntimeError('S1 Deployment has an unexpected nodeSelector')
             evidence = artifact_dir('graduation-s1-contention')
             environment = self.s1.environment()
-            deadlines = [epoch(host['last_start']) + int(host['max_run_seconds'])
-                         for host in environment['final_hosts'].values()]
+            from lib.host_lifetime import operational_host_deadline
+            deadlines = [operational_host_deadline(host) for host in environment['final_hosts'].values()]
             if min(deadlines) - time.time() < seconds + 1800:
                 raise RuntimeError('GCP host auto-stop headroom is too short for S1 contention')
             record = {'version': 1, 'run_id': 's1c-' + uuid.uuid4().hex[:12],

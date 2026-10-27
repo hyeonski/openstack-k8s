@@ -55,7 +55,7 @@ class S2(RecoveryLab):
                      'selector': {'matchLabels': {'app': name}},
                      'template': {'metadata': {'labels': {'app': name}}, 'spec': {
                          'nodeSelector': {'kubernetes.io/hostname': node},
-                         'containers': [{'name': name, 'image': 'python:3.12-alpine',
+                         'containers': [{'name': name, 'image': 'python@sha256:b658b05ce9c4eb97ec6fc19424818a1f31993659c2b505a532f470e83807815d',
                              'command': ['python', '-B', '/app/workload.py', *args],
                              'resources': {'requests': {'cpu': '100m', 'memory': '64Mi'},
                                            'limits': {'memory': '256Mi'}},

@@ -21,7 +21,7 @@ locals {
       }
     }
     compute01 = {
-      name                       = "osk8s-compute01"
+      name = "osk8s-compute01"
       # The control-plane VM and the recovery destination worker share this host.
       machine_type               = "n2-standard-8"
       address                    = "10.20.0.21"
@@ -218,11 +218,14 @@ resource "google_compute_instance" "hosts" {
     on_host_maintenance         = "MIGRATE"
     preemptible                 = false
     provisioning_model          = "STANDARD"
-    instance_termination_action = "STOP"
+    instance_termination_action = var.max_run_duration_seconds == null ? null : "STOP"
 
-    max_run_duration {
-      seconds = var.max_run_duration_seconds
-      nanos   = 0
+    dynamic "max_run_duration" {
+      for_each = var.max_run_duration_seconds == null ? [] : [var.max_run_duration_seconds]
+      content {
+        seconds = max_run_duration.value
+        nanos   = 0
+      }
     }
   }
 
@@ -327,7 +330,7 @@ resource "google_compute_instance" "image_builder" {
     instance_termination_action = "STOP"
 
     max_run_duration {
-      seconds = var.max_run_duration_seconds
+      seconds = var.image_builder_max_run_duration_seconds
       nanos   = 0
     }
   }

@@ -46,14 +46,23 @@ def injection_guard(profile, needed, environment):
     hosts = environment.get('final_hosts', {})
     if not hosts:
         raise RuntimeError('host auto-stop evidence unavailable before injection')
-    deadline = min(epoch(host['last_start']) + int(host['max_run_seconds'])
-                   for host in hosts.values())
+    from fresh_host_lifetime import effective_host_deadline
+    deadline = min(effective_host_deadline(profile,host) for host in hosts.values())
     if deadline - now < needed + ops['cleanup_seconds'] + ops['host_shutdown_timeout_seconds']:
         raise RuntimeError('host auto-stop headroom no longer covers H and cleanup')
 
 
 def horizon(ev, start, seconds):
-    time.sleep(max(0,start+seconds-time.monotonic()))
+    # UTC may slew relative to monotonic time. Meet BOTH registered clocks;
+    # never relax the analyser or repair an already recorded early end.
+    events=[json.loads(line) for line in (ev.directory/'events.jsonl').read_text().splitlines()]
+    injected=[e for e in events if e['kind']=='injection_applied']
+    if len(injected)!=1:raise RuntimeError('one actual injection event required before horizon wait')
+    wall_end=epoch(injected[0]['utc'])+seconds
+    while True:
+        remaining=max(start+seconds-time.monotonic(),wall_end-time.time())
+        if remaining<=0:break
+        time.sleep(remaining+.05)
     ev.event('horizon_end');ev.state('HORIZON_END')
 
 
@@ -664,7 +673,7 @@ class FreshS4Run(S4Run):
             return
         manifest={'apiVersion':'v1','kind':'Pod','metadata':{'name':name,'namespace':S4_NS,'labels':{LABEL_KEY:EXPERIMENT}},
                   'spec':{'nodeSelector':{'kubernetes.io/hostname':node},'restartPolicy':'Never',
-                          'containers':[{'name':'probe','image':'busybox:1.37.0','command':['sh','-c','sleep '+str(record['horizon_seconds']+600)],
+                          'containers':[{'name':'probe','image':'busybox@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e','command':['sh','-c','sleep '+str(record['horizon_seconds']+600)],
                             'resources':{'requests':{'cpu':'10m','memory':'16Mi'}},
                             'readinessProbe':{'exec':{'command':['sh','-c','wget -q -O - http.graduation-s4.svc.cluster.local:8080/healthz | grep -q ok']},'periodSeconds':3,'timeoutSeconds':2}}]}}
         self.preparation.k('w','apply','-f','-',data=json.dumps(manifest))

@@ -63,7 +63,7 @@ foundation_preflight() {
   log "GCP account: ${active_account}"
   log "GCP project/zone: ${GCP_PROJECT_ID}/${GCP_ZONE}"
   log "Management interface/CIDR: ${MANAGEMENT_INTERFACE}/${MANAGEMENT_CIDR}"
-  log "Automatic STOP contract: 36000 seconds (declared in infra/gcp)"
+  log "Evaluation-host automatic STOP is optional (default disabled in infra/gcp); final operating deadline and budget remain mandatory"
 }
 
 case "${action}" in
