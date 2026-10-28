@@ -61,6 +61,7 @@ class ControllerIdentityTests(unittest.TestCase):
     def test_live_admission_reads_guest_architecture_before_attempt(self):
         from fresh_live import LiveBackend
         p=profile();current=hosts(p)
+        p['operations']['hard_stop_utc']=utc(time.time()+86400)
         with tempfile.TemporaryDirectory() as root:
             base=Path(root);p['operations'].update(artifact_root=str(base/'release'),development_artifact_root=str(base/'dev'))
             backend=LiveBackend.__new__(LiveBackend);backend.state=base/'state';backend.state.mkdir();backend.directory=base
@@ -68,7 +69,7 @@ class ControllerIdentityTests(unittest.TestCase):
             record={'phase':'ready','final_hosts':{h['name']:{'id':h['id'],'last_start':h['lastStartTimestamp']} for h in current}}
             (backend.state/'graduation-environment.json').write_text(json.dumps(record))
             lab=Mock();lab.remote.return_value='x86_64\n'
-            with patch('fresh_live.BedLedger'),patch('fresh_live.case_time_gate',return_value=10800),patch('workload_state.command',return_value=json.dumps(current)),patch('fresh_live.RecoveryLab',return_value=lab):
+            with patch('fresh_live.time.time',return_value=__import__('fresh_evidence').epoch(current[0]['lastStartTimestamp'])+1),patch('fresh_live.BedLedger'),patch('fresh_live.case_time_gate',return_value=10800),patch('workload_state.command',return_value=json.dumps(current)),patch('fresh_live.RecoveryLab',return_value=lab):
                 backend.admit({'scenario':'s1'},p)
                 self.assertTrue((base/'controller-architecture-readbacks.jsonl').exists())
                 self.assertFalse((base/'cases').exists())

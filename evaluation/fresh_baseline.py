@@ -75,7 +75,9 @@ def baseline_gate(ev, cfg, collect, *, wait=True, source, policy_window=None):
     count = int(60*cfg['rate'])
     requests = []
     while True:
-        requests = collect()
+        from fresh_read_budget import phase_deadline
+        with phase_deadline(deadline):
+            requests = collect()
         selected = [r for r in requests if type(r.get('index')) is int and 0 <= r['index'] < count]
         zero = next((r for r in selected if r['index'] == 0), None)
         if zero:

@@ -514,35 +514,36 @@ class S1Contention:
             self.write(record, 'failed', error=primary_error)
             raise
         finally:
-            cleanup_errors = []
-            if primary_error:
-                try:
-                    record['failure_evidence'] = self.capture_failed_job(record)
-                except Exception as exc:
-                    record['evidence_capture_error'] = f'{type(exc).__name__}: {exc}'
-            if record.get('job_name'):
-                try:
-                    obj = self.s1.obj('job', job_name)
-                    if obj and obj['metadata'].get('labels', {}).get(LABEL) == NAMESPACE and\
-                            (not record.get('job_uid') or obj['metadata']['uid'] == record['job_uid']):
-                        self.s1.k('delete', 'job', job_name, '-n', NAMESPACE,
-                                  '--wait=true', '--timeout=3m', timeout=210)
-                except BaseException as exc:
-                    cleanup_errors.append(f'Job: {type(exc).__name__}: {exc}')
-            if record.get('server_name') or record.get('flavor_name'):
-                try:
-                    self.remove_competitor(record)
-                except BaseException as exc:
-                    cleanup_errors.append(f'contender: {type(exc).__name__}: {exc}')
-            if cleanup_errors:
-                self.write(record, 'cleanup-failed', cleanup_errors=cleanup_errors,
-                           primary_error=primary_error)
-                if primary_error is None:
-                    raise RuntimeError('; '.join(cleanup_errors))
-            elif primary_error:
-                self.write(record, 'failed', error=primary_error)
-            else:
-                self.write(record, 'completed')
+            if not getattr(self, 'defer_owned_cleanup', False):
+                cleanup_errors = []
+                if primary_error:
+                    try:
+                        record['failure_evidence'] = self.capture_failed_job(record)
+                    except Exception as exc:
+                        record['evidence_capture_error'] = f'{type(exc).__name__}: {exc}'
+                if record.get('job_name'):
+                    try:
+                        obj = self.s1.obj('job', job_name)
+                        if obj and obj['metadata'].get('labels', {}).get(LABEL) == NAMESPACE and\
+                                (not record.get('job_uid') or obj['metadata']['uid'] == record['job_uid']):
+                            self.s1.k('delete', 'job', job_name, '-n', NAMESPACE,
+                                      '--wait=true', '--timeout=3m', timeout=210)
+                    except BaseException as exc:
+                        cleanup_errors.append(f'Job: {type(exc).__name__}: {exc}')
+                if record.get('server_name') or record.get('flavor_name'):
+                    try:
+                        self.remove_competitor(record)
+                    except BaseException as exc:
+                        cleanup_errors.append(f'contender: {type(exc).__name__}: {exc}')
+                if cleanup_errors:
+                    self.write(record, 'cleanup-failed', cleanup_errors=cleanup_errors,
+                               primary_error=primary_error)
+                    if primary_error is None:
+                        raise RuntimeError('; '.join(cleanup_errors))
+                elif primary_error:
+                    self.write(record, 'failed', error=primary_error)
+                else:
+                    self.write(record, 'completed')
 
     def cleanup(self):
         with self.s1.lock_path.open('a+') as lock:

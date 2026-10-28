@@ -77,6 +77,8 @@ def remote_tail_seconds(cfg):
 
 
 class FreshS1(EvaluationS1):
+    # FreshCampaign seals the complete measurement before any owned cleanup.
+    defer_owned_cleanup = True
     def __init__(self, case, profile, ev):
         self.case,self.profile,self.ev=case,profile,ev
         super().__init__('no-action' if case['mode']=='M' else 'automatic')
@@ -415,6 +417,35 @@ class FreshOwnedLab:
         from fresh_transport import SSHReadBoundary
         return SSHReadBoundary(self).host_stat(host)
 
+    def create_owned(self,kind,*args):
+        """A lost create response is reconciled by this run's unique identity."""
+        from fresh_mutation import mutation_once
+        prefixes={'security-group':('security','group'),'floating-ip':('floating','ip'),
+                  'qos-policy':('network','qos','policy'),'qos-rule':('network','qos','rule')}
+        prefix=prefixes[kind];run=self.record['run_id']
+        def readback():
+            if kind=='qos-rule':
+                rows=self.admin_json(*prefix,'list',self.record['policy_id'])
+            elif kind=='floating-ip':
+                rows=self.admin_json(*prefix,'list')
+            else:rows=self.admin_json(*prefix,'list')
+            found=[]
+            for row in rows:
+                if kind in ('security-group','qos-policy') and row.get('Name',row.get('name'))!=run:continue
+                rid=row.get('ID',row.get('id'))
+                obj=(self.admin_json(*prefix,'show',self.record['policy_id'],rid) if kind=='qos-rule'
+                     else self.admin_json(*prefix,'show',rid))
+                if kind=='qos-rule':owned=int(obj.get('max_kbps',0))==6000 and obj.get('direction')=='egress'
+                elif kind=='floating-ip':owned=obj.get('description')==run and obj.get('port_id')==self.record['workers'][0]['port']['id']
+                else:owned=obj.get('name')==run
+                if owned:found.append(obj)
+            if len(found)!=1:raise RuntimeError('create ownership missing or ambiguous: '+kind)
+            return found[0]
+        self.write('create-intent',pending_create={'kind':kind,'run_id':run})
+        return mutation_once(self.ev,'create '+kind,lambda:self.admin_json(*prefix,'create',*args),
+                             readback,lambda obj:bool(obj.get('id')))
+
+
     def write(self,phase,**values):
         self.record['fresh_attempt']=str(self.ev.directory.resolve())
         return super().write(phase,**values)
@@ -489,7 +520,7 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
             self.write('network-create-intent', network_attempted=True)
             self.remote('sudo bash /opt/openstack-k8s/graduation-s2-network.sh prepare ' + run)
             self.write('network-ready')
-            sg = self.read_admin_json('security', 'group', 'create', '--project', a['project_id'], run)
+            sg = self.create_owned('security-group','--project', a['project_id'], run)
             self.write('security-group-created', security_group_id=sg['id'])
             self.admin('security', 'group', 'rule', 'create', '--protocol', 'tcp', '--dst-port', '30080',
                        '--remote-ip', '198.18.0.2/32', sg['id'])
@@ -498,12 +529,12 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
             updated_port = self.read_admin_json('port', 'show', a['port']['id'])
             if set(updated_port['security_group_ids']) != set(a['port']['security_group_ids']) | {sg['id']}:
                 raise RuntimeError('source port security groups were not preserved')
-            fip = self.read_admin_json('floating', 'ip', 'create', '--project', a['project_id'],
+            fip = self.create_owned('floating-ip','--project', a['project_id'],
                                   '--description', run, '--port', a['port']['id'], 'public')
             self.write('fip-created', fip=fip)
-            policy = self.read_admin_json('network', 'qos', 'policy', 'create', '--project', b['project_id'], run)
+            policy = self.create_owned('qos-policy','--project', b['project_id'], run)
             self.write('policy-created', policy_id=policy['id'])
-            rule = self.read_admin_json('network', 'qos', 'rule', 'create', '--type', 'bandwidth-limit',
+            rule = self.create_owned('qos-rule','--type', 'bandwidth-limit',
                                    '--max-kbps', '6000', '--max-burst-kbits', '600', '--egress', policy['id'])
             self.write('rule-created', rule_id=rule['id'])
             self.apply({'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': {'name': 'code', 'namespace': self.ns},
@@ -601,7 +632,8 @@ with sqlite3.connect(root/'progress.db') as db:
 files=[{'index':i,'size':(root/f'{i:06d}.chunk').stat().st_size,'sha256':hashlib.sha256((root/f'{i:06d}.chunk').read_bytes()).hexdigest()} for i,size,sha in rows]
 print(json.dumps({'rows':rows,'files':files}))
 """.replace('ROOT',repr('/var/lib/openstack-k8s-graduation/'+self.record['run_id']))
-            integrity=json.loads(self.remote('sudo python3 -',data=integrity_code,timeout=300))
+            from fresh_collection import durable_python_capture
+            integrity=durable_python_capture(self.ev,self.runtime,integrity_code,'s2-upload-integrity',seconds=self.client.remaining(90))
             final=dict(port=self.read_admin_json('port','show',b['port']['id']),upload_node=self.pods('upload')[0]['spec']['nodeName'],
                        api_uid=self.pods('api')[0]['metadata']['uid'],upload_image_id=self.pods('upload')[0]['status']['containerStatuses'][0]['imageID'])
             raw=dict(network_qdisc=json.loads((Path(self.record['evidence'])/'baseline.json').read_text())['qdisc_before'][0],initial=initial,final=final,policy_id=self.record['policy_id'],upload_windows=windows,upload_integrity=integrity,
@@ -660,15 +692,15 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
             seed = digest({'seed':self.case['seed'],'block':self.case['block'],'scenario':'s3','purpose':self.case['purpose']})
             self.sql("create table evidence(id integer primary key, value text not null); insert into evidence select i, md5(i::text || '" + seed + "') from generate_series(1,1000) i;")
             rows_query = 'select json_agg(t order by t.id) from (select id,value from evidence where id<=1000) t'
-            committed_rows = json.loads(self.sql(rows_query))
+            committed_rows = json.loads(self.read_sql(rows_query))
             expected_rows = [{'id': i, 'value': hashlib.md5((str(i) + seed).encode()).hexdigest()}
                              for i in range(1, 1001)]
             if committed_rows != expected_rows:
                 raise RuntimeError('committed baseline records differ from the seed')
             self.save('committed-records-before.json', committed_rows)
             query = "select count(*)::text || ':' || md5(string_agg(id::text || ':' || value, ',' order by id)) from evidence where id<=1000"
-            committed_digest = self.sql(query)
-            durability = self.sql("select current_setting('fsync') || ':' || current_setting('synchronous_commit') || ':' || current_setting('full_page_writes') || ':' || current_setting('data_directory')")
+            committed_digest = self.read_sql(query)
+            durability = self.read_sql("select current_setting('fsync') || ':' || current_setting('synchronous_commit') || ':' || current_setting('full_page_writes') || ':' || current_setting('data_directory')")
             if not durability.startswith('on:on:on:/var/lib/postgresql/data/pgdata'):
                 raise RuntimeError('DB durability settings differ from the experiment contract')
             fixture_ready(self.ev)
@@ -676,7 +708,7 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
             # Scoped transient rules: old PostgreSQL remains running, its client path and
             # kubelet API traffic fail. Rules disappear on VM restart and have owned chains.
             cfg=self.profile['s3']
-            controller=self.guest(cp,'cat /etc/kubernetes/manifests/kube-controller-manager.yaml')
+            controller=self.read_guest(cp,'cat /etc/kubernetes/manifests/kube-controller-manager.yaml')
             mhc=self.client.get('m','machinehealthchecks','-n',self.client.ns)
             actual_specs=sorted((m['spec'] for m in mhc['items']),key=digest)
             if actual_specs!=sorted(self.profile['timers']['mhc_policy']['s3_specs'],key=digest):
@@ -709,9 +741,13 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
     iptables -N OSK8S_S3_DB
     iptables -A OSK8S_S3_DB -p tcp --dport 5432 -j DROP
     iptables -I FORWARD -j OSK8S_S3_DB
-    crictl ps --name db -o json
+    crictl ps --name db -o json > /run/osk8s-s3-capture-RUN_ID.json
+    sync /run/osk8s-s3-capture-RUN_ID.json
     '''.replace('RUN_ID', shlex.quote(self.record['run_id']))
-                process = self.guest(source, fault)
+                try:self.guest(source, fault)
+                except Exception as error:
+                    self.ev.event('mutation_response_error',operation='S3 fault',detail=str(error),mutation_repeated=False)
+                process = self.read_guest(source,'test "$(cat /run/osk8s-s3-owner)" = '+shlex.quote(self.record['run_id'])+' && iptables -C OUTPUT -j OSK8S_S3_OUT && iptables -C FORWARD -j OSK8S_S3_DB && cat '+shlex.quote('/run/osk8s-s3-capture-'+self.record['run_id']+'.json'))
                 running = json.loads(process)
                 self.save('old-db-running-after-fault.json', running)
                 old_pod = self.record['pod_before']
@@ -747,7 +783,7 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
                     time.sleep(min(3,max(0,start+cfg['horizon_seconds']-time.monotonic())))
                 horizon(self.ev,start,cfg['horizon_seconds'])
             seed_after=None;seed_error=None
-            try:seed_after=json.loads(self.sql(rows_query,timeout=cfg['evidence_timeout_seconds']))
+            try:seed_after=json.loads(self.read_sql(rows_query,timeout=cfg['evidence_timeout_seconds']))
             except (RuntimeError,TimeoutError,subprocess.TimeoutExpired,json.JSONDecodeError) as exc:
                 seed_error=f'{type(exc).__name__}: {exc}'
             fence_path=Path(self.record['evidence'])/'fence.json'
@@ -860,8 +896,11 @@ def run_s4(case,profile,ev):
             injection_guard(profile,cfg['horizon_seconds'],prep.environment_record())
             ev.event('injection_requested',target=target['nova_id'])
             runner.write(record,'stop-intent',stop_intent_at=utc_now())
-            nova('stop',target['nova_id'])
-            wait_for(lambda:nova_status(target['nova_id'])['status']=='SHUTOFF',seconds=90)
+            from fresh_mutation import mutation_once
+            mutation_once(ev,'S4 stop '+target['nova_id'],
+                lambda:nova('stop',target['nova_id']),
+                lambda:wait_for(lambda:(row if (row:=nova_status(target['nova_id']))['status']=='SHUTOFF' else None),seconds=90),
+                lambda row:row['id'].lower()==target['nova_id'].lower() and row['status']=='SHUTOFF')
             stopped_vm=nova_status(target['nova_id'])
             runner.write(record,'injected',injected_at=utc_now())
             injected=ev.event('injection_applied',target=target['nova_id'])
@@ -910,6 +949,7 @@ def main():
     from fresh_contract import validate
     validate(profile,live=True)
     ev=Evidence(args.evidence,'scenario')
+    ev.operational_horizon_seconds=profile[case['scenario']]['horizon_seconds']
     import os, signal
     remaining=float(os.environ['FRESH_FIXTURE_DEADLINE_UTC'])-time.time()
     if remaining<=0:raise TimeoutError('fixture whole-phase deadline expired before adapter')

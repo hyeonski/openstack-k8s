@@ -53,10 +53,20 @@ class Evidence:
         self.observer = observer
 
     def event(self, kind, target=None, actor='observer', **fields):
+        token=os.environ.get('FRESH_CLOCK_TOKEN')
+        if token and kind in ('injection_requested','injection_applied','horizon_end'):
+            from fresh_clock_guard import SERVICE_ROOT
+            guard=json.loads((SERVICE_ROOT/'state.json').read_text())
+            if guard.get('status')!='protected' or guard.get('token')!=token or str(guard.get('pid'))!=os.environ.get('FRESH_CLOCK_OWNER_PID'):
+                raise RuntimeError('clock protection missing at scientific boundary')
         row = dict(event_id=uuid.uuid4().hex, kind=kind, utc=utc(),
                    monotonic_ns=time.monotonic_ns(), clock_id=self.clock_id,
                    observer=self.observer, target_uid=target, actor=actor, **fields)
         append(self.directory / 'events.jsonl', row)
+        if getattr(self,'operational_horizon_seconds',None) is not None:
+            from fresh_read_budget import set_horizon_deadline
+            if kind=='injection_applied':set_horizon_deadline(time.monotonic()+self.operational_horizon_seconds)
+            elif kind=='horizon_end':set_horizon_deadline(None)
         return row
 
     def state(self, phase):

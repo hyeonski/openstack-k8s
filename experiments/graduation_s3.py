@@ -50,10 +50,18 @@ class S3(RecoveryLab):
         return self.remote('sudo install -d -m 700 ' + shlex.quote(str(Path(known_hosts).parent)) +
                            ' && ' + shlex.join(args), data=script, timeout=timeout)
 
+    def read_guest(self,binding,script,timeout=120):
+        from lib.fresh_reads import read
+        return read('s3-guest-read',lambda left:self.guest(binding,script,timeout=left),timeout)
+
+    def read_sql(self,sql,timeout=30):
+        from lib.fresh_reads import read
+        return read('s3-integrity-sql',lambda left:self.sql(sql,timeout=left),timeout)
+
     def controller_policy(self):
         cp = self.record['control_plane']
         path = '/etc/kubernetes/manifests/kube-controller-manager.yaml'
-        original = self.guest(cp, 'cat ' + path)
+        original = self.read_guest(cp, 'cat ' + path)
         if '--disable-force-detach-on-timeout' in original and FLAG not in original:
             raise RuntimeError('conflicting controller-manager force detach policy')
         configured = original if FLAG in original else original.replace('    - kube-controller-manager\n', '    - kube-controller-manager\n    - ' + FLAG + '\n')
@@ -143,7 +151,7 @@ class S3(RecoveryLab):
                 raise RuntimeError('source VM moved to another hypervisor during fencing')
             if server.get('status') != 'SHUTOFF' or server.get('OS-EXT-STS:task_state') is not None:
                 return False
-            hypervisor = self.remote('sudo docker exec nova_libvirt virsh domstate ' + shlex.quote(source['instance_name']), host=source['host'])
+            hypervisor = self.operational_remote('s3-hypervisor-state','sudo docker exec nova_libvirt virsh domstate ' + shlex.quote(source['instance_name']), host=source['host'])
             require_fenced(server, source['nova_id'], hypervisor)
             self.save('fence.json', {'time': utc_now(), 'server': server, 'hypervisor_state': hypervisor.strip()})
             return True
@@ -156,7 +164,7 @@ class S3(RecoveryLab):
         server = self.admin_json('server', 'show', source['nova_id'])
         if server.get('OS-EXT-SRV-ATTR:host') != source['host']:
             raise RuntimeError('source VM hypervisor mapping changed')
-        hypervisor = self.remote('sudo docker exec nova_libvirt virsh domstate ' + shlex.quote(source['instance_name']), host=source['host'])
+        hypervisor = self.operational_remote('s3-hypervisor-state','sudo docker exec nova_libvirt virsh domstate ' + shlex.quote(source['instance_name']), host=source['host'])
         require_fenced(server, source['nova_id'], hypervisor)
         node = self.obj('node', source['node'], False)
         if node['metadata']['uid'] != source['node_uid']:
@@ -278,7 +286,7 @@ crictl ps --name db -o json
                                              'operation': 'COMMIT completed, followed by a separate SELECT'})
             stable = self.sample('stabilization', seconds=60)
             source_final = self.admin_json('server', 'show', source['nova_id'])
-            hypervisor = self.remote('sudo docker exec nova_libvirt virsh domstate ' + shlex.quote(source['instance_name']), host=source['host'])
+            hypervisor = self.operational_remote('s3-hypervisor-state','sudo docker exec nova_libvirt virsh domstate ' + shlex.quote(source['instance_name']), host=source['host'])
             require_fenced(source_final, source['nova_id'], hypervisor)
             checks = {'committed_data_preserved': after == digest, 'new_transaction_readable': new == 'after-recovery',
                       'every_committed_record_preserved': recovered_rows == committed_rows,
@@ -317,7 +325,12 @@ for pair in 'OUTPUT OSK8S_S3_OUT' 'FORWARD OSK8S_S3_DB'; do
 done
 rm /run/osk8s-s3-owner
 """.replace('RUN_ID', shlex.quote(self.record['run_id']))
-        self.guest(source, clear, timeout=30)
+        check="test ! -e /run/osk8s-s3-owner && ! iptables -S OSK8S_S3_OUT >/dev/null 2>&1 && ! iptables -S OSK8S_S3_DB >/dev/null 2>&1 && echo cleared"
+        try:self.guest(source, clear, timeout=30)
+        except Exception:
+            if self.read_guest(source,check,timeout=90).strip()!='cleared':raise
+        if self.read_guest(source,check,timeout=90).strip()!='cleared':
+            raise RuntimeError('source fault clear readback failed')
 
     def cleanup(self):
         self.acquire()
@@ -352,13 +365,7 @@ rm /run/osk8s-s3-owner
                 self.write('source-restore-intent', source_restore_started=True)
                 self.admin('server', 'start', source['nova_id'])
                 wait_for(lambda: self.admin_json('server', 'show', source['nova_id'])['status'] == 'ACTIVE', seconds=180)
-            def clear():
-                try:
-                    self.clear_fault(source)
-                    return True
-                except RuntimeError:
-                    return False
-            wait_for(clear, seconds=180)
+            self.clear_fault(source)
             node = self.obj('node', source['node'], False)
             owned = [t for t in node['spec'].get('taints', []) if t['key'] == OUT]
             if owned and any(t.get('value') != r['run_id'] for t in owned):
@@ -377,7 +384,7 @@ rm /run/osk8s-s3-owner
         if r.get('controller_original_sha256'):
             cp = r['control_plane']
             path = '/etc/kubernetes/manifests/kube-controller-manager.yaml'
-            current = self.guest(cp, 'cat ' + path)
+            current = self.read_guest(cp, 'cat ' + path)
             current_hash = hashlib.sha256(current.encode()).hexdigest()
             if current_hash not in (r['controller_original_sha256'], r['controller_configured_sha256']):
                 raise RuntimeError('controller-manager configuration changed externally')
@@ -392,7 +399,7 @@ rm /run/osk8s-s3-owner
                     return False
                 return pods[0]
             self.save('controller-manager-restored.json', wait_for(restored_policy, seconds=180))
-            restored_manifest = self.guest(cp, 'cat ' + path)
+            restored_manifest = self.read_guest(cp, 'cat ' + path)
             if hashlib.sha256(restored_manifest.encode()).hexdigest() != r['controller_original_sha256']:
                 raise RuntimeError('controller-manager manifest did not restore byte-for-byte')
             self.save('controller-manager-after.yaml', restored_manifest)

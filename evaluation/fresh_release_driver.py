@@ -69,6 +69,8 @@ def review_dev():
  prior=check_frozen(DEV)
  assert prior['git_head']=='6730ecfa68a0628b83b0f9e5924fffcbf72a95ae'
  unchanged=('kubernetes/graduation-s1/app.py','kubernetes/graduation-s1/loadgen.py','evaluation/fresh_baseline.py','evaluation/fresh_analysis.py','evaluation/fresh_contract.py','evaluation/fresh_calibration.py')
+ if TRANSITION and TRANSITION.get('kind')=='user-authorized-stability-continuation-v4':
+  unchanged=tuple(n for n in unchanged if n not in ('evaluation/fresh_baseline.py','evaluation/fresh_analysis.py','evaluation/fresh_calibration.py'))
  for name in unchanged:
   assert hashlib.sha256((ROOT/name).read_bytes()).hexdigest()==prior['source_sha256'][name],name
  case=prior['cases'][0];rows=[]
@@ -78,7 +80,7 @@ def review_dev():
   assert evidence_hashes(path)==attempt['evidence_sha256']
   judged=judge(path,case,prior['profile'])
   rows.append(dict(attempt=attempt['id'],**judged))
- value=dict(source_commit=prior['git_head'],reviewed_utc=utc(),primary_sample_count=0,run_results=rows,note='original-source evidence reuse; no old artifact rewritten; same SHA analysis recomputation')
+ value=dict(source_commit=prior['git_head'],reviewed_utc=utc(),primary_sample_count=0,run_results=rows,note='original-source evidence reuse; no old artifact rewritten; strict analysis recomputation; authorised stability sidecar equivalence required for v4')
  atomic_json(BASE/'reused-dev-review.json',value)
  return value
 
@@ -116,7 +118,7 @@ def cli(action,*extra,campaign=None):
  old_deadline=os.environ.get('FRESH_ADMISSION_DEADLINE_UTC')
  if action=='run':os.environ['FRESH_ADMISSION_DEADLINE_UTC']=str(admission_until)
  try:
-  for attempt in range(1,4):
+  for attempt in range(1,2 if P['operations'].get('stability') else 4):
    log=BASE/('driver-command-'+str(time.time_ns())+'.log')
    DATA['events'].append({'utc':utc(),'argv':args,'log':str(log),'step_attempt':attempt})
    save('CLI '+action,current_campaign=str(campaign) if campaign else None,last_command_log=str(log))
@@ -174,9 +176,14 @@ def remaining_budget(label):
  prep_seconds=sum(max(nominal[c['scenario']]*72,observed.get(c['scenario'],0)) for c in pending if c['purpose']!='main')
  budget['first_main_forecast_kst']=dt.datetime.fromtimestamp(now+prep_seconds+(lifecycle if completed==set() else 0),dt.timezone(dt.timedelta(hours=9))).isoformat() if prep_seconds else ('main in progress or admitted' if pending else None)
  atomic_json(BASE/('remaining-budget-'+str(time.time_ns())+'.json'),budget);save('remaining work budget checked',remaining_budget=budget,first_main_forecast=budget['first_main_forecast_kst'],completion_forecast=budget['planned_finish_kst'])
- if projected>P['operations']['new_work_budget_krw']:
+ forward=ledger.forward_credit(seconds)
+ if forward is not None:
+  budget['forward_credit']=forward
+  atomic_json(BASE/'latest-forward-credit.json',budget)
+  if forward['margin_krw']<=0:raise OperationalPause('latest credit forward forecast cannot cover remaining authorised scope and reserves')
+ if forward is None and projected>P['operations']['new_work_budget_krw']:
   raise OperationalPause('remaining authorised scope planning shortfall KRW '+str(round(projected-P['operations']['new_work_budget_krw']))+'; retain all pending cases and request budget decision before admission')
- if usage['estimated_cost_krw']>=P['operations']['new_work_budget_krw']:
+ if not ledger.budget_available():
   raise RuntimeError('actual accumulated planning cost limit reached; preserve pending scope')
 
 def verify_headroom(force=False):
@@ -220,12 +227,12 @@ def run_one(path):
  out=measured(path)
  row=next(r for r in out['run_results'] if r['case_id']==pending['id'] and r['attempt']=='attempt-01')
  if not row['cleanup'] or row['safety'] is not True or not row['trial_valid']:
-  action=operational_failure_action(row,cleanup_verified=row['cleanup'] is True,budget_available=BedLedger(P).usage()['estimated_cost_krw']<P['operations']['new_work_budget_krw'])
+  action=operational_failure_action(row,cleanup_verified=row['cleanup'] is True,budget_available=BedLedger(P).budget_available())
   atomic_json(BASE/'REPAIR-REQUIRED.json',dict(utc=utc(),action=action,case=pending['id'],result=row,no_fault_replay=True))
   DATA['failure_action']=action
   # A scientific safety=false with verified owned cleanup pauses for review;
   # it does not end the newly authorised supplementary scope by itself.
-  if action=='safe_shutdown' and (row['cleanup'] is not True or BedLedger(P).usage()['estimated_cost_krw']>=P['operations']['new_work_budget_krw']):
+  if action=='safe_shutdown' and (row['cleanup'] is not True or not BedLedger(P).budget_available()):
    environment('down')
   raise OperationalPause(action+': '+pending['id'])
  DATA['events'].append({'utc':utc(),'case':pending['id'],'judgement':{k:row[k] for k in ('trial_valid','fault_realized','impact_realized','recovered','safety','cleanup','v1_outcome')}})
@@ -316,7 +323,7 @@ except BaseException as exc:
   if any(active) or any(not proof or not all(v is True for v in proof.values()) for proof in proofs):
    save('stop: owned cleanup verification required before down')
   else:
-   action=next_action(dict(trial_valid=False,safety=True,cleanup=True,missing=[]),cleanup_verified=True,budget_available=BedLedger(P).usage()['estimated_cost_krw']<P['operations']['new_work_budget_krw'])
+   action=next_action(dict(trial_valid=False,safety=True,cleanup=True,missing=[]),cleanup_verified=True,budget_available=BedLedger(P).budget_available())
    if action=='safe_shutdown':
     environment('down');save('cost safety shutdown; pending scope preserved',error=DATA['error'])
    else:

@@ -371,11 +371,20 @@ class FreshCampaign:
                 interrupted=None
                 try:
                     self.backend.execute(case, self.profile, ev)
+                    from fresh_seal import seal_measurement
+                    with phase('measurement sealing',90,ev.directory/'phases.jsonl'):
+                        seal_measurement(ev, case, self.profile)
                 except BaseException as exc:
-                    ev.event('execution_error', detail=f'{type(exc).__name__}: {exc}')
+                    ev.event('execution_error', phase='measurement', detail=f'{type(exc).__name__}: {exc}')
                     attempt['error'] = f'{type(exc).__name__}: {exc}'
                     if isinstance(exc,(KeyboardInterrupt,SystemExit)):interrupted=exc
                 finally:
+                    finish_measurement=getattr(self.backend,'finish_measurement',None)
+                    if finish_measurement:
+                        try:finish_measurement()
+                        except BaseException as exc:
+                            ev.event('execution_error',phase='clock_restore',detail=str(exc))
+                            attempt['clock_restore_error']=str(exc)
                     attempt['state'] = 'CLEANUP'; self.save()
                     ev.state('CLEANUP')
                     try:
@@ -384,14 +393,18 @@ class FreshCampaign:
                         else:
                             with phase('cleanup',ops['cleanup_seconds'],path/'phases.jsonl',None if time_targets_only(self.profile) else epoch(ops['hard_stop_utc'])-ops['host_shutdown_timeout_seconds']):
                                 cleanup = self.backend.cleanup(case, self.profile, ev)
+                        from fresh_seal import verify_measurement
+                        verify_measurement(path)
                         save_cleanup(path,cleanup)
                         if not cleanup.get('checks') or not all(v is True for v in cleanup['checks'].values()):
                             raise RuntimeError('cleanup readback failed')
                     except BaseException as exc:
+                        ev.event('execution_error', phase='cleanup', detail=f'{type(exc).__name__}: {exc}')
                         atomic_json(path/('cleanup-error-'+uuid.uuid4().hex+'.json'),{'utc':utc(),'error':str(exc)})
                         attempt.update(state='CLEANUP_FAILED',cleanup_error=str(exc))
                         self.ledger(case, attempt, 'cleanup_failed',error=str(exc)); self.save()
                         raise RuntimeError('cleanup failed; next case blocked') from exc
+                ev.event('cleanup_verified', actor='cleanup')
                 ev.state('VERIFIED')
                 attempt['state'] = 'VERIFIED'
                 result = operational_judgement(path, case, self.profile)

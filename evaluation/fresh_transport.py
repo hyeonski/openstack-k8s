@@ -15,13 +15,8 @@ from fresh_evidence import append, utc
 
 
 def transient_transport_error(exc):
-    text = str(exc).lower()
-    if any(word in text for word in ('forbidden', 'unauthorized', 'notfound',
-                                     'not found', 'permission denied', 'certificate')):
-        return False
-    return any(word in text for word in ('connection reset', 'connection refused',
-        'broken pipe', 'unexpected eof', 'unable to connect to the server',
-        'error while connecting to', 'failed to receive data from'))
+    from fresh_read_budget import transient_error
+    return transient_error(exc)
 
 
 def read_command(args, data=None):
@@ -63,43 +58,27 @@ def retry_read(invoke, args, *, timeout, identity, reconnect, evidence,
     """invoke(args, data=..., timeout=...) must execute exactly one command."""
     if not read_command(args, data):
         return invoke(args, data=data, timeout=timeout)
-    if not math.isfinite(timeout) or timeout <= 0:
-        raise TimeoutError('read deadline exhausted before command')
-    end = clock() + timeout
-
-    def remaining():
-        value = end - clock()
-        if value <= 0:
-            raise TimeoutError('read cumulative deadline exhausted')
-        return value
-
-    for number in range(1, attempts + 1):
-        remaining()
+    from fresh_read_budget import read_with_budget, _ACTIVE
+    if _ACTIVE.get() is not None:
+        left=_ACTIVE.get()
+        return invoke(deadline_args(args,left()),data=data,timeout=left())
+    values=list(map(str,args))
+    convergence=('wait' in values or ('rollout' in values and 'status' in values))
+    end=clock()+timeout
+    while True:
         try:
-            if number > 1:
-                # Reconnect is serialised with the preparation/cleanup watcher.
-                reconnect(remaining)
-                identity(remaining)
-            result = invoke(deadline_args(args, remaining()), data=data, timeout=remaining())
-            if number > 1:
-                identity(remaining)
-            remaining()
-        except Exception as exc:
-            append(Path(evidence) / 'transport-read-attempts.jsonl', dict(
-                utc=utc(), command=list(map(str, args)), attempt=number,
-                error=type(exc).__name__ + ': ' + str(exc),
-                remaining_seconds=max(0, end - clock()), observation_filled=False))
-            if number == attempts or not transient_transport_error(exc):
-                raise
-            pause = min(float(number), remaining())
-            sleep(pause)
-            remaining()
-        else:
-            append(Path(evidence) / 'transport-read-attempts.jsonl', dict(
-                utc=utc(), command=list(map(str, args)), attempt=number,
-                captured=True, remaining_seconds=max(0, end - clock()),
-                observation_filled=False))
-            return result
+            return read_with_budget(
+                lambda left: invoke(deadline_args(args, max(.001,left()-1) if convergence else left()), data=data, timeout=left()),
+                timeout=max(.001,end-clock()), identity=identity, reconnect=reconnect,
+                label='kubectl:'+repr(tuple(args)), evidence=evidence, attempts=attempts,
+                clock=clock, sleep=sleep)
+        except Exception as error:
+            # Kubernetes convergence timeout is a pending condition, distinct
+            # from transport retry. Preserve the original wait's total deadline.
+            pending=any(text in str(error).lower() for text in (
+                'timed out waiting for the condition','timed out waiting for condition'))
+            if not convergence or not pending or clock()>=end:raise
+            sleep(min(.1,max(0,end-clock())))
 
 
 def listener_reachable(port):
@@ -147,71 +126,15 @@ def transport_lock(state, remaining, sleep=time.sleep):
 
 
 def transient_ssh_error(exc):
-    text = str(exc).lower()
-    if any(word in text for word in ('forbidden', 'unauthorized', 'permission denied',
-            'not found', 'notfound', 'invalid argument', 'invalid choice',
-            'certificate', '403:', '401:')):
-        return False
-    return ('4047' in text and 'failed to lookup instance' in text) or any(
-        word in text for word in ('connection reset', 'connection refused',
-            'broken pipe', 'unexpected eof', 'failed to receive data',
-            'connection timed out', 'connection closed by remote host'))
+    return transient_transport_error(exc)
 
 
 def retry_ssh_read(invoke, *, timeout, identity, label, evidence,
                    attempts=3, clock=time.monotonic, sleep=time.sleep):
-    """Explicit read only; no shell classification and no nested command retry.
-
-    identity must independently establish the existing VM and attempt ownership.
-    Its queries, both backoffs and every read share the original timeout.
-    A successful retry is a later real observation, never a filled missing row.
-    """
-    if not math.isfinite(timeout) or timeout <= 0 or attempts not in (1, 2, 3):
-        raise ValueError('invalid bounded SSH read budget')
-    end = clock() + timeout
-    def remaining():
-        left = end - clock()
-        if left <= 0: raise TimeoutError('SSH read cumulative deadline exhausted')
-        return left
-    for number in range(1, attempts + 1):
-        started = utc(); begin = clock()
-        try:
-            result = invoke(remaining())
-            remaining()
-        except Exception as exc:
-            append(Path(evidence)/'ssh-read-attempts.jsonl', dict(label=label,
-                attempt=number, started_utc=started, ended_utc=utc(),
-                elapsed_seconds=clock()-begin, error=type(exc).__name__+': '+str(exc),
-                remaining_seconds=max(0, end-clock()), observation_filled=False))
-            if not transient_ssh_error(exc): raise
-            if number == attempts:
-                raise TimeoutError('SSH read attempt limit exhausted: '+label) from exc
-            # In particular, IAP4047 alone is not evidence of a transient error.
-            try:
-                identity(remaining)
-                remaining()
-            except Exception as identity_error:
-                append(Path(evidence)/'ssh-read-attempts.jsonl', dict(label=label,
-                    attempt=number, identity_error=type(identity_error).__name__+': '+str(identity_error),
-                    utc=utc(), observation_filled=False))
-                raise
-            sleep(min(float(number), remaining()))
-            remaining()
-        else:
-            if number > 1:
-                try:
-                    identity(remaining)
-                    remaining()
-                except Exception as identity_error:
-                    append(Path(evidence)/'ssh-read-attempts.jsonl', dict(label=label,
-                        attempt=number, utc=utc(), after_read_identity_error=type(identity_error).__name__+': '+str(identity_error),
-                        captured=False, observation_filled=False))
-                    raise
-            append(Path(evidence)/'ssh-read-attempts.jsonl', dict(label=label,
-                attempt=number, started_utc=started, ended_utc=utc(),
-                elapsed_seconds=clock()-begin, captured=True,
-                remaining_seconds=max(0, end-clock()), observation_filled=False))
-            return result
+    from fresh_read_budget import read_with_budget
+    return read_with_budget(lambda left: invoke(left()), timeout=timeout,
+        identity=identity, label=label, evidence=evidence, attempts=attempts,
+        clock=clock, sleep=sleep, log_name='ssh-read-attempts.jsonl')
 
 
 class SSHReadBoundary:
@@ -286,16 +209,13 @@ class SSHReadBoundary:
             label='admin-json:'+str(args),evidence=runner.ev.directory)
 
     def host_stat(self, host):
-        import json
-        from workload_state import ROOT, command
-        runner = self.runner
+        from fresh_collection import durable_host_stat
+        runner=self.runner
         if host not in {w['host'] for w in runner.record['workers']}:
             raise ValueError('host stat outside current workers')
-        return json.loads(retry_ssh_read(
-            lambda left: command([ROOT/'scripts/host-stat.sh', host], timeout=left),
-            timeout=runner.client.remaining(90),
-            identity=lambda remaining: self.identity(host, remaining),
-            label='host-stat:'+host, evidence=runner.ev.directory))
+        runner._host_stat_sequence=getattr(runner,'_host_stat_sequence',0)+1
+        return durable_host_stat(runner.ev,runner.runtime,host,runner._host_stat_sequence,
+            identity=lambda left:self.identity(host,left),seconds=runner.client.remaining(90))
 
 
 def stop_probe_once(runner, stop_path, *, clock=time.monotonic):

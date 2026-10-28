@@ -212,7 +212,10 @@ def validate_binding(profile):
                  'evaluation/fresh_baseline.py','evaluation/fresh_analysis.py',
                  'evaluation/fresh_contract.py','evaluation/fresh_calibration.py'):
         if sha(ROOT/name) != frozen['source_sha256'][name]:
-            raise ValueError('validated measurement source changed: '+name)
+            if profile['operations'].get('stability'):
+                from fresh_stability_release import validate_calibration_source
+                validate_calibration_source(name,ROOT,frozen['source_sha256'][name])
+            else:raise ValueError('validated measurement source changed: '+name)
     amendment = binding['amendment_path']
     if amendment not in profile['operations']['preregistered_documents'] or PROTOCOL not in profile['operations']['preregistered_documents'] or sha(ROOT/amendment) != binding['amendment_sha256']:
         raise ValueError('calibration amendment/document binding differs')

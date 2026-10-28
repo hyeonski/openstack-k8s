@@ -17,7 +17,7 @@ class CollectionTests(unittest.TestCase):
     def test_transient_read_error_preserved_and_retry_bounded(self):
         with tempfile.TemporaryDirectory() as root:
             ev=Evidence(root);reader=Mock(side_effect=[RuntimeError('TLS EOF'),'raw'])
-            self.assertEqual(read_evidence(ev,'raw',reader),'raw')
+            self.assertEqual(read_evidence(ev,'raw',reader,identity=lambda left:left()),'raw')
             records=[json.loads(l) for l in (Path(root)/'collection-attempts.jsonl').read_text().splitlines()]
             self.assertEqual(len(records),2)
             self.assertIn('TLS EOF',records[0]['error'])
@@ -45,7 +45,7 @@ class CollectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             now=utc();runtime=Mock()
             runtime.remote.side_effect=[RuntimeError('response lost'),RuntimeError('TLS EOF'),json.dumps({'time':now,'cpu_ticks':[1]*8})]
-            value=durable_host_stat(Evidence(root),runtime,'osk8s-compute02',1)
+            value=durable_host_stat(Evidence(root),runtime,'osk8s-compute02',1,identity=lambda left:left())
             self.assertEqual(value['time'],now)
             self.assertEqual(runtime.remote.call_count,3)
             self.assertEqual(runtime.remote.call_args_list[0].args[0],'sudo python3 -')
@@ -56,7 +56,7 @@ class CollectionTests(unittest.TestCase):
             runtime=Mock();runtime.remote.side_effect=RuntimeError('not found')
             with self.assertRaises(RuntimeError):durable_host_stat(Evidence(root),runtime,'osk8s-compute02',1)
             self.assertEqual(sum(c.args[0]=='sudo python3 -' for c in runtime.remote.call_args_list),1)
-            self.assertEqual(runtime.remote.call_count,4)
+            self.assertEqual(runtime.remote.call_count,2)
 
     def test_stale_remote_snapshot_rejected(self):
         with tempfile.TemporaryDirectory() as root:

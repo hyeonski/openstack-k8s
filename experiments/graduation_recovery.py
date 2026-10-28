@@ -55,6 +55,10 @@ class RecoveryLab:
     def remote(self, script, **kwargs):
         return self.runtime.remote(script, **kwargs)
 
+    def operational_remote(self,label,script,*,host=None,timeout=120):
+        from lib.fresh_reads import read
+        return read(label,lambda left:self.remote(script,host=host,timeout=left),timeout)
+
     def admin(self, *args, **kwargs):
         return self.runtime.admin(*args, **kwargs)
 

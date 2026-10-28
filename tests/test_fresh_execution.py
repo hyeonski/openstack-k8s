@@ -141,7 +141,7 @@ class FreshExecutionTests(unittest.TestCase):
             backend.require_clean_state=Mock();h=Mock();h.data={'host_identity':p['observed_environment']['host_identity'],'flavors':{}}
             h.state_record.return_value=None;h.verify_ready_environment.return_value={'run_id':'env'}
             backend.helper=Mock(return_value=h)
-            with patch('fresh_calibration.TransportWatch') as watcher:
+            with patch('fresh_calibration.TransportWatch') as watcher, patch('fresh_live.time.time',return_value=epoch(p['operations']['last_case_start_utc'])-1):
                 backend.execute({'id':'dev','scenario':'s1'},p,Evidence(base/'attempt'))
                 watcher.return_value.__exit__.assert_called_once()
             h.environment.assert_not_called()

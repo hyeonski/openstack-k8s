@@ -193,7 +193,7 @@ def v1_relative_impact(directory, raw, requests, profile):
     return impact,dict(baseline=baseline,windows=observed)
 
 
-def scenario_checks(case, raw, events):
+def scenario_checks(case, raw, events, *, include_cleanup=True):
     """Read identity/configuration snapshots, never summary booleans."""
     s, mode = case['scenario'], case['mode']
     checks, outcomes = {}, {}
@@ -266,8 +266,10 @@ def scenario_checks(case, raw, events):
         checks['old_database_identity']=sum(c.get('id')==process_id and c.get('state')=='CONTAINER_RUNNING' and c.get('labels',{}).get('io.kubernetes.pod.uid')==raw['pod_before']['metadata']['uid'] for c in raw['old_database_processes']['containers'])==1
         checks['seed_not_corrupted'] = outcomes['seed_preserved'] is not False
     else:
-        before, during, restored = raw['mhc_before'], raw['mhc_during'], raw['mhc_restored']
-        checks['mhc_restored'] = before['spec'] == restored['spec'] and before['metadata']['uid'] == restored['metadata']['uid'] and before['metadata'].get('annotations',{}) == restored['metadata'].get('annotations',{})
+        before, during = raw['mhc_before'], raw['mhc_during']
+        if include_cleanup:
+            restored = raw['mhc_restored']
+            checks['mhc_restored'] = before['spec'] == restored['spec'] and before['metadata']['uid'] == restored['metadata']['uid'] and before['metadata'].get('annotations',{}) == restored['metadata'].get('annotations',{})
         checks['mhc_arm'] = ('cluster.x-k8s.io/paused' in during['metadata'].get('annotations', {})) == (mode == 'off')
         checks['mhc_identity'] = before['metadata']['uid'] == during['metadata']['uid']
         capacity = raw['capacity']
@@ -284,7 +286,7 @@ def scenario_checks(case, raw, events):
     return checks, outcomes
 
 
-def _judge(directory, case, profile):
+def _judge(directory, case, profile, *, include_cleanup=True):
     directory = Path(directory)
     events, requests = rows(directory / 'events.jsonl'), normalize(directory)
     errors = []
@@ -328,6 +330,7 @@ def _judge(directory, case, profile):
     if sum(e['kind']=='injection_applied' for e in events)!=1 or sum(e['kind']=='horizon_end' for e in events)!=1:
         errors.append('semantic_event_missing_or_duplicate')
     metrics = {}
+    start = end = None
     if not injected or not ended:
         errors.append('horizon_missing')
     else:
@@ -361,10 +364,10 @@ def _judge(directory, case, profile):
         raw['mhc_restored']=read(directory/'mhc-restored.json',{})
     checks, outcomes = {}, {}
     try:
-        checks, outcomes = scenario_checks(case, raw, events)
+        checks, outcomes = scenario_checks(case, raw, events, include_cleanup=include_cleanup)
     except (KeyError, TypeError, IndexError, ZeroDivisionError) as exc:
         errors.append('scenario_evidence_missing:' + str(exc))
-    if case['scenario']=='s2' and injected:
+    if case['scenario']=='s2' and start is not None and end is not None:
         upload=uploader_metrics(rows(directory/'uploader-progress.jsonl'),start,end)
         errors.extend(upload['errors'])
         outcomes['upload_unique_bytes']=upload['unique_bytes_lower_bound']
@@ -380,7 +383,7 @@ def _judge(directory, case, profile):
             if elapsed<=0:errors.append('network_counter_time_reversed');continue
             network_realized|=(b['qdisc']['bytes']-a['qdisc']['bytes'])*8/elapsed>=16_000_000 and b['qdisc']['overlimits']>a['qdisc']['overlimits']
         outcomes['network_contention_observed']=network_realized
-    if case['scenario']=='s4' and raw.get('capacity_snapshot'):
+    if case['scenario']=='s4' and start is not None and end is not None and raw.get('capacity_snapshot'):
         from graduation_s4_run import summarize_capacity
         snapshots=[read(p) for p in sorted((directory/'observations').glob('capacity-*.json'))]
         streak=[]

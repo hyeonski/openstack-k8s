@@ -220,6 +220,20 @@ class OwnedProbeReads:
             if left <= 0:raise TimeoutError('owned probe read cumulative deadline exhausted')
             return left
         try:
+            if os.environ.get('FRESH_READ_CONTEXT'):
+                from lib.fresh_reads import ROOT
+                import sys
+                if str(ROOT/'evaluation') not in sys.path:sys.path.insert(0,str(ROOT/'evaluation'))
+                from fresh_read_budget import read_with_budget
+                from fresh_transport import deadline_args
+                deleted=[False]
+                def verify(left):
+                    deleted[0]=self._identity(left,owned,deleting)
+                return read_with_budget(
+                    lambda left:'' if deleted[0] else self.client.k(plane,*deadline_args(args,left())),
+                    timeout=remaining(),identity=verify,reconnect=self._wait_transport,
+                    label='owned-worker-probe:'+repr(args),evidence=self.path,
+                    clock=self.clock,sleep=self.sleep)
             for attempt in range(1, 4):
                 remaining()
                 try:

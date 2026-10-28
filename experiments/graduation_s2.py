@@ -87,7 +87,7 @@ class S2(RecoveryLab):
             raise RuntimeError('QoS API readback mismatch')
         # Inspect the enforcing OVS interface, not just the Neutron database.
         def installed():
-            out = self.remote('sudo docker exec openvswitch_vswitchd ovs-vsctl --format=json '
+            out = self.operational_remote('s2-ovs-enforcement','sudo docker exec openvswitch_vswitchd ovs-vsctl --format=json '
                               '--columns=name,ingress_policing_rate,ingress_policing_burst find Interface '
                               + shlex.quote('external_ids:iface-id=' + port['id']), host=r['workers'][1]['host'])
             rows = json.loads(out)['data']

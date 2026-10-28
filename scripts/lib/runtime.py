@@ -63,7 +63,11 @@ class LabRuntime:
                 '--project=' + os.environ['GCP_PROJECT_ID'], '--zone=' + os.environ['GCP_ZONE'], '--quiet']
         if os.environ.get('GCP_USE_IAP_TUNNEL') == 'yes':
             args.append('--tunnel-through-iap')
-        return command([*args, '--command=' + shlex.join(['bash', '-lc', script])], timeout=timeout, data=data)
+        invoke=lambda left:command([*args, '--command=' + shlex.join(['bash', '-lc', script])], timeout=left, data=data)
+        from lib.fresh_reads import REMOTE_READS, read
+        if data is None and script in REMOTE_READS:
+            return read(REMOTE_READS[script],invoke,timeout)
+        return invoke(timeout)
 
     def admin(self, *args, timeout=60, user_data=None):
         cloud = ('set -euo pipefail; source /opt/kolla-venv/bin/activate; '
@@ -78,6 +82,9 @@ class LabRuntime:
         else:
             quoted = shlex.join(map(str, args))
         cloud += 'openstack --os-cloud kolla-admin ' + quoted
+        from lib.fresh_reads import openstack_read, read
+        if user_data is None and openstack_read(args):
+            return read("openstack:"+repr(args),lambda left:self.remote(cloud,timeout=left),timeout)
         return self.remote(cloud, timeout=timeout)
 
     def admin_json(self, *args, **kwargs):

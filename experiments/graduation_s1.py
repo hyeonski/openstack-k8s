@@ -394,8 +394,14 @@ class S1:
 
     def cpu_stat(self, pod):
         try:
-            raw = self.k('-n', NAMESPACE, 'exec', pod, '--',
-                         'cat', '/sys/fs/cgroup/cpu.stat', timeout=60)
+            if __import__('os').environ.get('FRESH_READ_CONTEXT'):
+                import sys
+                sys.path.insert(0,str(ROOT/'evaluation'))
+                from fresh_collection import durable_pod_cpu
+                raw=durable_pod_cpu(self,pod,NAMESPACE)
+            else:
+                raw = self.k('-n', NAMESPACE, 'exec', pod, '--',
+                             'cat', '/sys/fs/cgroup/cpu.stat', timeout=60)
         except RuntimeError as exc:
             return {'error': f'{type(exc).__name__}: cgroup CPU counters unavailable'}
         return {parts[0]: int(parts[1]) for line in raw.splitlines()

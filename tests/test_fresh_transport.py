@@ -68,8 +68,8 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(result, 'job/owned complete')
         self.assertEqual([event[0] for event in events], ['repair', 'uid', 'uid'])
         self.assertEqual(invoke.call_count, 2)
-        self.assertEqual(invoke.call_args.kwargs['timeout'], 29)
-        self.assertIn('--timeout=29.0s', invoke.call_args.args[0])
+        self.assertEqual(invoke.call_args.kwargs['timeout'], 20)
+        self.assertIn('--timeout=19.0s', invoke.call_args.args[0])
         self.assertEqual(len(records), 2)
         self.assertTrue(all(row['observation_filled'] is False for row in records))
         self.assertNotIn('captured', records[0])
@@ -108,7 +108,7 @@ class TransportTests(unittest.TestCase):
     def test_repeated_errors_have_fixed_attempt_cap(self):
         invoke = Mock(side_effect=RuntimeError('connection refused'))
         with self.assertRaisesRegex(RuntimeError, 'connection refused'):
-            self.run_read(invoke, ['logs', 'job/owned'])
+            self.run_read(invoke, ['logs', 'job/owned'], timeout=90)
         self.assertEqual(invoke.call_count, 3)
 
     def test_reconnect_identity_and_backoff_share_original_total_deadline(self):
@@ -138,8 +138,8 @@ class TransportTests(unittest.TestCase):
             retry_read(invoke, ['wait', 'job/owned', '--timeout=30s'], timeout=30,
                 identity=Mock(), reconnect=reconnect, evidence=folder,
                 clock=clock, sleep=clock.sleep)
-        self.assertEqual(calls[1][1], 20)
-        self.assertIn('--timeout=20.0s', calls[1][0])
+        self.assertEqual(calls[1][1], 11)
+        self.assertIn('--timeout=10.0s', calls[1][0])
 
     def test_read_classifier_handles_flags_and_rejects_mutation_payload(self):
         self.assertTrue(read_command(['-n', 'ns', 'rollout', 'status', 'deployment/http']))
@@ -189,7 +189,7 @@ class TransportTests(unittest.TestCase):
                  patch('fresh_transport.listener_reachable',return_value=False), \
                  patch('fresh_scenarios.subprocess.run',return_value=SimpleNamespace(returncode=0)) as repair:
                 with runner.transport_reads():
-                    self.assertEqual(runner.s1.k('logs','job/owned',timeout=5),'actual request log')
+                    self.assertEqual(runner.s1.k('logs','job/owned',timeout=30),'actual request log')
                 self.assertEqual(repair.call_count,1)
             self.assertEqual(sum(args[:3]==('get','job','owned') for args in calls),2)
             self.assertEqual(sum('logs' in args for args in calls),2)
@@ -238,7 +238,7 @@ class TransportTests(unittest.TestCase):
 
 
 class SSHReadTests(unittest.TestCase):
-    def read(self, invoke, *, identity=None, timeout=30):
+    def read(self, invoke, *, identity=None, timeout=90):
         from fresh_transport import retry_ssh_read
         clock=Clock();identity=identity or Mock()
         with tempfile.TemporaryDirectory() as folder:
@@ -252,14 +252,14 @@ class SSHReadTests(unittest.TestCase):
         result,rows,clock,identity=self.read(invoke)
         self.assertEqual(result,'actual raw bytes');self.assertEqual(invoke.call_count,2)
         self.assertEqual(identity.call_count,2)
-        self.assertEqual(clock.now,1)
-        self.assertEqual(invoke.call_args.args[0],29)
+        self.assertEqual(clock.now,10)
+        self.assertEqual(invoke.call_args.args[0],20)
         self.assertTrue(all(row['observation_filled'] is False for row in rows))
         self.assertNotIn('captured',rows[0])
 
     def test_continued_failure_is_bounded_to_three_attempts(self):
         invoke=Mock(side_effect=RuntimeError('SSH broken pipe'))
-        with self.assertRaisesRegex(TimeoutError,'attempt limit'):
+        with self.assertRaisesRegex(RuntimeError,'broken pipe'):
             self.read(invoke)
         self.assertEqual(invoke.call_count,3)
 
@@ -307,8 +307,7 @@ class SSHReadTests(unittest.TestCase):
                 return retry_ssh_read(invoke,timeout=timeout,identity=Mock(),label=script,evidence=folder,clock=clock,sleep=clock.sleep)
             self.assertEqual(remote_file(ev,remote,'/owned/raw','requests.jsonl',bounded=True),'original\nraw\n')
             self.assertEqual((Path(folder)/'requests.jsonl').read_bytes(),b'original\nraw\n')
-            collection=[json.loads(l) for l in (Path(folder)/'collection-attempts.jsonl').read_text().splitlines()]
-            self.assertEqual(len(collection),1)
+            self.assertFalse((Path(folder)/'collection-attempts.jsonl').exists())
         self.assertEqual(invoke.call_count,3)
 
     def test_lost_probe_stop_ack_reads_applied_state_without_repeating_mutation(self):
@@ -422,7 +421,7 @@ class S3BindingReadTests(unittest.TestCase):
 
     def test_three_failures_timeout_without_nesting_and_permanent_immediate(self):
         from fresh_transport import read_owned_s3_binding
-        for message,expected_count,exception in [('Broken pipe',3,TimeoutError),('permission denied',1,RuntimeError)]:
+        for message,expected_count,exception in [('Broken pipe',3,RuntimeError),('permission denied',1,RuntimeError)]:
             with self.subTest(message=message),tempfile.TemporaryDirectory() as folder,patch.dict('os.environ',{'CONTROLLER_NAME':'controller'}),patch('fresh_transport.SSHReadBoundary.identity'),self.no_sleep():
                 runner,node,admin=self.fixture(folder)
                 runner.admin_json.side_effect=lambda *a,**k:(_ for _ in ()).throw(RuntimeError(message)) if a==('port','show','port-a') else admin(*a,**k)
@@ -453,7 +452,7 @@ class S3BindingReadTests(unittest.TestCase):
             def slow(*args,**kw):clock.now+=25;return admin(*args,**kw)
             runner.admin_json.side_effect=slow
             with self.assertRaises(TimeoutError):read_owned_s3_binding(runner,node)
-            self.assertEqual([c.kwargs['timeout'] for c in runner.admin_json.call_args_list],[60,35,10])
+            self.assertEqual([c.kwargs['timeout'] for c in runner.admin_json.call_args_list],[20,20,10])
             self.assertIsNone(runner.client.deadline)
 
     def test_other_scenario_is_rejected_without_remote_command(self):

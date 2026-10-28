@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import sys
 import time
 
@@ -23,6 +24,28 @@ class LiveBackend:
         self.state=Path(os.environ['STATE_DIR'])
         self.lock=(self.state/'graduation-evaluation.lock').open('a+')
         fcntl.flock(self.lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+
+    def configure_reads(self,profile,evidence):
+        policy=profile['operations'].get('stability')
+        if not policy:return
+        from fresh_read_registry import audit
+        audit()
+        context={**policy['read_identity'], 'version':1, 'evidence':str(Path(evidence).resolve()),
+            'environment_path':str(self.state/'graduation-environment.json'),
+            'management_kubeconfig':str(self.state/'kubeconfigs/management.yaml')}
+        path=Path(evidence)/'operational-read-context.json'
+        atomic_json(path,context)
+        os.environ['FRESH_READ_CONTEXT']=str(path)
+
+    def finish_measurement(self):
+        lease=getattr(self,'clock_lease',None)
+        if lease is not None:
+            try:lease.__exit__(None,None,None)
+            finally:
+                self.clock_lease=None
+                signal.signal(signal.SIGTERM,self.previous_sigterm)
+                os.environ.pop('FRESH_CLOCK_TOKEN',None)
+                os.environ.pop('FRESH_CLOCK_OWNER_PID',None)
 
     def helper(self, profile, ev):
         # Reuse environment/owned fixture cleanup, not the legacy schedule or verifier.
@@ -49,6 +72,7 @@ class LiveBackend:
     def admit(self, case, profile):
         from workload_state import command
         validate_controller_policy(profile,live=True)
+        self.configure_reads(profile,self.directory/'admission')
         self.require_clean_state()
         ops=profile['operations']
         for key in ('artifact_root','development_artifact_root'):
@@ -133,6 +157,7 @@ class LiveBackend:
         from workload_state import ROOT
         from fresh_calibration import TransportWatch
         self.require_clean_state()
+        self.configure_reads(profile,ev.directory)
         h=self.helper(profile,ev)
         h.data['cases']=[case]
         prior=h.state_record(case['scenario'])
@@ -165,11 +190,24 @@ class LiveBackend:
         os.environ['FRESH_OPERATIONAL_HARD_STOP_UTC']=ops['hard_stop_utc']
         from fresh_host_lifetime import time_targets_only
         os.environ['FRESH_TIME_POLICY']='cost-bounded-targets-only' if time_targets_only(profile) else 'bounded'
+        adapter_seconds=profile['max_case_seconds']
+        if ops.get('stability'):
+            protected_started=time.monotonic()
+            from fresh_clock_guard import ClockLease
+            self.previous_sigterm=signal.getsignal(signal.SIGTERM)
+            def clock_stop(*_):raise RuntimeError('clock protection revoked; abort adapter and clean owned state')
+            signal.signal(signal.SIGTERM,clock_stop)
+            self.clock_lease=ClockLease(ev.directory,seconds=profile['max_case_seconds'])
+            self.clock_lease.__enter__()
+            os.environ['FRESH_CLOCK_TOKEN']=self.clock_lease.token
+            os.environ['FRESH_CLOCK_OWNER_PID']=str(os.getpid())
+            # Reserve sealing inside the SAME 90-minute ceiling, never extend it.
+            adapter_seconds-=90+(time.monotonic()-protected_started)
         try:
-            with phase('adapter',profile['max_case_seconds'],ev.directory/'phases.jsonl',None if time_targets_only(profile) else epoch(ops['drain_utc'])):
+            with phase('adapter',adapter_seconds,ev.directory/'phases.jsonl',None if time_targets_only(profile) else epoch(ops['drain_utc'])):
                 h.call([sys.executable,ROOT/'evaluation/fresh_scenarios.py',
                         '--case',ev.directory/'case-contract.json','--profile',ev.directory/'profile-contract.json',
-                        '--evidence',ev.directory], 'run.log',timeout=profile['max_case_seconds'])
+                        '--evidence',ev.directory], 'run.log',timeout=adapter_seconds)
         finally:
             if old is None:os.environ.pop('FRESH_FIXTURE_DEADLINE_UTC',None)
             else:os.environ['FRESH_FIXTURE_DEADLINE_UTC']=old
@@ -178,6 +216,7 @@ class LiveBackend:
                 else:os.environ[key]=value
 
     def cleanup(self, case, profile, ev):
+        self.configure_reads(profile,ev.directory)
         h=self.helper(profile,ev)
         # Persisted ownership records are authoritative after lost responses/process interruption.
         ledger=ev.directory/'fixture-ledger.json'

@@ -92,6 +92,14 @@ class BedLedger:
         return dict(bed_seconds=seconds, estimated_cost_krw=seconds/3600*basis['bed_hour_krw']+days*basis['calendar_day_krw']+basis['other_usage_reserve_krw'],
                     cost_semantics='planning upper estimate; not real-time billed amount')
 
+    def forward_credit(self,reserved=0):
+        from fresh_credit import forward_credit
+        return forward_credit(self.profile,reserved)
+
+    def budget_available(self):
+        forward=self.forward_credit()
+        return forward['margin_krw']>0 if forward is not None else self.usage()['estimated_cost_krw']<self.ops['new_work_budget_krw']
+
     def gate(self, reserved):
         usage = self.usage()
         from fresh_host_lifetime import time_targets_only
@@ -99,7 +107,12 @@ class BedLedger:
         if not targets and (usage['bed_seconds'] >= self.ops['bed_uptime_soft_limit_seconds'] or usage['bed_seconds']+reserved > self.ops['bed_uptime_limit_seconds']):
             raise RuntimeError('bed uptime gate rejected new work')
         estimate = usage['estimated_cost_krw']+reserved/3600*self.data['cost_basis']['bed_hour_krw']
-        if estimate > self.ops['new_work_budget_krw']:
+        forward=self.forward_credit(reserved)
+        if forward is not None:
+            if forward['margin_krw']<=0:raise RuntimeError('forward credit reservation rejected new work')
+            if time.time()+reserved>=epoch(forward['credit_expires_utc']):raise RuntimeError('latest credit expiry before completion')
+            self.data['forward_credit']=forward
+        if forward is None and estimate > self.ops['new_work_budget_krw']:
             raise RuntimeError('cost estimate gate rejected new work')
         if (time.time()+reserved if targets else epoch(self.ops['hard_stop_utc'])) >= epoch(self.ops['credit_evidence']['expires_utc']):
             raise RuntimeError('credit expires before operational completion')

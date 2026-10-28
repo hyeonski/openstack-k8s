@@ -36,6 +36,23 @@ def now():
 
 
 def command(args, *, data=None, timeout=60):
+    if os.environ.get('FRESH_READ_CONTEXT'):
+        from lib.fresh_reads import command_read, read, ROOT as fresh_root
+        if str(fresh_root/'evaluation') not in sys.path:sys.path.insert(0,str(fresh_root/'evaluation'))
+        label=command_read(args,data)
+        if label=='kubernetes-operational':
+            from fresh_transport import retry_read
+            from lib.fresh_reads import context, identity
+            ctx=context()
+            return retry_read(lambda values,**kw:command_once([args[0],*values],**kw),args[1:],
+                data=data,timeout=timeout,identity=lambda left:identity(ctx,left),
+                reconnect=lambda left:None,evidence=ctx['evidence'])
+        if label:
+            return read(label,lambda left:command_once(args,data=data,timeout=left),timeout)
+    return command_once(args,data=data,timeout=timeout)
+
+
+def command_once(args, *, data=None, timeout=60):
     if COMMAND_LOCK_FD is not None:
         return guarded_command(args, data=data, timeout=timeout)
     # Kill the process group too (gcloud/SSH grandchildren must not outlive a deadline).

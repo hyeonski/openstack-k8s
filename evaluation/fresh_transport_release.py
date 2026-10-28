@@ -214,6 +214,9 @@ def validate_probe_read_diff(previous, current):
 
 
 def audit_transition(profile, authorization, root):
+    if authorization.get('kind')=='user-authorized-stability-continuation-v4':
+        from fresh_stability_release import audit_stability_transition
+        return audit_stability_transition(profile,authorization,root)
     from fresh_campaign import source_hashes, pilot_contract
     root = Path(root)
     if not (authorization.get('kind') == 'user-authorized-transport-continuation-v1' and authorization.get('supplemental_limit') == 1 or authorization.get('kind') == 'user-authorized-ssh-read-two-supplement-continuation-v2' and authorization.get('supplemental_limit') == 2 and authorization.get('supplemental_origins') == ['s1-b02-a','s2-b03-p'] or authorization.get('kind') == 'user-authorized-four-supplement-cleanup-read-continuation-v3' and authorization.get('supplemental_limit') == 4 and authorization.get('supplemental_origins') == ['s1-b02-a','s2-b03-p','s3-b02-m3600','s3-b03-m3600']):
