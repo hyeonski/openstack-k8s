@@ -239,6 +239,27 @@ def check_frozen(directory, current=False):
     return data
 
 
+def operational_judgement(directory, case, profile):
+    """Keep analyser exceptions as explicit invalids without changing its rules.
+
+    This fallback makes no claim about fault, impact, recovery or trial safety.
+    Cleanup is independently established from the existing owned readback only.
+    The function is pure: reporting sealed evidence must never append to raw.
+    """
+    try:
+        return judge(directory, case, profile)
+    except Exception as exc:
+        cleanup = read(Path(directory) / 'cleanup.json', {})
+        checks = cleanup.get('checks', {})
+        return dict(trial_valid=False, fault_realized=None, impact_realized=None,
+                    recovered=None, safety=None, execution='judgement_failed',
+                    cleanup=bool(checks) and all(v is True for v in checks.values()),
+                    missing=['judgement_error:' + type(exc).__name__ + ':' + str(exc)],
+                    checks={}, v1_outcome=None, metrics={},
+                    evidence=['events.jsonl', 'requests.jsonl', 'observations/contract.json', 'cleanup.json'],
+                    runner_summary_used=False)
+
+
 def save_cleanup(directory,proof):
     directory=Path(directory)
     index=len(list(directory.glob('cleanup-attempt-*.json')))+1
@@ -362,7 +383,7 @@ class FreshCampaign:
                         raise RuntimeError('cleanup failed; next case blocked') from exc
                 ev.state('VERIFIED')
                 attempt['state'] = 'VERIFIED'
-                result = judge(path, case, self.profile)
+                result = operational_judgement(path, case, self.profile)
                 atomic_json(path / 'judgement.json', {k:v for k,v in result.items() if k!='metrics'})
                 atomic_json(path / 'metrics.json', result['metrics'])
                 try:
@@ -419,7 +440,7 @@ class FreshCampaign:
                 raise
             attempt.update(state='VERIFIED',resumed_with_gap=True,evidence_sha256=evidence_hashes(ev.directory))
             ev.state('VERIFIED')
-            judged=judge(ev.directory,case,self.profile)
+            judged=operational_judgement(ev.directory,case,self.profile)
             atomic_json(ev.directory/'judgement.json',{k:v for k,v in judged.items() if k!='metrics'})
             atomic_json(ev.directory/'metrics.json',judged['metrics'])
             attempt['evidence_sha256']=evidence_hashes(ev.directory)
@@ -456,7 +477,7 @@ def report(directory, allow_synthetic=False):
             raw=read(path/'observations/contract.json',{})
             if raw.get('application_image_ids'):
                 images.setdefault(case['scenario'],set()).add(digest(raw['application_image_ids']))
-            judged = judge(path,case,data['profile'])
+            judged = operational_judgement(path,case,data['profile'])
             judged['evidence_sealed']=bool(a.get('evidence_sha256'))
             if not judged['evidence_sealed']:
                 judged['trial_valid']=False

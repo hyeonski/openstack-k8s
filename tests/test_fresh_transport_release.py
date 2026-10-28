@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/d) for d in ('evaluation','scripts','experiments')]
 from fresh_transport_release import (validate_scenario_transport_diff,
     validate_live_transport_diff,historical_campaign, audit_transition, select_cases, REVIEWED_FILES)
-from fresh_campaign import FreshCampaign, evidence_hashes
+from fresh_campaign import FreshCampaign, evidence_hashes, operational_judgement
 
 BEFORE='''class FreshS1:
     def move_service(self): return self.policy()
@@ -35,6 +35,36 @@ class OtherScenario:
 
 
 class TransportReleaseTests(unittest.TestCase):
+    def test_analyser_exception_seals_only_invalid_unknown_outcomes_without_raw_writes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)
+            (path/'cleanup.json').write_text(json.dumps({'checks':{'owned_absent':True}}))
+            before=evidence_hashes(path)
+            with patch('fresh_campaign.judge',side_effect=UnboundLocalError('start unavailable')):
+                result=operational_judgement(path,{}, {})
+            self.assertFalse(result['trial_valid'])
+            self.assertTrue(result['cleanup'])
+            self.assertEqual(result['execution'],'judgement_failed')
+            for key in ('fault_realized','impact_realized','recovered','safety'):
+                self.assertIsNone(result[key])
+            self.assertIn('UnboundLocalError',result['missing'][0])
+            self.assertEqual(evidence_hashes(path),before)
+
+    def test_missing_or_failed_cleanup_is_never_inferred_from_analyser_failure(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)
+            for checks in ({}, {'owned_absent':False}):
+                (path/'cleanup.json').write_text(json.dumps({'checks':checks}))
+                with patch('fresh_campaign.judge',side_effect=RuntimeError('broken raw')):
+                    self.assertFalse(operational_judgement(path,{}, {})['cleanup'])
+
+    def test_normal_judgements_are_returned_unchanged_and_interrupts_propagate(self):
+        expected={'trial_valid':True,'metrics':{'raw':123}}
+        with patch('fresh_campaign.judge',return_value=expected):
+            self.assertIs(operational_judgement('.',{}, {}),expected)
+        with patch('fresh_campaign.judge',side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):operational_judgement('.',{}, {})
+
     def test_live_adapter_changes_only_reconnect_helper_and_calibration_stays_bound(self):
         current=(ROOT/'evaluation/fresh_live.py').read_text()
         hook='        from fresh_transport import coordinate_reconnect\n        h.call=coordinate_reconnect(h.call,h.state,Path(__file__).resolve().parents[1])\n'

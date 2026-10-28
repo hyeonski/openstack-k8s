@@ -267,6 +267,7 @@ try:
  else:
   save('all pilot gates passed; main starting')
   for s in ('s1','s2','s3','s4'):
+   if TRANSITION and not any(c['scenario']==s and c['id'] in TRANSITION['remaining_main_ids'] for c in P['cases']):continue
    operational_gate(next(c for c in P['cases'] if c['scenario']==s and c['purpose']=='main'))
    verify_headroom()
    path=frozen(s+('-main-transport-v2' if TRANSITION else '-main-v1'),'main',s,pilots[s]);previous=None
