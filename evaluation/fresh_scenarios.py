@@ -619,6 +619,10 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
         super().__init__('automatic')
         self.case,self.profile,self.ev=case,profile,ev
 
+    def binding(self, node):
+        from fresh_transport import read_owned_s3_binding
+        return read_owned_s3_binding(self, node)
+
     def recover_if_enabled(self,source,start,cfg):
         if self.case['mode']!='P3600' or time.monotonic()+180>=start+cfg['horizon_seconds']:
             return False

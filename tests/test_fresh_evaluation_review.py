@@ -315,3 +315,45 @@ class AgreementReviewTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class S3PreControllerCleanupTests(unittest.TestCase):
+    def checker(self):
+        import ast,hashlib
+        tree=ast.parse((ROOT/'evaluation/graduation_evaluation.py').read_text())
+        fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='s3_controller_cleanup_checks')
+        namespace={'Path':Path,'hashlib':hashlib}
+        exec(compile(ast.Module(body=[fn],type_ignores=[]),'<cleanup-check>','exec'),namespace)
+        return namespace['s3_controller_cleanup_checks']
+
+    def test_no_intent_and_no_files_is_explicitly_not_started(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertEqual(self.checker()({'evidence':folder}),{'controller_configuration_not_started':True})
+
+    def test_normal_restoration_requires_original_sha_and_actual_matching_files(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as folder:
+            p=Path(folder);(p/'controller-manager-before.yaml').write_bytes(b'original');(p/'controller-manager-after.yaml').write_bytes(b'original')
+            record={'evidence':folder,'controller_original_sha256':hashlib.sha256(b'original').hexdigest()}
+            self.assertEqual(self.checker()(record),{'controller_policy_restored':True})
+            (p/'controller-manager-after.yaml').write_bytes(b'changed')
+            self.assertEqual(self.checker()(record),{'controller_policy_restored':False})
+            (p/'controller-manager-after.yaml').write_bytes(b'original');record['controller_original_sha256']='wrong'
+            self.assertEqual(self.checker()(record),{'controller_policy_restored':False})
+
+    def test_missing_file_after_intent_is_never_waived(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaises(FileNotFoundError):self.checker()({'evidence':folder,'controller_original_sha256':'set'})
+
+    def test_orphan_intent_or_file_is_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaises(RuntimeError):self.checker()({'evidence':folder,'controller_configured_sha256':'set'})
+            (Path(folder)/'controller-manager-before.yaml').write_text('orphan')
+            with self.assertRaises(RuntimeError):self.checker()({'evidence':folder})
+
+    def test_helper_ast_rejects_unrelated_cleanup_change(self):
+        from fresh_transport_release import validate_cleanup_helper_diff,HELPER_EXPECTED
+        current=(ROOT/'evaluation/graduation_evaluation.py').read_text()
+        original=current.replace(HELPER_EXPECTED,'').replace('checks.update(s3_controller_cleanup_checks(record))',"checks['controller_policy_restored'] = (Path(record['evidence']) / 'controller-manager-before.yaml').read_bytes() == (Path(record['evidence']) / 'controller-manager-after.yaml').read_bytes()")
+        validate_cleanup_helper_diff(original,current)
+        with self.assertRaises(ValueError):validate_cleanup_helper_diff(original,current.replace("mode == 'auto' and current['workers'] == 1","mode == 'auto' and current['workers'] == 2"))

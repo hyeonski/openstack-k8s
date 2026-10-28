@@ -47,6 +47,24 @@ def hashes():
     return {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in source_files()}
 
 
+def s3_controller_cleanup_checks(record):
+    """Distinguish an owned restoration from failure before mutation intent."""
+    evidence = Path(record['evidence'])
+    before = evidence / 'controller-manager-before.yaml'
+    after = evidence / 'controller-manager-after.yaml'
+    if record.get('controller_original_sha256'):
+        original = before.read_bytes()
+        restored = after.read_bytes()
+        return {'controller_policy_restored':
+                hashlib.sha256(original).hexdigest() == record['controller_original_sha256']
+                and original == restored}
+    if record.get('controller_configured_sha256') or before.exists() or after.exists():
+        raise RuntimeError('S3 controller intent/evidence is inconsistent; inspect owned state')
+    # The durable intent is written before controller mutation. Never fabricate
+    # restoration files for a failure before that intent was reached.
+    return {'controller_configuration_not_started': True}
+
+
 def interruption_ready(record, previous_run_id, environment_run_id, started):
     """Do not interrupt a new process using a prior trial's persistent record."""
     if not record or not record.get('run_id') or record['run_id'] == previous_run_id or\
@@ -324,7 +342,7 @@ class Campaign:
             elif case['scenario'] == 's3':
                 checks['volume_absent'] = not any(v['ID'] == record.get('volume_id') for v in self.lab.admin_json('volume', 'list', '--all-projects'))
                 checks['pv_absent'] = not any(v['metadata']['name'] == record.get('pv_name') for v in self.lab.client.get('w', 'pv')['items'])
-                checks['controller_policy_restored'] = (Path(record['evidence']) / 'controller-manager-before.yaml').read_bytes() == (Path(record['evidence']) / 'controller-manager-after.yaml').read_bytes()
+                checks.update(s3_controller_cleanup_checks(record))
                 machines = self.lab.client.get('m', 'machines', '-n', self.lab.client.ns)['items']
                 checks['remediation_skip_removed'] = not any(m['metadata'].get('annotations', {}).get('cluster.x-k8s.io/skip-remediation') == record['run_id'] for m in machines)
         proof = {'time': utc_now(), 'checks': checks, 'passed': all(checks.values())}

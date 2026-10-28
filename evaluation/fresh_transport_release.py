@@ -22,6 +22,7 @@ from lib.state import atomic_json
 
 REVIEWED_FILES = frozenset({
     'evaluation/fresh_transport.py', 'evaluation/fresh_transport_release.py',
+    'evaluation/graduation_evaluation.py',
     'evaluation/fresh_scenarios.py', 'evaluation/fresh_live.py',
     'evaluation/fresh_campaign.py', 'evaluation/fresh_release_driver.py',
     'tests/test_fresh_transport.py', 'tests/test_fresh_transport_release.py',
@@ -55,6 +56,17 @@ def normalize_ssh_read_boundaries(tree):
                 if found is not None:
                     if ast.dump(found)!=ast.dump(expected):raise ValueError('SSH helper changes more than explicit reads')
                     cls.body.remove(found)
+    binding = ast.parse("""class FreshS3:
+ def binding(self, node):
+  from fresh_transport import read_owned_s3_binding
+  return read_owned_s3_binding(self, node)
+""").body[0].body[0]
+    for cls in tree.body:
+        if isinstance(cls, ast.ClassDef) and cls.name == 'FreshS3':
+            found = next((n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'binding'), None)
+            if found is not None:
+                if ast.dump(found) != ast.dump(binding):raise ValueError('S3 binding adapter changed more than named reads')
+                cls.body.remove(found)
     expressions = ["'curl -fsS http://198.18.0.2:8090/progress'",
                    "'sudo tc -s -j qdisc show dev s2-egress'",
                    repr("python3 -c 'import time; print(time.time())'"),
@@ -156,6 +168,25 @@ def historical_campaign(path, expected_manifest):
     return manifest
 
 
+HELPER_EXPECTED = 'def s3_controller_cleanup_checks(record):\n    """Distinguish an owned restoration from failure before mutation intent."""\n    evidence = Path(record[\'evidence\'])\n    before = evidence / \'controller-manager-before.yaml\'\n    after = evidence / \'controller-manager-after.yaml\'\n    if record.get(\'controller_original_sha256\'):\n        original = before.read_bytes()\n        restored = after.read_bytes()\n        return {\'controller_policy_restored\':\n                hashlib.sha256(original).hexdigest() == record[\'controller_original_sha256\']\n                and original == restored}\n    if record.get(\'controller_configured_sha256\') or before.exists() or after.exists():\n        raise RuntimeError(\'S3 controller intent/evidence is inconsistent; inspect owned state\')\n    # The durable intent is written before controller mutation. Never fabricate\n    # restoration files for a failure before that intent was reached.\n    return {\'controller_configuration_not_started\': True}\n\n\n'
+
+def validate_cleanup_helper_diff(previous, current):
+    old, new = ast.parse(previous), ast.parse(current)
+    expected = ast.parse(HELPER_EXPECTED).body[0]
+    found = next((n for n in new.body if isinstance(n, ast.FunctionDef) and n.name == expected.name), None)
+    if found is not None:
+        if ast.dump(found) != ast.dump(expected):raise ValueError('S3 pre-controller cleanup check changed')
+        new.body.remove(found)
+    call = ast.parse('checks.update(s3_controller_cleanup_checks(record))').body[0]
+    original = ast.parse("checks['controller_policy_restored'] = (Path(record['evidence']) / 'controller-manager-before.yaml').read_bytes() == (Path(record['evidence']) / 'controller-manager-after.yaml').read_bytes()").body[0]
+    class Restore(ast.NodeTransformer):
+        def visit_Expr(self, node):
+            if ast.dump(node) == ast.dump(call):return original
+            return self.generic_visit(node)
+    new = Restore().visit(new)
+    if ast.dump(old) != ast.dump(new):raise ValueError('cleanup helper changed outside pre-controller verification')
+
+
 def audit_transition(profile, authorization, root):
     from fresh_campaign import source_hashes, pilot_contract
     root = Path(root)
@@ -191,6 +222,9 @@ def audit_transition(profile, authorization, root):
     if authorization.get('kind') == 'user-authorized-ssh-read-two-supplement-continuation-v2':
         validate_collection_read_diff((anchor_path/'source/evaluation/fresh_collection.py').read_text(),
                                       (root/'evaluation/fresh_collection.py').read_text())
+    if 'evaluation/graduation_evaluation.py' in changed:
+        validate_cleanup_helper_diff((anchor_path/'source/evaluation/graduation_evaluation.py').read_text(),
+                                     (root/'evaluation/graduation_evaluation.py').read_text())
     validate_live_transport_diff((anchor_path/'source/evaluation/fresh_live.py').read_text(),
                                 (root/'evaluation/fresh_live.py').read_text())
     before, after = copy.deepcopy(anchor['profile']), copy.deepcopy(profile)

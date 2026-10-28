@@ -317,3 +317,67 @@ def stop_probe_once(runner, stop_path, *, clock=time.monotonic):
         runner.ev.event('mutation_state_readback',operation='stop existing probe',
                         applied=state=='stopped',mutation_repeated=False)
         if state!='stopped':raise error
+
+
+def read_owned_s3_binding(runner, node, *, timeout=60):
+    """Only the three named Nova/port reads for a fixed S3 Node/Machine.
+
+    No mutation, remote shell classifier or retry of the scenario. A single
+    conservative 60-second budget covers mapping reads, SSH attempts and UID
+    readbacks; each remote command has at most three attempts.
+    """
+    import os
+    controller = os.environ.get('CONTROLLER_NAME')
+    if not controller or runner.scenario != 's3':
+        raise ValueError('owned S3 binding requires its controller')
+    end = time.monotonic() + runner.client.remaining(timeout)
+    previous = runner.client.deadline
+    runner.client.deadline = end if previous is None else min(previous, end)
+    def left():
+        remaining = end - time.monotonic()
+        if remaining <= 0: raise TimeoutError('S3 binding cumulative deadline exhausted')
+        return remaining
+    try:
+        machines = runner.client.get('m', 'machines', '-n', runner.client.ns)['items']
+        matched = [m for m in machines if not m['metadata'].get('deletionTimestamp')
+                   and m.get('status', {}).get('nodeRef', {}).get('name') == node['metadata']['name']]
+        if len(matched) != 1:
+            raise RuntimeError('ambiguous Node/Machine mapping')
+        machine = matched[0]
+        provider = machine.get('spec', {}).get('providerID', '')
+        if not provider.startswith('openstack:///') or node['spec'].get('providerID') != provider:
+            raise RuntimeError('Node/Machine provider identity mismatch')
+        def identity(remaining):
+            SSHReadBoundary(runner).identity(controller, remaining)
+            current_node = runner.client.get('w', 'node', node['metadata']['name'])
+            current_machine = runner.client.get('m', 'machine', machine['metadata']['name'], '-n', runner.client.ns)
+            if (current_node['metadata']['uid'] != node['metadata']['uid']
+                    or current_node['spec'].get('providerID') != provider
+                    or current_machine['metadata']['uid'] != machine['metadata']['uid']
+                    or current_machine['metadata'].get('deletionTimestamp')
+                    or current_machine['spec'].get('providerID') != provider
+                    or current_machine.get('status', {}).get('nodeRef', {}).get('name') != node['metadata']['name']):
+                raise RuntimeError('S3 binding Node/Machine identity changed')
+            remaining()
+        def query(*args):
+            return retry_ssh_read(lambda seconds: runner.admin_json(*args, timeout=seconds),
+                timeout=left(), identity=identity, label='S3 owned binding '+repr(args),
+                evidence=runner.ev.directory)
+        nova = query('server', 'show', provider.removeprefix('openstack:///'))
+        if nova.get('id') != provider.removeprefix('openstack:///'):
+            raise RuntimeError('S3 binding Nova identity changed')
+        ports = query('port', 'list', '--server', nova['id'])
+        if nova['status'] != 'ACTIVE' or len(ports) != 1:
+            raise RuntimeError('one ACTIVE VM and one unambiguous port required')
+        port = query('port', 'show', ports[0]['ID'])
+        if port.get('id') != ports[0]['ID'] or port['device_id'] != nova['id'] or len(port['fixed_ips']) != 1:
+            raise RuntimeError('VM/port identity mismatch')
+        left()
+        return {'node': node['metadata']['name'], 'node_uid': node['metadata']['uid'],
+                'machine': machine['metadata']['name'], 'machine_uid': machine['metadata']['uid'],
+                'nova_id': nova['id'], 'host': nova['OS-EXT-SRV-ATTR:host'],
+                'instance_name': nova['OS-EXT-SRV-ATTR:instance_name'],
+                'project_id': nova['project_id'], 'port': port,
+                'ip': port['fixed_ips'][0]['ip_address']}
+    finally:
+        runner.client.deadline = previous

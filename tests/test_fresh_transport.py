@@ -368,3 +368,97 @@ class SSHReadTests(unittest.TestCase):
 
 
 if __name__ == '__main__': unittest.main()
+
+
+class S3BindingReadTests(unittest.TestCase):
+    def fixture(self, folder):
+        import copy
+        node={'metadata':{'name':'cp','uid':'node-a'},'spec':{'providerID':'openstack:///nova-a'}}
+        machine={'metadata':{'name':'machine-a','uid':'machine-uid'},'spec':{'providerID':'openstack:///nova-a'},'status':{'nodeRef':{'name':'cp'}}}
+        port={'id':'port-a','device_id':'nova-a','fixed_ips':[{'ip_address':'10.0.0.2'}]}
+        nova={'id':'nova-a','status':'ACTIVE','OS-EXT-SRV-ATTR:host':'compute','OS-EXT-SRV-ATTR:instance_name':'instance-a','project_id':'project-a'}
+        client=SimpleNamespace(ns='workload',deadline=None,remaining=lambda seconds:seconds)
+        def get(plane, resource, *args):
+            if resource=='machines':return {'items':[copy.deepcopy(machine)]}
+            if resource=='machine':return copy.deepcopy(machine)
+            if resource=='node':return copy.deepcopy(node)
+            raise AssertionError(resource)
+        client.get=Mock(side_effect=get)
+        def admin(*args,timeout=60):
+            if args==('server','show','nova-a'):return copy.deepcopy(nova)
+            if args==('port','list','--server','nova-a'):return [{'ID':'port-a'}]
+            if args==('port','show','port-a'):return copy.deepcopy(port)
+            raise AssertionError('not one of the three named reads: '+repr(args))
+        runner=SimpleNamespace(scenario='s3',client=client,ev=SimpleNamespace(directory=Path(folder)),admin_json=Mock(side_effect=admin))
+        return runner,node,admin
+
+    def no_sleep(self):
+        from fresh_transport import retry_ssh_read
+        return patch('fresh_transport.retry_ssh_read',side_effect=lambda invoke,**kw:retry_ssh_read(invoke,sleep=lambda seconds:None,**kw))
+
+    def test_normal_binding_exactly_matches_original_without_identity_queries(self):
+        from fresh_transport import read_owned_s3_binding
+        from graduation_recovery import RecoveryLab
+        with tempfile.TemporaryDirectory() as folder,patch.dict('os.environ',{'CONTROLLER_NAME':'controller'}),patch('fresh_transport.SSHReadBoundary.identity') as identity:
+            runner,node,admin=self.fixture(folder)
+            expected=RecoveryLab.binding(runner,node)
+            runner.admin_json.reset_mock()
+            self.assertEqual(read_owned_s3_binding(runner,node),expected)
+            self.assertEqual(runner.admin_json.call_count,3);identity.assert_not_called()
+            self.assertIsNone(runner.client.deadline)
+
+    def test_only_failed_port_show_retries_and_rechecks_namespace_and_node_machine(self):
+        from fresh_transport import read_owned_s3_binding
+        with tempfile.TemporaryDirectory() as folder,patch.dict('os.environ',{'CONTROLLER_NAME':'controller'}),patch('fresh_transport.SSHReadBoundary.identity') as identity,self.no_sleep():
+            runner,node,admin=self.fixture(folder);failed=[False]
+            def flaky(*args,**kw):
+                if args==('port','show','port-a') and not failed[0]:failed[0]=True;raise RuntimeError('4047 Failed to lookup instance')
+                return admin(*args,**kw)
+            runner.admin_json.side_effect=flaky
+            self.assertEqual(read_owned_s3_binding(runner,node)['node_uid'],'node-a')
+            self.assertEqual([c.args for c in runner.admin_json.call_args_list],[('server','show','nova-a'),('port','list','--server','nova-a'),('port','show','port-a'),('port','show','port-a')])
+            self.assertEqual(identity.call_count,2)
+            self.assertEqual(sum(c.args[1]=='node' for c in runner.client.get.call_args_list),2)
+
+    def test_three_failures_timeout_without_nesting_and_permanent_immediate(self):
+        from fresh_transport import read_owned_s3_binding
+        for message,expected_count,exception in [('Broken pipe',3,TimeoutError),('permission denied',1,RuntimeError)]:
+            with self.subTest(message=message),tempfile.TemporaryDirectory() as folder,patch.dict('os.environ',{'CONTROLLER_NAME':'controller'}),patch('fresh_transport.SSHReadBoundary.identity'),self.no_sleep():
+                runner,node,admin=self.fixture(folder)
+                runner.admin_json.side_effect=lambda *a,**k:(_ for _ in ()).throw(RuntimeError(message)) if a==('port','show','port-a') else admin(*a,**k)
+                with self.assertRaises(exception):read_owned_s3_binding(runner,node)
+                self.assertEqual(sum(c.args==('port','show','port-a') for c in runner.admin_json.call_args_list),expected_count)
+                self.assertEqual(sum(c.args[:2]==('server','show') for c in runner.admin_json.call_args_list),1)
+                self.assertIsNone(runner.client.deadline)
+
+    def test_replacement_node_rejects_retry_before_second_remote_read(self):
+        from fresh_transport import read_owned_s3_binding
+        with tempfile.TemporaryDirectory() as folder,patch.dict('os.environ',{'CONTROLLER_NAME':'controller'}),patch('fresh_transport.SSHReadBoundary.identity'),self.no_sleep():
+            runner,node,admin=self.fixture(folder)
+            def flaky(*args,**kw):
+                if args==('port','show','port-a'):
+                    node['metadata']['uid']='replacement';raise RuntimeError('4047 Failed to lookup instance')
+                return admin(*args,**kw)
+            # Preserve the input snapshot while get(node) returns a replacement.
+            import copy
+            initial=copy.deepcopy(node);runner.admin_json.side_effect=flaky
+            with self.assertRaisesRegex(RuntimeError,'identity changed'):read_owned_s3_binding(runner,initial)
+            self.assertEqual(sum(c.args==('port','show','port-a') for c in runner.admin_json.call_args_list),1)
+
+    def test_all_three_commands_and_readbacks_share_one_deadline(self):
+        from fresh_transport import read_owned_s3_binding,retry_ssh_read
+        clock=Clock()
+        with tempfile.TemporaryDirectory() as folder,patch.dict('os.environ',{'CONTROLLER_NAME':'controller'}),patch('fresh_transport.time.monotonic',clock),patch('fresh_transport.retry_ssh_read',side_effect=lambda invoke,**kw:retry_ssh_read(invoke,clock=clock,sleep=clock.sleep,**kw)):
+            runner,node,admin=self.fixture(folder)
+            def slow(*args,**kw):clock.now+=25;return admin(*args,**kw)
+            runner.admin_json.side_effect=slow
+            with self.assertRaises(TimeoutError):read_owned_s3_binding(runner,node)
+            self.assertEqual([c.kwargs['timeout'] for c in runner.admin_json.call_args_list],[60,35,10])
+            self.assertIsNone(runner.client.deadline)
+
+    def test_other_scenario_is_rejected_without_remote_command(self):
+        from fresh_transport import read_owned_s3_binding
+        with tempfile.TemporaryDirectory() as folder,patch.dict('os.environ',{'CONTROLLER_NAME':'controller'}):
+            runner,node,admin=self.fixture(folder);runner.scenario='s2'
+            with self.assertRaises(ValueError):read_owned_s3_binding(runner,node)
+            runner.admin_json.assert_not_called()
