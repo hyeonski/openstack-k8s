@@ -69,7 +69,7 @@ def review_dev():
  prior=check_frozen(DEV)
  assert prior['git_head']=='6730ecfa68a0628b83b0f9e5924fffcbf72a95ae'
  unchanged=('kubernetes/graduation-s1/app.py','kubernetes/graduation-s1/loadgen.py','evaluation/fresh_baseline.py','evaluation/fresh_analysis.py','evaluation/fresh_contract.py','evaluation/fresh_calibration.py')
- if TRANSITION and TRANSITION.get('kind')=='user-authorized-stability-continuation-v4':
+ if TRANSITION and TRANSITION.get('kind') in ('user-authorized-stability-continuation-v4','user-authorized-inventory-continuation-v5'):
   unchanged=tuple(n for n in unchanged if n not in ('evaluation/fresh_baseline.py','evaluation/fresh_analysis.py','evaluation/fresh_calibration.py'))
  for name in unchanged:
   assert hashlib.sha256((ROOT/name).read_bytes()).hexdigest()==prior['source_sha256'][name],name

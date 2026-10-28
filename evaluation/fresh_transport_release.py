@@ -214,6 +214,9 @@ def validate_probe_read_diff(previous, current):
 
 
 def audit_transition(profile, authorization, root):
+    if authorization.get('kind')=='user-authorized-inventory-continuation-v5':
+        from fresh_inventory_release import audit_inventory_transition
+        return audit_inventory_transition(profile,authorization,root)
     if authorization.get('kind')=='user-authorized-stability-continuation-v4':
         from fresh_stability_release import audit_stability_transition
         return audit_stability_transition(profile,authorization,root)

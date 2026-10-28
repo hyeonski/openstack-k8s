@@ -49,7 +49,8 @@ def read(label,invoke,timeout):
     if str(ROOT/'evaluation') not in sys.path:sys.path.insert(0,str(ROOT/'evaluation'))
     from fresh_read_budget import read_with_budget
     return read_with_budget(lambda left:invoke(left()),timeout=timeout,
-        identity=lambda left:identity(ctx,left),label=label,evidence=ctx['evidence'])
+        identity=lambda left:identity(ctx,left),label=label,evidence=ctx['evidence'],
+        compound=label=='openstack-workload-inventory')
 
 
 # Explicit OpenStack grammar. Mutations are dispatched once by LabRuntime.

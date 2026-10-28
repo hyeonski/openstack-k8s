@@ -53,7 +53,7 @@ def transient_error(error):
 
 def read_with_budget(invoke, *, timeout, identity, label, evidence,
                      reconnect=None, attempts=3, clock=time.monotonic,
-                     sleep=time.sleep, log_name='transport-read-attempts.jsonl'):
+                     sleep=time.sleep, log_name='transport-read-attempts.jsonl', compound=False):
     """Callbacks accept a remaining() function capped to 20s per command.
 
     Reentrant identity reads execute once, on the SAME deadline. Callbacks must
@@ -63,6 +63,8 @@ def read_with_budget(invoke, *, timeout, identity, label, evidence,
         raise ValueError('invalid operational read budget')
     parent = _ACTIVE.get()
     if parent is not None:
+        if compound:
+            raise ValueError('compound read cannot reset an enclosing command deadline')
         result = invoke(parent)
         parent()
         return result
@@ -73,12 +75,17 @@ def read_with_budget(invoke, *, timeout, identity, label, evidence,
         if left <= 0:
             raise TimeoutError('operational read cumulative deadline exhausted: '+label)
         return min(COMMAND_CAP, left)
+    def operation_remaining():
+        # Only a registered collector that bounds EACH child command may use
+        # the operation budget. Identity and nested reads retain their 20s cap.
+        remaining()
+        return end-clock()
     token = _ACTIVE.set(remaining)
     try:
         for number in range(1, attempts+1):
             began = clock()
             try:
-                result = invoke(remaining)
+                result = invoke(operation_remaining if compound else remaining)
                 remaining()
                 if number > 1: identity(remaining)
                 remaining()

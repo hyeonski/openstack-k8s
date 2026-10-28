@@ -217,6 +217,9 @@ class LiveBackend:
 
     def cleanup(self, case, profile, ev):
         self.configure_reads(profile,ev.directory)
+        if profile['operations'].get('stability'):
+            from fresh_worker_quiescence import wait_worker_quiescent
+            wait_worker_quiescent(self.state,ev.directory)
         h=self.helper(profile,ev)
         # Persisted ownership records are authoritative after lost responses/process interruption.
         ledger=ev.directory/'fixture-ledger.json'
