@@ -15,11 +15,19 @@ from fresh_host_lifetime import effective_host_deadline, validate_host_lifetime_
 from fresh_evidence import epoch,utc
 from lib.state import atomic_json
 BASE=ROOT/'artifacts/fresh-evaluation-measurement-repaired-2026-10-27'
-PROFILE=ROOT/'.state/cloud-gcp-amd64-greenfield/evaluation-profiles/fresh-20261027-measurement-repaired.json'
+ACTIVE_PATH=BASE/'transport-release-active.json'
+ACTIVE=json.loads(ACTIVE_PATH.read_text()) if ACTIVE_PATH.exists() else None
+PROFILE=Path(ACTIVE['profile']) if ACTIVE else ROOT/'.state/cloud-gcp-amd64-greenfield/evaluation-profiles/fresh-20261027-measurement-repaired.json'
 P=json.loads(PROFILE.read_text());BED=Path(P['operations']['artifact_root'])
 AUTH=json.loads((BASE/'restart-authorization.json').read_text())
 assert AUTH['scope']=={'preparation':8,'main':29}
-assert hashlib.sha256(PROFILE.read_bytes()).hexdigest()==AUTH['profile_sha256']
+assert hashlib.sha256(PROFILE.read_bytes()).hexdigest()==(ACTIVE['profile_sha256'] if ACTIVE else AUTH['profile_sha256'])
+TRANSITION=None
+if ACTIVE:
+ from fresh_transport_release import audit_transition, historical_campaign
+ assert hashlib.sha256(Path(ACTIVE['authorization']).read_bytes()).hexdigest()==ACTIVE['authorization_sha256']
+ TRANSITION=json.loads(Path(ACTIVE['authorization']).read_text())
+ audit_transition(P,TRANSITION,ROOT)
 assert hashlib.sha256((Path(AUTH['prior_root'])/'HOLD-NEXT-EXPERIMENTS.json').read_bytes()).hexdigest()==AUTH['old_hold_sha256']
 from fresh_failure_policy import next_action
 class OperationalPause(RuntimeError):pass
@@ -34,6 +42,19 @@ os.environ['FRESH_TIME_POLICY']='cost-bounded-targets-only'
 OPS=BASE/'operations';DEV=ROOT/'artifacts/fresh-evaluation-development-calibrated-2026-10-26/dev-v1'
 REG=BASE/'release-registry.json';DATA={'profile':str(PROFILE),'campaigns':{},'events':[],'pilot_no_go':{}}
 if REG.exists():DATA=json.loads(REG.read_text())
+DATA['profile']=str(PROFILE)
+
+def campaign_files():
+ paths=set(BED.glob('*/campaign.json'))
+ if TRANSITION:paths.update(Path(row['path'])/'campaign.json' for row in TRANSITION['prior_campaigns'].values())
+ return sorted(paths)
+
+def planning_manifest(path):
+ if TRANSITION:
+  for row in TRANSITION['prior_campaigns'].values():
+   if Path(row['path']).resolve()==Path(path).resolve():
+    return historical_campaign(path,row['frozen_manifest_sha256'])
+ return check_frozen(path,current=True)
 LOCK=(BASE/'operator-driver.lock').open('a+');fcntl.flock(LOCK,fcntl.LOCK_EX|fcntl.LOCK_NB)
 DATA['operator_pid']=os.getpid()
 DATA['driver_sha256']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
@@ -66,7 +87,7 @@ def save(stage,**fields):
  DATA['updated_utc']=utc();DATA['stage']=stage;DATA.update(fields);atomic_json(REG,DATA)
  progress=json.loads((BASE/'progress.json').read_text());ledger=BedLedger(P);ledger.save()
  results=[];injections=[];attempted=[]
- for campaign in BED.glob('*/campaign.json'):
+ for campaign in campaign_files():
   manifest=json.loads(campaign.read_text())
   for case in manifest['cases']:
    for attempt in case.get('attempts',[]):
@@ -76,7 +97,8 @@ def save(stage,**fields):
     for events in (path/'events.jsonl',):
      if events.exists():
       injections.extend(e['utc'] for e in map(json.loads,events.read_text().splitlines()) if e.get('kind')=='injection_applied')
- progress.update(preparation_attempted=sum(c['purpose']!='main' for c in attempted),preparation_valid=sum(c['purpose']!='main' and j['trial_valid'] is True for c,j in results),preparation_invalid=sum(c['purpose']!='main' and j['trial_valid'] is not True for c,j in results),main_attempted=sum(c['purpose']=='main' for c in attempted),first_injection_utc=min(injections) if injections else progress.get('first_injection_utc'))
+ progress.update(preparation_attempted=sum(c['purpose'] in ('smoke','pilot') for c in attempted),preparation_valid=sum(c['purpose'] in ('smoke','pilot') and j['trial_valid'] is True for c,j in results),preparation_invalid=sum(c['purpose'] in ('smoke','pilot') and j['trial_valid'] is not True for c,j in results),main_attempted=sum(c['purpose']=='main' for c in attempted),first_injection_utc=min(injections) if injections else progress.get('first_injection_utc'))
+ progress.update(main_valid=sum(c['purpose']=='main' and j['trial_valid'] is True for c,j in results),main_invalid=sum(c['purpose']=='main' and j['trial_valid'] is not True for c,j in results),supplemental_attempted=sum(c['purpose']=='supplemental' for c in attempted),supplemental_valid=sum(c['purpose']=='supplemental' and j['trial_valid'] is True for c,j in results),supplemental_invalid=sum(c['purpose']=='supplemental' and j['trial_valid'] is not True for c,j in results))
  progress.update(updated_utc=utc(),stage=stage,release_registry=str(REG),uptime_and_estimated_cost=ledger.data['usage'],**fields)
  atomic_json(BASE/'progress.json',progress)
  print(json.dumps({'utc':utc(),'stage':stage,**fields}),flush=True)
@@ -130,8 +152,8 @@ def remaining_budget(label):
  # Preserve the registered nominal schedule and its 20%/session allowances.
  # Completed calibration/DEV/preparation are never counted as future work.
  completed=set();observed={};now=time.time()
- for saved in BED.rglob('campaign.json'):
-  manifest=check_frozen(saved.parent,current=True)
+ for saved in campaign_files():
+  manifest=planning_manifest(saved.parent)
   if manifest.get('synthetic'):continue
   records=[json.loads(line) for line in (saved.parent/'attempts.jsonl').read_text().splitlines()] if (saved.parent/'attempts.jsonl').exists() else []
   for c in manifest['cases']:
@@ -140,14 +162,16 @@ def remaining_budget(label):
    end=next((epoch(r['utc']) for r in records if r['case_id']==c['id'] and r['attempt_id']=='attempt-01' and r['state']=='finished'),None)
    if start and end:observed[c['scenario']]=max(observed.get(c['scenario'],0),1.2*(end-start))
  nominal={'s1':44,'s2':37,'s3':32,'s4':37};pending=[c for c in P['cases'] if c['id'] not in completed]
+ supplement_pending=bool(TRANSITION) and not any(c['purpose']=='supplemental' and c['status']=='finished' for saved in BED.glob('*/campaign.json') for c in check_frozen(saved.parent)['cases'])
  seconds=sum(max(nominal[c['scenario']]*72,observed.get(c['scenario'],0)) for c in pending)
+ if supplement_pending:seconds+=max(nominal['s1']*72,observed.get('s1',0))
  idle=planned_idle(now)
  lifecycle=P['operations']['single_host_lifecycle_estimate_seconds'] if pending else P['operations']['host_shutdown_timeout_seconds']
  seconds+=idle+lifecycle
  ledger=BedLedger(P);ledger.save();usage=ledger.data['usage'];hard=epoch(P['operations']['hard_stop_utc'])
  projected=usage['estimated_cost_krw']+seconds/3600*P['operations']['cost_estimate']['bed_hour_krw']+seconds/86400*P['operations']['cost_estimate']['calendar_day_krw']
  DATA['observed_max_case_seconds']={k:v/1.2 for k,v in observed.items()}
- budget=dict(idle_seconds=idle,remaining_lifecycle_estimate_seconds=lifecycle,calendar_estimate_advisory=True,updated_utc=utc(),label=label,completed_registered_cases=len(completed),remaining_registered_cases=len(pending),remaining_plan_seconds=seconds,planned_finish_kst=dt.datetime.fromtimestamp(now+seconds,dt.timezone(dt.timedelta(hours=9))).isoformat(),calendar_margin_seconds=hard-now-seconds,soft_uptime_margin_after_plan_seconds=P['operations']['bed_uptime_soft_limit_seconds']-usage['bed_seconds']-seconds,projected_estimate_krw=projected,usage=usage,notes='case nominal or observed x1.2; one measured lifecycle25min, no fixed host rotation; scheduled idle included; total forecast advisory; phase deadlines and credit/cost gates remain; calendar/uptime advisory; completed work excluded; not Billing')
+ budget=dict(idle_seconds=idle,remaining_lifecycle_estimate_seconds=lifecycle,calendar_estimate_advisory=True,updated_utc=utc(),label=label,completed_registered_cases=len(completed),remaining_registered_cases=len(pending),supplemental_remaining=int(supplement_pending),remaining_plan_seconds=seconds,planned_finish_kst=dt.datetime.fromtimestamp(now+seconds,dt.timezone(dt.timedelta(hours=9))).isoformat(),calendar_margin_seconds=hard-now-seconds,soft_uptime_margin_after_plan_seconds=P['operations']['bed_uptime_soft_limit_seconds']-usage['bed_seconds']-seconds,projected_estimate_krw=projected,usage=usage,notes='case nominal or observed x1.2; one measured lifecycle25min, no fixed host rotation; scheduled idle included; total forecast advisory; phase deadlines and credit/cost gates remain; calendar/uptime advisory; completed work excluded; not Billing')
  prep_seconds=sum(max(nominal[c['scenario']]*72,observed.get(c['scenario'],0)) for c in pending if c['purpose']!='main')
  budget['first_main_forecast_kst']=dt.datetime.fromtimestamp(now+prep_seconds+(lifecycle if completed==set() else 0),dt.timezone(dt.timedelta(hours=9))).isoformat() if prep_seconds else ('main in progress or admitted' if pending else None)
  atomic_json(BASE/('remaining-budget-'+str(time.time_ns())+'.json'),budget);save('remaining work budget checked',remaining_budget=budget,first_main_forecast=budget['first_main_forecast_kst'],completion_forecast=budget['planned_finish_kst'])
@@ -166,8 +190,12 @@ def frozen(name,stage,scenario,pilot=None):
  path=BED/name
  if not (path/'campaign.json').exists():
   args=['--profile',PROFILE,'--stage',stage,'--scenario',scenario]
-  if pilot:args+=['--pilot-campaign',pilot,'--policy-manifest',BED/'s1-pilot-v1/policy-manifest.json']
-  cli('freeze',*args,campaign=path)
+  if TRANSITION:
+   args+=['--transport-authorization',ACTIVE['authorization']]
+   cli('freeze-transport',*args,campaign=path)
+  else:
+   if pilot:args+=['--pilot-campaign',pilot,'--policy-manifest',BED/'s1-pilot-v1/policy-manifest.json']
+   cli('freeze',*args,campaign=path)
  DATA['campaigns'][name]=str(path);save('campaign frozen',current_campaign=str(path))
  return path
 
@@ -231,7 +259,8 @@ try:
   with (BASE/'cadence.log').open('a') as stream:
    rc=subprocess.call(command,stdout=stream,stderr=subprocess.STDOUT,cwd=ROOT)
   if rc or not (BASE/'cadence-approved.json').exists():raise OperationalPause('cadence verification requires investigation')
- pilots={s:run_pilot(s) for s in ('s4','s1','s2','s3')}
+ pilots={s:Path(TRANSITION['prior_campaigns'][s+'-pilot-v1']['path']) for s in ('s4','s1','s2','s3')} if TRANSITION else {s:run_pilot(s) for s in ('s4','s1','s2','s3')}
+ if TRANSITION:save('hash-bound preparation reuse approved; no preparation replay',transport_authorization=ACTIVE['authorization'],source_boundary=TRANSITION['boundary_case'])
  remaining_budget('after full pilot wave')
  if DATA['pilot_no_go']:
   save('pilot wave no-go; main blocked',pilot_no_go=DATA['pilot_no_go'])
@@ -240,13 +269,21 @@ try:
   for s in ('s1','s2','s3','s4'):
    operational_gate(next(c for c in P['cases'] if c['scenario']==s and c['purpose']=='main'))
    verify_headroom()
-   path=frozen(s+'-main-v1','main',s,pilots[s]);previous=None
+   path=frozen(s+('-main-transport-v2' if TRANSITION else '-main-v1'),'main',s,pilots[s]);previous=None
    for c in check_frozen(path)['cases']:
     if c['status']!='pending':previous=c['session'];continue
     if previous and previous!=c['session']:verify_headroom()
     run_one(path);previous=c['session']
    measured(path)
+  observed_main={c['id'] for saved in campaign_files() for c in planning_manifest(saved.parent)['cases'] if c['purpose']=='main' and c.get('attempts') and c['attempts'][0]['state']=='VERIFIED'}
+  assert observed_main=={c['id'] for c in P['cases'] if c['purpose']=='main'},'original main29 coverage incomplete'
   save('registered 29 main cases measured')
+  if TRANSITION:
+   supplement=frozen('s1-supplement-transport-v2','supplemental','s1',pilots['s1'])
+   if any(c['status']=='pending' for c in check_frozen(supplement)['cases']):run_one(supplement)
+   measured(supplement)
+   assert sum(len(c.get('attempts',[])) for c in check_frozen(supplement)['cases'])==1,'exactly one authorised supplementary attempt required'
+   save('original main29 and supplementary A measured; ready for final owned cleanup')
  environment('down')
  save('hosts down verified; release ready for final analysis')
 except OperationalPause as exc:

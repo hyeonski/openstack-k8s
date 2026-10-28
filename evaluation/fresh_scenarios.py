@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 import copy
 import concurrent.futures
+from contextlib import contextmanager
+import os
 import hashlib
 import json
 from pathlib import Path
@@ -222,7 +224,86 @@ class FreshS1(EvaluationS1):
     def recovery_checks(self,record,rows,baseline):
         return {'fresh_independent_judgement_required':True}
 
+    @contextmanager
+    def transport_reads(self):
+        from fresh_transport import retry_read, transport_lock, listener_reachable
+        original_k, original_client_k = self.s1.k, self.client.k
+        from workload_state import command
+        def invoke_client(plane, values, *, data=None, timeout=30):
+            config = 'management' if plane == 'm' else self.client.cluster
+            return command(['kubectl', '--kubeconfig', self.client.state/'kubeconfigs'/(config+'.yaml'),
+                '--request-timeout=15s', *values], data=data, timeout=self.client.remaining(min(30, timeout)))
+
+        def identity(remaining):
+            record = self.read()
+            if not record or record.get('fresh_attempt') != str(self.ev.directory.resolve()):
+                raise RuntimeError('transport read identity not owned by current attempt')
+            job = None
+            if record.get('job_uid'):
+                raw = original_k('get', 'job', record['job_name'], '-n', S1_NS,
+                                 '--ignore-not-found', '-o', 'json', timeout=min(20, remaining()))
+                job = json.loads(raw) if raw.strip() else None
+                if job and job['metadata']['uid'] != record['job_uid']:
+                    raise RuntimeError('transport read Job UID changed; refusing continuation')
+                if not job and record.get('phase') != 'completed':
+                    raise RuntimeError('transport read Job disappeared before acknowledged cleanup')
+            if not job:
+                preparation = self.s1.read()
+                if not preparation or preparation.get('run_id') != record.get('preparation_id') or preparation.get('environment_run_id') != record.get('environment_run_id'):
+                    raise RuntimeError('transport read preparation identity changed')
+                obj = json.loads(invoke_client('m', ['get', 'cluster', self.client.cluster,
+                                 '-n', self.client.ns, '-o', 'json'], timeout=min(20, remaining())))
+                if obj['metadata']['uid'] != preparation.get('cluster_uid'):
+                    raise RuntimeError('transport read cluster UID changed; refusing continuation')
+                after = record.get('service_after')
+                if record.get('phase') == 'completed' and after:
+                    pod = json.loads(original_k('get', 'pod', after['pod'], '-n', S1_NS,
+                                     '-o', 'json', timeout=min(20, remaining())))
+                    if pod['metadata']['uid'] != after['pod_uid']:
+                        raise RuntimeError('transport read final service Pod UID changed')
+            remaining()
+
+        def reconnect(remaining):
+            with transport_lock(self.client.state, remaining):
+                if listener_reachable(os.environ['WORKLOAD_LOCAL_API_PORT']):
+                    return
+                saved = self.client.state/'workload-api-iap-tunnel.log'
+                if saved.exists():
+                    checkpoint_text(self.ev.directory/('transport-read-before-'+str(time.time_ns())+'.log'),saved.read_text())
+                log = self.ev.directory/'transport-read-reconnect.log'
+                with log.open('a') as stream:
+                    repaired = subprocess.run([str(ROOT/'scripts/gcp-workload-api-tunnel.sh'), 'ensure'],
+                        stdout=stream, stderr=subprocess.STDOUT,
+                        timeout=min(60, remaining()))
+                if repaired.returncode:
+                    raise RuntimeError('transport reconnect failed: '+log.read_text()[-4000:])
+                remaining()
+
+        def query(*args, data=None, timeout=60):
+            def invoke(values, *, data, timeout):
+                return original_k(*values, data=data, timeout=timeout)
+            return retry_read(invoke, args, data=data, timeout=timeout,
+                identity=identity, reconnect=reconnect, evidence=self.ev.directory)
+
+        def client_query(plane, *args, data=None):
+            if plane != 'w':
+                return original_client_k(plane, *args, data=data)
+            def invoke(values, *, data, timeout):
+                return invoke_client(plane, values, data=data, timeout=timeout)
+            return retry_read(invoke, args, data=data, timeout=self.client.remaining(30),
+                identity=identity, reconnect=reconnect, evidence=self.ev.directory)
+
+        self.s1.k, self.client.k = query, client_query
+        try:
+            yield
+        finally:
+            self.s1.k, self.client.k = original_k, original_client_k
+
     def finish(self):
+        with self.transport_reads():
+            return self.finish_once()
+
+    def finish_once(self):
         cfg=self.profile['s1']
         if self.case['mode']=='V1':
             selected=self.profile['v1_selected']

@@ -71,6 +71,7 @@ class CollectionTests(unittest.TestCase):
             runner=FreshS1.__new__(FreshS1)
             runner.case={'mode':'A'};runner.profile={'s1':{'rate':5,'rounds':100000,'seconds':1800}}
             runner.ev=ev;runner.raw={'service_before':{'pod_uid':'original'}}
+            runner.s1=Mock();runner.client=Mock()
             runner.run=Mock(side_effect=RuntimeError('completion stat unavailable'))
             runner.read=Mock(return_value={'evidence':str(raw),'fresh_attempt':str(ev.directory.resolve())})
             with self.assertRaisesRegex(RuntimeError,'completion stat'):runner.finish()

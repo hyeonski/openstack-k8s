@@ -40,7 +40,7 @@ def source_hashes(root=ROOT):
 
 
 def policy_manifest(source):
-    return {name: value for name, value in source.items() if name.startswith(('experiments/','scripts/','kubernetes/')) or name in ('evaluation/fresh_pause.py','evaluation/fresh_host_lifetime.py','evaluation/fresh_collection.py','evaluation/fresh_scenarios.py','evaluation/fresh_live.py','evaluation/fresh_contract.py','evaluation/fresh_campaign.py','evaluation/fresh_baseline.py','evaluation/fresh_operations.py','evaluation/fresh_identity.py','evaluation/fresh_analysis.py','evaluation/fresh_evidence.py','evaluation/graduation_evaluation.py','evaluation/graduation_evaluation_case.py')}
+    return {name: value for name, value in source.items() if name.startswith(('experiments/','scripts/','kubernetes/')) or name in ('evaluation/fresh_transport.py','evaluation/fresh_transport_release.py','evaluation/fresh_pause.py','evaluation/fresh_host_lifetime.py','evaluation/fresh_collection.py','evaluation/fresh_scenarios.py','evaluation/fresh_live.py','evaluation/fresh_contract.py','evaluation/fresh_campaign.py','evaluation/fresh_baseline.py','evaluation/fresh_operations.py','evaluation/fresh_identity.py','evaluation/fresh_analysis.py','evaluation/fresh_evidence.py','evaluation/graduation_evaluation.py','evaluation/graduation_evaluation_case.py')}
 
 
 def pilot_contract(profile, scenario):
@@ -225,6 +225,8 @@ def check_frozen(directory, current=False):
             raise ValueError('preregistered document changed: '+name)
     if frozen.get('tool_change_audit_sha256') and digest(read(directory/'tool-change-audit.json'))!=frozen['tool_change_audit_sha256']:
         raise ValueError('tool change audit changed')
+    if frozen.get('transport_transition_sha256') and digest(read(directory/'transport-transition.json')) != frozen['transport_transition_sha256']:
+        raise ValueError('transport transition audit changed')
     if current:
         if source_hashes() != frozen['source_sha256']:
             raise ValueError('source changed; freeze a new cohort with diff and impact analysis')
@@ -319,7 +321,8 @@ class FreshCampaign:
                     if not prior or prior['status']!='finished' or not prior.get('judgement',{}).get('trial_valid') or not prior['judgement'].get('safety'):
                         raise RuntimeError('case dependency not verified: '+dependency)
                 previous = case.get('attempts', [])
-                if len(previous) >= self.profile['max_attempts']:
+                cap = 1 if self.data['stage'] == 'supplemental' else self.profile['max_attempts']
+                if len(previous) >= cap:
                     raise ValueError('registered retry cap exhausted')
                 attempt = {'id': f'attempt-{len(previous)+1:02}', 'state':'PREPARED',
                            'previous':previous[-1]['id'] if previous else None}
@@ -522,14 +525,15 @@ def report(directory, allow_synthetic=False):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=('schedule','validate','freeze','run','status','report','resume-cleanup','environment-ensure','environment-down','environment-rotate'))
+    parser.add_argument('action',choices=('schedule','validate','freeze','freeze-transport','run','status','report','resume-cleanup','environment-ensure','environment-down','environment-rotate'))
     parser.add_argument('--profile',type=Path,default=ROOT/'config/graduation-evaluation-fresh.json')
     parser.add_argument('--campaign',type=Path)
-    parser.add_argument('--stage',choices=('main','preparation','development'),default='preparation')
+    parser.add_argument('--stage',choices=('main','preparation','development','supplemental'),default='preparation')
     parser.add_argument('--scenario',choices=('s1','s2','s3','s4'))
     parser.add_argument('--policy-manifest',type=Path)
     parser.add_argument('--pilot-campaign',type=Path)
     parser.add_argument('--previous-campaign',type=Path)
+    parser.add_argument('--transport-authorization',type=Path)
     parser.add_argument('--synthetic',action='store_true',help='offline fake backend; never primary evidence')
     parser.add_argument('--synthetic-report',action='store_true')
     parser.add_argument('--limit',type=int)
@@ -556,6 +560,11 @@ def main():
             args.campaign.mkdir(parents=True,exist_ok=True)
             backend=LiveBackend(args.campaign)
             print(backend.environment_action(p,args.action.split('-')[1]));return
+        if args.action=='freeze-transport':
+            if not args.transport_authorization or args.synthetic:
+                raise ValueError('explicit live transport authorization required')
+            from fresh_transport_release import freeze_transport
+            print(freeze_transport(args.profile,args.campaign,args.transport_authorization,scenario=args.scenario,stage=args.stage));return
         if args.action=='freeze':
             print(freeze(args.profile,args.campaign,args.stage,args.scenario,args.policy_manifest,args.synthetic,args.pilot_campaign,args.previous_campaign));return
         if args.action=='report':

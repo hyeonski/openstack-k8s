@@ -261,8 +261,16 @@ class TransportWatch:
         saved = Path(os.environ['STATE_DIR'])/'workload-api-iap-tunnel.log'
         if saved.exists():shutil.copyfile(saved,self.directory/f'transport-before-repair-{self.repairs}.log')
         try:
-            self.helper.call([ROOT/'scripts/gcp-workload-api-tunnel.sh','ensure'],
-                             'transport-reconnect.log',timeout=60)
+            from fresh_transport import transport_lock
+            deadline = time.monotonic() + 60
+            def remaining():
+                left = deadline - time.monotonic()
+                if left <= 0:raise TimeoutError('transport reconnect cumulative deadline')
+                return left
+            with transport_lock(os.environ['STATE_DIR'], remaining):
+                if not self.reachable():
+                    self.helper.call([ROOT/'scripts/gcp-workload-api-tunnel.sh','ensure'],
+                                     'transport-reconnect.log',timeout=remaining())
             append(self.directory/'transport-watch.jsonl',dict(utc=utc(),state='reconnect_completed',attempt=self.repairs,listener_reachable=self.reachable()))
         except BaseException as exc:
             self.error = type(exc).__name__+': '+str(exc)
