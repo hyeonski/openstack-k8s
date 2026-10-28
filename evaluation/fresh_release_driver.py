@@ -159,7 +159,7 @@ def remaining_budget(label):
   for c in manifest['cases']:
    if c['status']=='finished':completed.add(c['id'])
    start=next((epoch(r['utc']) for r in records if r['case_id']==c['id'] and r['attempt_id']=='attempt-01' and r['state']=='started'),None)
-   end=next((epoch(r['utc']) for r in records if r['case_id']==c['id'] and r['attempt_id']=='attempt-01' and r['state']=='finished'),None)
+   end=next((epoch(r['utc']) for r in records if r['case_id']==c['id'] and r['attempt_id']=='attempt-01' and r['state'] in ('finished','resumed_cleanup_only')),None)
    if start and end:observed[c['scenario']]=max(observed.get(c['scenario'],0),1.2*(end-start))
  nominal={'s1':44,'s2':37,'s3':32,'s4':37};pending=[c for c in P['cases'] if c['id'] not in completed]
  supplement_pending=[next(c for c in P['cases'] if c['id']==origin) for origin in supplemental_origins(TRANSITION) if origin+'-supplement01' not in completed] if TRANSITION else []
@@ -174,6 +174,8 @@ def remaining_budget(label):
  prep_seconds=sum(max(nominal[c['scenario']]*72,observed.get(c['scenario'],0)) for c in pending if c['purpose']!='main')
  budget['first_main_forecast_kst']=dt.datetime.fromtimestamp(now+prep_seconds+(lifecycle if completed==set() else 0),dt.timezone(dt.timedelta(hours=9))).isoformat() if prep_seconds else ('main in progress or admitted' if pending else None)
  atomic_json(BASE/('remaining-budget-'+str(time.time_ns())+'.json'),budget);save('remaining work budget checked',remaining_budget=budget,first_main_forecast=budget['first_main_forecast_kst'],completion_forecast=budget['planned_finish_kst'])
+ if projected>P['operations']['new_work_budget_krw']:
+  raise OperationalPause('remaining authorised scope planning shortfall KRW '+str(round(projected-P['operations']['new_work_budget_krw']))+'; retain all pending cases and request budget decision before admission')
  if usage['estimated_cost_krw']>=P['operations']['new_work_budget_krw']:
   raise RuntimeError('actual accumulated planning cost limit reached; preserve pending scope')
 
@@ -185,10 +187,11 @@ def verify_headroom(force=False):
  # Explicit targets-only approval: no elapsed-time gate and no forced rotation.
 
 
-def frozen(name,stage,scenario,pilot=None):
+def frozen(name,stage,scenario,pilot=None,origin=None):
  path=BED/name
  if not (path/'campaign.json').exists():
   args=['--profile',PROFILE,'--stage',stage,'--scenario',scenario]
+  if origin is not None:args+=['--supplemental-origin',origin]
   if TRANSITION:
    args+=['--transport-authorization',ACTIVE['authorization']]
    cli('freeze-transport',*args,campaign=path)
@@ -220,7 +223,9 @@ def run_one(path):
   action=operational_failure_action(row,cleanup_verified=row['cleanup'] is True,budget_available=BedLedger(P).usage()['estimated_cost_krw']<P['operations']['new_work_budget_krw'])
   atomic_json(BASE/'REPAIR-REQUIRED.json',dict(utc=utc(),action=action,case=pending['id'],result=row,no_fault_replay=True))
   DATA['failure_action']=action
-  if action=='safe_shutdown':
+  # A scientific safety=false with verified owned cleanup pauses for review;
+  # it does not end the newly authorised supplementary scope by itself.
+  if action=='safe_shutdown' and (row['cleanup'] is not True or BedLedger(P).usage()['estimated_cost_krw']>=P['operations']['new_work_budget_krw']):
    environment('down')
   raise OperationalPause(action+': '+pending['id'])
  DATA['events'].append({'utc':utc(),'case':pending['id'],'judgement':{k:row[k] for k in ('trial_valid','fault_realized','impact_realized','recovered','safety','cleanup','v1_outcome')}})
@@ -281,7 +286,9 @@ try:
   if TRANSITION:
    for origin in supplemental_origins(TRANSITION):
     original=next(c for c in P['cases'] if c['id']==origin);scenario=original['scenario']
-    supplement=frozen(scenario+'-supplement-transport-v2','supplemental',scenario,pilots[scenario])
+    same_scenario=[value for value in supplemental_origins(TRANSITION) if next(c for c in P['cases'] if c['id']==value)['scenario']==scenario]
+    supplement_name=(origin if len(same_scenario)>1 else scenario)+'-supplement-transport-v2'
+    supplement=frozen(supplement_name,'supplemental',scenario,pilots[scenario],origin=origin)
     if any(c['status']=='pending' for c in check_frozen(supplement)['cases']):run_one(supplement)
     measured(supplement)
     assert len(check_frozen(supplement)['cases'])==1 and sum(len(c.get('attempts',[])) for c in check_frozen(supplement)['cases'])==1,'exactly one authorised attempt per supplementary origin required'
@@ -289,7 +296,7 @@ try:
  environment('down')
  save('hosts down verified; release ready for final analysis')
 except OperationalPause as exc:
- save('paused for agent investigation; no new fault injection',error=str(exc),first_main_forecast=None)
+ save('paused for agent investigation; no new fault injection',error=str(exc),first_main_forecast=None,remaining_budget=None,completion_forecast=None)
  raise
 except BaseException as exc:
  DATA['error']=f'{type(exc).__name__}: {exc}';save('execution stopped for investigation',error=DATA['error'])

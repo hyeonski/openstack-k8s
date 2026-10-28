@@ -209,3 +209,73 @@ class WorkerControlTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class OwnedProbeReadTests(unittest.TestCase):
+    def setUp(self):
+        from test_resources import OwnedProbeReads,OWNER,RUN
+        from types import SimpleNamespace
+        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=Path(self.tmp.name);self.clock=SimpleNamespace(now=0.0);self.client=FakeClient(self.root);self.client.deadline=None;self.client.remaining=lambda limit:min(limit,self.client.deadline-self.clock.now) if self.client.deadline is not None else limit
+        self.client.md['spec']['replicas']=1;self.client.md['status'].update(replicas=1,readyReplicas=1,availableReplicas=1);self.client.ca['spec']['replicas']=0;self.client.ca['status']={'replicas':0,'availableReplicas':0}
+        self.fd=(self.root/'worker-operation.lock').open('a+');self.addCleanup(self.fd.close);(self.root/'kubeconfigs').mkdir();(self.root/'kubeconfigs/workload.yaml').write_text('same cluster TLS identity')
+        journal=dict(kind='manual',identity={'cluster_uid':'cluster-a','md_uid':'md-a','ca_uid':'ca-a'},mode='fixed',from_count=2,target=1,ca_before=0,started='original-operation');(self.root/'worker-operation.json').write_text(json.dumps(journal))
+        self.env=patch.dict(os.environ,{'WORKER_CONTROL_LOCK_FD':str(self.fd.fileno()),'CLUSTER_AUTOSCALER_NAMESPACE':'ca-system'});self.env.start();self.addCleanup(self.env.stop)
+        self.pod={'metadata':{'name':'probe','namespace':'default','uid':'pod-a','labels':{OWNER:'workload',RUN:'run-a'}},'spec':{'nodeName':'node-a'}};self.node={'metadata':{'name':'node-a','uid':'node-uid'}};self.calls=[];self.errors=[];self.response='ok';base_get=self.client.get
+        def get(plane,kind,*args):
+            if kind=='node':return copy.deepcopy(self.node)
+            return base_get(plane,kind,*args)
+        self.client.get=get
+        def k(plane,*args):
+            self.calls.append((plane,args))
+            if '--ignore-not-found' in args:return json.dumps(self.pod) if self.pod else ''
+            if self.errors:
+                item=self.errors.pop(0)
+                if isinstance(item,Exception):raise item
+            if args[:2]==('get','nodes'):return json.dumps({'items':[self.node]})
+            return self.response
+        self.client.k=k;self.guard=OwnedProbeReads(self.client,self.root/'proof',self.client.cluster_obj,clock=lambda:self.clock.now,sleep=lambda seconds:setattr(self.clock,'now',self.clock.now+seconds));self.guard._wait_transport=lambda remaining:remaining();self.guard.nodes={'node-a':'node-uid'}
+    def test_normal_value_and_original_deadline_are_unchanged(self):
+        self.assertEqual(self.guard.get('w','nodes')['items'],[self.node]);self.assertEqual(len(self.calls),1);self.assertIsNone(self.client.deadline)
+    def test_refused_nodes_read_reconnect_waits_then_same_scale_identity_and_no_scale_replay(self):
+        self.errors=[RuntimeError('connection refused')];self.assertEqual(self.guard.get('w','nodes')['items'],[self.node]);self.assertEqual(len(self.calls),2);self.assertFalse(any(a[0] in ('scale','create','delete','patch') for p,a in self.calls));self.assertIn('connection refused',(self.root/'proof/read-attempts.jsonl').read_text())
+    def test_repeated_failure_has_three_calls_and_timeout(self):
+        self.errors=[RuntimeError('connection reset')]*3
+        with self.assertRaises(TimeoutError):self.guard.get('w','nodes')
+        self.assertEqual(len(self.calls),3);self.assertIsNone(self.client.deadline)
+    def test_permission_failure_is_immediate(self):
+        self.errors=[RuntimeError('Forbidden')]
+        with self.assertRaises(RuntimeError):self.guard.get('w','nodes')
+        self.assertEqual(len(self.calls),1)
+    def test_changed_cluster_or_unconverged_scale_is_rejected_without_second_read(self):
+        for change in ('cluster','scale'):
+            with self.subTest(change=change):
+                self.calls.clear();self.errors=[RuntimeError('connection refused')];self.client.cluster_obj['metadata']['uid']='changed' if change=='cluster' else 'cluster-a';self.client.md['status']['readyReplicas']=0 if change=='scale' else 1
+                with self.assertRaises(RuntimeError):self.guard.get('w','nodes')
+                self.assertEqual(len(self.calls),1)
+    def test_pod_replacement_blocks_log_retry(self):
+        target=copy.deepcopy(self.pod);self.pod['metadata']['uid']='replacement';self.errors=[RuntimeError('unexpected EOF')]
+        with self.assertRaisesRegex(RuntimeError,'identity changed'):self.guard.k('w','logs','probe','-n','default',owned=target)
+        self.assertEqual(sum(a[0]=='logs' for p,a in self.calls),1)
+    def test_node_replacement_blocks_log_retry(self):
+        self.node['metadata']['uid']='replacement';self.errors=[RuntimeError('connection reset')]
+        with self.assertRaisesRegex(RuntimeError,'Node UID changed'):self.guard.k('w','logs','probe','-n','default',owned=self.pod)
+    def test_lost_delete_wait_checks_actual_absence_without_delete_or_wait_replay(self):
+        target=copy.deepcopy(self.pod);self.pod=None;self.errors=[RuntimeError('connection refused')]
+        self.assertEqual(self.guard.k('w','wait','--for=delete','pod/probe','-n','default','--timeout=20s',owned=target),'');self.assertEqual(sum(a[0]=='wait' for p,a in self.calls),1);self.assertFalse(any(a[0]=='delete' for p,a in self.calls))
+    def test_passive_reconnect_wait_consumes_original_deadline(self):
+        self.errors=[RuntimeError('connection refused')]
+        def wait(remaining):self.clock.now+=31;remaining()
+        self.guard._wait_transport=wait
+        with self.assertRaises(TimeoutError):self.guard.get('w','nodes')
+        self.assertEqual(len(self.calls),1);self.assertIsNone(self.client.deadline)
+    def test_mutation_is_never_sent_through_read_adapter(self):
+        for args in [('create','pod','x'),('delete','pod','x'),('patch','node','x'),('scale','deployment','x')]:
+            with self.assertRaises(ValueError):self.guard.k('w',*args)
+        self.assertEqual(self.calls,[])
+    def test_probe_ast_guard_rejects_probe_mutation_or_workload_change(self):
+        import ast
+        root=Path(__file__).resolve().parents[1];sys.path.insert(0,str(root/'evaluation'))
+        from fresh_transport_release import validate_probe_read_diff,PROBE_READ_EXPECTED
+        current=(root/'scripts/test_resources.py').read_text();tree=ast.parse(current);cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='OwnedProbeReads');lines=current.splitlines(True);del lines[cls.lineno-1:cls.end_lineno];original=''.join(lines).replace('    reads = OwnedProbeReads(client, path, cluster)\n','').replace('reads.get(','client.get(').replace('reads.k(','client.k(').replace(', owned=obj','')
+        validate_probe_read_diff(original,current)
+        with self.assertRaises(ValueError):validate_probe_read_diff(original,current.replace("'activeDeadlineSeconds': 240","'activeDeadlineSeconds': 300"))

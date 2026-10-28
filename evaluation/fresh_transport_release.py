@@ -22,7 +22,7 @@ from lib.state import atomic_json
 
 REVIEWED_FILES = frozenset({
     'evaluation/fresh_transport.py', 'evaluation/fresh_transport_release.py',
-    'evaluation/graduation_evaluation.py',
+    'evaluation/graduation_evaluation.py', 'scripts/test_resources.py', 'tests/test_worker_control.py',
     'evaluation/fresh_scenarios.py', 'evaluation/fresh_live.py',
     'evaluation/fresh_campaign.py', 'evaluation/fresh_release_driver.py',
     'tests/test_fresh_transport.py', 'tests/test_fresh_transport_release.py',
@@ -187,11 +187,37 @@ def validate_cleanup_helper_diff(previous, current):
     if ast.dump(old) != ast.dump(new):raise ValueError('cleanup helper changed outside pre-controller verification')
 
 
+PROBE_READ_EXPECTED = 'class OwnedProbeReads:\n    """Bound only post-scale workload probe reads; mutations delegate once."""\n    def __init__(self, client, path, cluster, *, clock=None, sleep=None):\n        import hashlib\n        self.client, self.path = client, path\n        self.clock, self.sleep = clock or time.monotonic, sleep or time.sleep\n        self.enabled = False\n        self.nodes = {}\n        descriptor = os.environ.get(\'WORKER_CONTROL_LOCK_FD\')\n        if descriptor is None:\n            return\n        journal = client.state / \'worker-operation.json\'\n        if not journal.exists():\n            return\n        self.journal = json.loads(journal.read_text())\n        if self.journal.get(\'kind\') != \'manual\':\n            return\n        actual = os.fstat(int(descriptor)); expected = os.stat(client.state / \'worker-operation.lock\')\n        if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):\n            raise RuntimeError(\'probe worker lock identity changed\')\n        if cluster[\'metadata\'][\'uid\'] != self.journal[\'identity\'][\'cluster_uid\']:\n            raise RuntimeError(\'probe cluster identity changed\')\n        self.kubeconfig = client.state / \'kubeconfigs\' / (client.cluster + \'.yaml\')\n        self.kubeconfig_sha = hashlib.sha256(self.kubeconfig.read_bytes()).hexdigest()\n        self.enabled = True\n        save(self.path / \'read-guard.json\', {\'enabled\': True, \'worker_target\': self.journal[\'target\'],\n             \'identity\': self.journal[\'identity\'], \'kubeconfig_sha256\': self.kubeconfig_sha,\n             \'worker_lock_inherited\': True, \'mutation_repeated\': False, \'ensure_called\': False})\n\n    def _log(self, **values):\n        from workload_state import now\n        self.path.mkdir(parents=True, exist_ok=True)\n        with (self.path / \'read-attempts.jsonl\').open(\'a\') as stream:\n            stream.write(json.dumps(dict(utc=now(), observation_filled=False, **values)) + \'\\n\')\n\n    def _wait_transport(self, remaining):\n        import fcntl, socket\n        port = os.environ.get(\'WORKLOAD_LOCAL_API_PORT\')\n        if not port:\n            return\n        # Wait for the existing reconnect owner; never run ensure here.\n        with (self.client.state / \'workload-api-reconnect.lock\').open(\'a+\') as lock:\n            while True:\n                remaining()\n                try:\n                    fcntl.flock(lock, fcntl.LOCK_SH | fcntl.LOCK_NB)\n                except BlockingIOError:\n                    self.sleep(min(.1, remaining())); continue\n                try:\n                    with socket.create_connection((\'127.0.0.1\', int(port)), timeout=min(1, remaining())):\n                        return\n                except OSError:\n                    self.sleep(min(.2, remaining()))\n                finally:\n                    fcntl.flock(lock, fcntl.LOCK_UN)\n\n    def _identity(self, remaining, owned, deleting):\n        import hashlib\n        from worker_control import WorkerControl\n        remaining()\n        journal = json.loads((self.client.state / \'worker-operation.json\').read_text())\n        if journal != self.journal or hashlib.sha256(self.kubeconfig.read_bytes()).hexdigest() != self.kubeconfig_sha:\n            raise RuntimeError(\'probe worker journal/kubeconfig changed\')\n        control = WorkerControl(self.client)\n        observed = control.observe(); control.require_identity(journal, observed)\n        if not control.stable_workers(observed) or observed[\'workers\'] != journal[\'target\'] or observed[\'ca_replicas\'] != 0:\n            raise RuntimeError(\'probe scale target has not actually converged\')\n        remaining()\n        if owned is not None:\n            meta = owned[\'metadata\']\n            raw = self.client.k(\'w\', \'get\', \'pod\', meta[\'name\'], \'-n\', meta[\'namespace\'], \'--ignore-not-found\', \'-o\', \'json\')\n            remaining()\n            if not raw.strip():\n                if deleting:return True\n                raise RuntimeError(\'probe Pod disappeared during read\')\n            current = json.loads(raw)\n            if (current[\'metadata\'][\'uid\'] != meta[\'uid\']\n                    or current[\'metadata\'].get(\'labels\', {}).get(OWNER) != meta.get(\'labels\', {}).get(OWNER)\n                    or current[\'metadata\'].get(\'labels\', {}).get(RUN) != meta.get(\'labels\', {}).get(RUN)\n                    or current[\'spec\'].get(\'nodeName\') != owned[\'spec\'].get(\'nodeName\')):\n                raise RuntimeError(\'probe Pod/run/Node identity changed\')\n            node_name = current[\'spec\'].get(\'nodeName\')\n            if node_name:\n                current_node = self.client.get(\'w\', \'node\', node_name)\n                if self.nodes.get(node_name) != current_node[\'metadata\'][\'uid\']:\n                    raise RuntimeError(\'probe Node UID changed\')\n                remaining()\n        return False\n\n    def get(self, plane, resource, *args, owned=None):\n        result = json.loads(self.k(plane, \'get\', resource, *args, \'-o\', \'json\', owned=owned))\n        if self.enabled and plane == \'w\' and resource == \'nodes\':\n            self.nodes = {n[\'metadata\'][\'name\']: n[\'metadata\'][\'uid\'] for n in result[\'items\']}\n        return result\n\n    def k(self, plane, *args, owned=None):\n        args = tuple(args)\n        if not self.enabled or plane != \'w\':\n            return self.client.k(plane, *args)\n        deleting = False\n        allowed = args in ((\'get\', \'nodes\', \'-o\', \'json\'), (\'get\', \'--raw=/readyz\'))\n        if owned is not None:\n            m = owned[\'metadata\']; name, ns, uid = m[\'name\'], m[\'namespace\'], m[\'uid\']\n            if m.get(\'labels\', {}).get(OWNER) != self.client.cluster or not m.get(\'labels\', {}).get(RUN):\n                raise ValueError(\'probe read target has no owned run label\')\n            deleting = args == (\'wait\', \'--for=delete\', \'pod/\' + name, \'-n\', ns, \'--timeout=20s\')\n            allowed = allowed or deleting or args in (\n                (\'get\', \'pod\', name, \'-n\', ns, \'-o\', \'json\'),\n                (\'get\', \'events\', \'-n\', ns, \'--field-selector\', \'involvedObject.uid=\' + uid, \'-o\', \'json\'),\n                (\'logs\', name, \'-n\', ns))\n        if not allowed:\n            raise ValueError(\'not a named owned workload probe read\')\n        end = self.clock() + self.client.remaining(30)\n        previous = self.client.deadline\n        self.client.deadline = end if previous is None else min(previous, end)\n        def remaining():\n            left = end - self.clock()\n            if left <= 0:raise TimeoutError(\'owned probe read cumulative deadline exhausted\')\n            return left\n        try:\n            for attempt in range(1, 4):\n                remaining()\n                try:\n                    answer = self.client.k(plane, *args)\n                    remaining()\n                except Exception as error:\n                    self._log(args=args, attempt=attempt, error=type(error).__name__ + \': \' + str(error))\n                    text = str(error).lower()\n                    permanent = any(w in text for w in (\'forbidden\', \'unauthorized\', \'permission denied\', \'notfound\', \'not found\', \'certificate\'))\n                    transient = any(w in text for w in (\'connection refused\', \'connection reset\', \'unexpected eof\', \'i/o timeout\', \'tls handshake timeout\', \'context deadline exceeded\'))\n                    if permanent or not transient:raise\n                    if attempt == 3:raise TimeoutError(\'owned probe read attempt limit exhausted\') from error\n                    self._wait_transport(remaining)\n                    if self._identity(remaining, owned, deleting):\n                        self._log(args=args, attempt=attempt, captured=True, actual_deleted_pod_absence=True)\n                        return \'\'\n                    self.sleep(min(attempt, remaining())); remaining()\n                else:\n                    if attempt > 1:\n                        self._identity(remaining, owned, deleting); remaining()\n                        self._log(args=args, attempt=attempt, captured=True)\n                    return answer\n        finally:\n            self.client.deadline = previous\n\n'
+
+def validate_probe_read_diff(previous, current):
+    old, new = ast.parse(previous), ast.parse(current)
+    expected=ast.parse(PROBE_READ_EXPECTED).body[0]
+    found=next((n for n in new.body if isinstance(n,ast.ClassDef) and n.name=='OwnedProbeReads'),None)
+    if found is not None:
+        if ast.dump(found)!=ast.dump(expected):raise ValueError('owned probe read helper differs')
+        new.body.remove(found)
+    setup=ast.parse('reads = OwnedProbeReads(client, path, cluster)').body[0]
+    class Restore(ast.NodeTransformer):
+        def visit_FunctionDef(self,node):
+            if node.name=='probe':node.body=[x for x in node.body if ast.dump(x)!=ast.dump(setup)]
+            return self.generic_visit(node)
+        def visit_Call(self,node):
+            if isinstance(node.func,ast.Attribute) and isinstance(node.func.value,ast.Name) and node.func.value.id=='reads':
+                if node.func.attr not in ('get','k'):raise ValueError('unknown probe read adapter')
+                node.func.value.id='client'
+                if node.keywords:
+                    if len(node.keywords)!=1 or node.keywords[0].arg!='owned' or not isinstance(node.keywords[0].value,ast.Name) or node.keywords[0].value.id!='obj':raise ValueError('probe read target changed')
+                    node.keywords=[]
+            return self.generic_visit(node)
+    new=Restore().visit(new)
+    if ast.dump(old)!=ast.dump(new):raise ValueError('probe operations changed outside owned reads')
+
+
 def audit_transition(profile, authorization, root):
     from fresh_campaign import source_hashes, pilot_contract
     root = Path(root)
-    if not (authorization.get('kind') == 'user-authorized-transport-continuation-v1' and authorization.get('supplemental_limit') == 1 or authorization.get('kind') == 'user-authorized-ssh-read-two-supplement-continuation-v2' and authorization.get('supplemental_limit') == 2 and authorization.get('supplemental_origins') == ['s1-b02-a','s2-b03-p']):
-        raise ValueError('explicit transport continuation and exactly one supplement required')
+    if not (authorization.get('kind') == 'user-authorized-transport-continuation-v1' and authorization.get('supplemental_limit') == 1 or authorization.get('kind') == 'user-authorized-ssh-read-two-supplement-continuation-v2' and authorization.get('supplemental_limit') == 2 and authorization.get('supplemental_origins') == ['s1-b02-a','s2-b03-p'] or authorization.get('kind') == 'user-authorized-four-supplement-cleanup-read-continuation-v3' and authorization.get('supplemental_limit') == 4 and authorization.get('supplemental_origins') == ['s1-b02-a','s2-b03-p','s3-b02-m3600','s3-b03-m3600']):
+        raise ValueError('explicit continuation with exact authorised supplementary origins required')
     if authorization.get('kind')=='user-authorized-transport-continuation-v1' and authorization.get('supplemental_origins', [authorization.get('supplemental_origin')]) != [authorization.get('supplemental_origin')]:
         raise ValueError('one-supplement authorisation cannot add another origin')
     if not authorization.get('human_instruction') or not authorization.get('boundary_case'):
@@ -219,12 +245,15 @@ def audit_transition(profile, authorization, root):
         raise ValueError('reviewed diff changed')
     validate_scenario_transport_diff((anchor_path/'source/evaluation/fresh_scenarios.py').read_text(),
                                     (root/'evaluation/fresh_scenarios.py').read_text())
-    if authorization.get('kind') == 'user-authorized-ssh-read-two-supplement-continuation-v2':
+    if authorization.get('kind') in ('user-authorized-ssh-read-two-supplement-continuation-v2','user-authorized-four-supplement-cleanup-read-continuation-v3'):
         validate_collection_read_diff((anchor_path/'source/evaluation/fresh_collection.py').read_text(),
                                       (root/'evaluation/fresh_collection.py').read_text())
     if 'evaluation/graduation_evaluation.py' in changed:
         validate_cleanup_helper_diff((anchor_path/'source/evaluation/graduation_evaluation.py').read_text(),
                                      (root/'evaluation/graduation_evaluation.py').read_text())
+    if 'scripts/test_resources.py' in changed:
+        validate_probe_read_diff((anchor_path/'source/scripts/test_resources.py').read_text(),
+                                  (root/'scripts/test_resources.py').read_text())
     validate_live_transport_diff((anchor_path/'source/evaluation/fresh_live.py').read_text(),
                                 (root/'evaluation/fresh_live.py').read_text())
     before, after = copy.deepcopy(anchor['profile']), copy.deepcopy(profile)
@@ -288,22 +317,24 @@ def supplemental_origins(authorization):
     return [authorization['supplemental_origin']]
 
 
-def select_cases(profile, authorization, scenario, stage):
+def select_cases(profile, authorization, scenario, stage, origin=None):
     if stage == 'main':
         return [dict(case, status='pending', negative=False) for case in profile['cases']
                 if case['id'] in authorization['remaining_main_ids'] and case['scenario'] == scenario]
     if stage == 'supplemental':
         origins=supplemental_origins(authorization)
-        for index,origin in enumerate(origins):
-            original=next(case for case in profile['cases'] if case['id']==origin)
-            if original['scenario']==scenario:
-                return [dict(original,id=origin+'-supplement01',purpose='supplemental',
+        matches=[value for value in origins if next(c for c in profile['cases'] if c['id']==value)['scenario']==scenario and (origin is None or origin==value)]
+        if len(matches)!=1:raise ValueError('one explicit supplementary origin required for scenario')
+        for index,value in enumerate(origins):
+            original=next(case for case in profile['cases'] if case['id']==value)
+            if value==matches[0]:
+                return [dict(original,id=value+'-supplement01',purpose='supplemental',
                     block='supplement-'+original['block']+'-'+original['mode'].lower(),
                     order=38+index,status='pending',negative=False,depends_on=[])]
     raise ValueError('unsupported transport continuation stage')
 
 
-def freeze_transport(profile_path, destination, authorization_path, *, scenario, stage='main', root=None):
+def freeze_transport(profile_path, destination, authorization_path, *, scenario, stage='main', root=None, origin=None):
     from fresh_campaign import ROOT, source_hashes, policy_manifest
     root = Path(root or ROOT).resolve()
     profile_path = Path(profile_path).resolve();destination = Path(destination).resolve()
@@ -324,7 +355,7 @@ def freeze_transport(profile_path, destination, authorization_path, *, scenario,
         raise ValueError('explicit environment override mismatch')
     for key, field in [('ENVIRONMENT_NAME', 'environment'), ('GCP_PROJECT_ID', 'project'), ('GCP_ZONE', 'zone')]:
         if os.environ.get(key) != profile[field]: raise ValueError('explicit environment identity mismatch')
-    selected = select_cases(profile, authorization, scenario, stage)
+    selected = select_cases(profile, authorization, scenario, stage, origin=origin)
     if stage == 'supplemental':
         # Admission is after all original main IDs have one sealed first attempt.
         actual = set(audit['predecessor_observed_main'])

@@ -82,7 +82,7 @@ class TransportReleaseTests(unittest.TestCase):
         tree=ast.Module(body=[loop,ast.parse("environment('down')").body[0]],type_ignores=[])
         events=[];campaigns={}
         profile={'cases':[{'id':'s1-b02-a','scenario':'s1'},{'id':'s2-b03-p','scenario':'s2'}]}
-        def frozen(name,*args):
+        def frozen(name,*args,**kwargs):
             campaigns[name]={'cases':[{'status':'pending'}]};return name
         def run_one(name):
             events.append(('run',name))
@@ -220,3 +220,51 @@ class TransportReleaseTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class FourSupplementTests(unittest.TestCase):
+    origins=['s1-b02-a','s2-b03-p','s3-b02-m3600','s3-b03-m3600']
+    def profile(self):
+        return {'cases':[dict(id=o,scenario=o[:2],mode='M3600' if o.startswith('s3') else ('A' if o.startswith('s1') else 'P'),block='b02' if 'b02' in o else 'b03',purpose='main',order=i) for i,o in enumerate(self.origins)]}
+    def test_each_s3_origin_is_explicit_unique_and_never_a_main_replacement(self):
+        p=self.profile();before=json.dumps(p,sort_keys=True);a={'supplemental_origins':self.origins}
+        with self.assertRaisesRegex(ValueError,'explicit'):select_cases(p,a,'s3','supplemental')
+        for i,o in enumerate(self.origins):
+            c=select_cases(p,a,o[:2],'supplemental',origin=o)[0]
+            self.assertEqual(c['id'],o+'-supplement01');self.assertEqual(c['purpose'],'supplemental');self.assertEqual(c['order'],38+i);self.assertTrue(c['block'].startswith('supplement-'))
+        self.assertEqual(json.dumps(p,sort_keys=True),before)
+    def flow(self, fail=None):
+        script=ast.parse((ROOT/'evaluation/fresh_release_driver.py').read_text());loop=next(n for n in ast.walk(script) if isinstance(n,ast.For) and isinstance(n.target,ast.Name) and n.target.id=='origin');events=[];manifests={}
+        def frozen(name,*args,**kwargs):
+            events.append(('freeze',kwargs['origin']));manifests[name]={'cases':[{'status':'pending'}]};return name
+        def run(name):
+            events.append(('run',name))
+            if fail and fail in name:raise RuntimeError('single attempt failed')
+            manifests[name]['cases'][0].update(status='finished',attempts=[{'state':'VERIFIED'}])
+        values=dict(P=self.profile(),TRANSITION={'supplemental_origins':self.origins},supplemental_origins=lambda a:a['supplemental_origins'],pilots={'s1':'p1','s2':'p2','s3':'p3'},frozen=frozen,check_frozen=lambda name:manifests[name],run_one=run,measured=lambda name:None,save=lambda *a:None,environment=lambda action:events.append(('environment',action)))
+        try:exec(compile(ast.Module(body=[loop,ast.parse("environment('down')").body[0]],type_ignores=[]),'four-supp-flow','exec'),values)
+        except RuntimeError:
+            if not fail:raise
+        return events
+    def test_down_follows_four_actual_distinct_attempts_in_order(self):
+        events=self.flow();self.assertEqual([v for k,v in events if k=='freeze'],self.origins);self.assertEqual(len(set(v for k,v in events if k=='run')),4);self.assertEqual(events[-1],('environment','down'))
+    def test_missing_fourth_attempt_blocks_down(self):
+        events=self.flow(fail='s3-b03-m3600');self.assertFalse(any(k=='environment' for k,v in events))
+    def test_two_supplement_authorization_cannot_admit_four(self):
+        a=dict(kind='user-authorized-ssh-read-two-supplement-continuation-v2',supplemental_limit=4,supplemental_origins=self.origins,human_instruction='yes',boundary_case='closed')
+        with self.assertRaises(ValueError):audit_transition({},a,ROOT)
+        a.update(kind='user-authorized-four-supplement-cleanup-read-continuation-v3',human_instruction='')
+        with self.assertRaisesRegex(ValueError,'human instruction'):audit_transition({},a,ROOT)
+
+
+class SupplementScopeSafetyTests(unittest.TestCase):
+    def test_scientific_unknown_or_false_with_actual_cleanup_pauses_before_down(self):
+        tree=ast.parse((ROOT/'evaluation/fresh_release_driver.py').read_text());fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='run_one')
+        for budget in (True,False):
+            with self.subTest(budget=budget),tempfile.TemporaryDirectory() as folder:
+                events=[];case={'id':'supplement','status':'pending'};row=dict(case_id='supplement',attempt='attempt-01',cleanup=True,safety=False,trial_valid=False)
+                class Pause(RuntimeError):pass
+                values=dict(check_frozen=lambda *a,**k:{'cases':[case]},operational_gate=lambda *a:None,remaining_budget=lambda *a:None,verify_headroom=lambda *a:None,save=lambda *a,**k:None,cli=lambda *a,**k:None,measured=lambda *a:{'run_results':[row]},operational_failure_action=lambda *a,**k:'safe_shutdown',BedLedger=lambda p:type('Ledger',(),{'usage':lambda self:{'estimated_cost_krw':10 if budget else 101}})(),P={'operations':{'new_work_budget_krw':100}},BASE=Path(folder),atomic_json=lambda *a:None,utc=lambda:'now',DATA={},environment=lambda action:events.append(action),OperationalPause=Pause)
+                exec(compile(ast.Module(body=[fn],type_ignores=[]),'run-one-scope','exec'),values)
+                with self.assertRaises(Pause):values['run_one']('campaign')
+                self.assertEqual(events,[] if budget else ['down'])

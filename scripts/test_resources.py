@@ -100,12 +100,159 @@ def cleanup(client, path, run_id=None):
     raise TimeoutError('test resource cleanup timeout; evidence preserved')
 
 
+class OwnedProbeReads:
+    """Bound only post-scale workload probe reads; mutations delegate once."""
+    def __init__(self, client, path, cluster, *, clock=None, sleep=None):
+        import hashlib
+        self.client, self.path = client, path
+        self.clock, self.sleep = clock or time.monotonic, sleep or time.sleep
+        self.enabled = False
+        self.nodes = {}
+        descriptor = os.environ.get('WORKER_CONTROL_LOCK_FD')
+        if descriptor is None:
+            return
+        journal = client.state / 'worker-operation.json'
+        if not journal.exists():
+            return
+        self.journal = json.loads(journal.read_text())
+        if self.journal.get('kind') != 'manual':
+            return
+        actual = os.fstat(int(descriptor)); expected = os.stat(client.state / 'worker-operation.lock')
+        if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
+            raise RuntimeError('probe worker lock identity changed')
+        if cluster['metadata']['uid'] != self.journal['identity']['cluster_uid']:
+            raise RuntimeError('probe cluster identity changed')
+        self.kubeconfig = client.state / 'kubeconfigs' / (client.cluster + '.yaml')
+        self.kubeconfig_sha = hashlib.sha256(self.kubeconfig.read_bytes()).hexdigest()
+        self.enabled = True
+        save(self.path / 'read-guard.json', {'enabled': True, 'worker_target': self.journal['target'],
+             'identity': self.journal['identity'], 'kubeconfig_sha256': self.kubeconfig_sha,
+             'worker_lock_inherited': True, 'mutation_repeated': False, 'ensure_called': False})
+
+    def _log(self, **values):
+        from workload_state import now
+        self.path.mkdir(parents=True, exist_ok=True)
+        with (self.path / 'read-attempts.jsonl').open('a') as stream:
+            stream.write(json.dumps(dict(utc=now(), observation_filled=False, **values)) + '\n')
+
+    def _wait_transport(self, remaining):
+        import fcntl, socket
+        port = os.environ.get('WORKLOAD_LOCAL_API_PORT')
+        if not port:
+            return
+        # Wait for the existing reconnect owner; never run ensure here.
+        with (self.client.state / 'workload-api-reconnect.lock').open('a+') as lock:
+            while True:
+                remaining()
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    self.sleep(min(.1, remaining())); continue
+                try:
+                    with socket.create_connection(('127.0.0.1', int(port)), timeout=min(1, remaining())):
+                        return
+                except OSError:
+                    self.sleep(min(.2, remaining()))
+                finally:
+                    fcntl.flock(lock, fcntl.LOCK_UN)
+
+    def _identity(self, remaining, owned, deleting):
+        import hashlib
+        from worker_control import WorkerControl
+        remaining()
+        journal = json.loads((self.client.state / 'worker-operation.json').read_text())
+        if journal != self.journal or hashlib.sha256(self.kubeconfig.read_bytes()).hexdigest() != self.kubeconfig_sha:
+            raise RuntimeError('probe worker journal/kubeconfig changed')
+        control = WorkerControl(self.client)
+        observed = control.observe(); control.require_identity(journal, observed)
+        if not control.stable_workers(observed) or observed['workers'] != journal['target'] or observed['ca_replicas'] != 0:
+            raise RuntimeError('probe scale target has not actually converged')
+        remaining()
+        if owned is not None:
+            meta = owned['metadata']
+            raw = self.client.k('w', 'get', 'pod', meta['name'], '-n', meta['namespace'], '--ignore-not-found', '-o', 'json')
+            remaining()
+            if not raw.strip():
+                if deleting:return True
+                raise RuntimeError('probe Pod disappeared during read')
+            current = json.loads(raw)
+            if (current['metadata']['uid'] != meta['uid']
+                    or current['metadata'].get('labels', {}).get(OWNER) != meta.get('labels', {}).get(OWNER)
+                    or current['metadata'].get('labels', {}).get(RUN) != meta.get('labels', {}).get(RUN)
+                    or current['spec'].get('nodeName') != owned['spec'].get('nodeName')):
+                raise RuntimeError('probe Pod/run/Node identity changed')
+            node_name = current['spec'].get('nodeName')
+            if node_name:
+                current_node = self.client.get('w', 'node', node_name)
+                if self.nodes.get(node_name) != current_node['metadata']['uid']:
+                    raise RuntimeError('probe Node UID changed')
+                remaining()
+        return False
+
+    def get(self, plane, resource, *args, owned=None):
+        result = json.loads(self.k(plane, 'get', resource, *args, '-o', 'json', owned=owned))
+        if self.enabled and plane == 'w' and resource == 'nodes':
+            self.nodes = {n['metadata']['name']: n['metadata']['uid'] for n in result['items']}
+        return result
+
+    def k(self, plane, *args, owned=None):
+        args = tuple(args)
+        if not self.enabled or plane != 'w':
+            return self.client.k(plane, *args)
+        deleting = False
+        allowed = args in (('get', 'nodes', '-o', 'json'), ('get', '--raw=/readyz'))
+        if owned is not None:
+            m = owned['metadata']; name, ns, uid = m['name'], m['namespace'], m['uid']
+            if m.get('labels', {}).get(OWNER) != self.client.cluster or not m.get('labels', {}).get(RUN):
+                raise ValueError('probe read target has no owned run label')
+            deleting = args == ('wait', '--for=delete', 'pod/' + name, '-n', ns, '--timeout=20s')
+            allowed = allowed or deleting or args in (
+                ('get', 'pod', name, '-n', ns, '-o', 'json'),
+                ('get', 'events', '-n', ns, '--field-selector', 'involvedObject.uid=' + uid, '-o', 'json'),
+                ('logs', name, '-n', ns))
+        if not allowed:
+            raise ValueError('not a named owned workload probe read')
+        end = self.clock() + self.client.remaining(30)
+        previous = self.client.deadline
+        self.client.deadline = end if previous is None else min(previous, end)
+        def remaining():
+            left = end - self.clock()
+            if left <= 0:raise TimeoutError('owned probe read cumulative deadline exhausted')
+            return left
+        try:
+            for attempt in range(1, 4):
+                remaining()
+                try:
+                    answer = self.client.k(plane, *args)
+                    remaining()
+                except Exception as error:
+                    self._log(args=args, attempt=attempt, error=type(error).__name__ + ': ' + str(error))
+                    text = str(error).lower()
+                    permanent = any(w in text for w in ('forbidden', 'unauthorized', 'permission denied', 'notfound', 'not found', 'certificate'))
+                    transient = any(w in text for w in ('connection refused', 'connection reset', 'unexpected eof', 'i/o timeout', 'tls handshake timeout', 'context deadline exceeded'))
+                    if permanent or not transient:raise
+                    if attempt == 3:raise TimeoutError('owned probe read attempt limit exhausted') from error
+                    self._wait_transport(remaining)
+                    if self._identity(remaining, owned, deleting):
+                        self._log(args=args, attempt=attempt, captured=True, actual_deleted_pod_absence=True)
+                        return ''
+                    self.sleep(min(attempt, remaining())); remaining()
+                else:
+                    if attempt > 1:
+                        self._identity(remaining, owned, deleting); remaining()
+                        self._log(args=args, attempt=attempt, captured=True)
+                    return answer
+        finally:
+            self.client.deadline = previous
+
+
 def probe(client, path, run_id, owner_id=None):
     labels = {OWNER: client.cluster, RUN: owner_id or run_id}
     cluster = client.get('m', 'cluster', client.cluster, '-n', client.ns)
     endpoint = cluster['spec']['controlPlaneEndpoint']
+    reads = OwnedProbeReads(client, path, cluster)
     tests = [('m', client.ns, 'api', None, ['nc', '-z', '-w', '15', endpoint['host'], str(endpoint['port'])])]
-    nodes = client.get('w', 'nodes')['items']
+    nodes = reads.get('w', 'nodes')['items']
     for i, node in enumerate(nodes):
         tests.append(('w', 'default', 'dns-' + str(i), node['metadata']['name'],
                       ['sh', '-ceu', 'nslookup kubernetes.default.svc.cluster.local >/dev/null']))
@@ -121,21 +268,21 @@ def probe(client, path, run_id, owner_id=None):
         save(path / (suffix + '-created.json'), obj)
         deadline = time.monotonic() + 300
         while True:
-            observed = client.get(plane, 'pod', name, '-n', namespace)
+            observed = reads.get(plane, 'pod', name, '-n', namespace, owned=obj)
             save(path / (suffix + '.json'), observed)
             phase = observed.get('status', {}).get('phase')
             if phase in ('Succeeded', 'Failed') or time.monotonic() >= deadline:
-                save(path / (suffix + '-events.json'), client.get(plane, 'events', '-n', namespace, '--field-selector', 'involvedObject.uid=' + obj['metadata']['uid']))
-                save(path / (suffix + '.log'), client.k(plane, 'logs', name, '-n', namespace))
+                save(path / (suffix + '-events.json'), reads.get(plane, 'events', '-n', namespace, '--field-selector', 'involvedObject.uid=' + obj['metadata']['uid'], owned=obj))
+                save(path / (suffix + '.log'), reads.k(plane, 'logs', name, '-n', namespace, owned=obj))
                 if phase != 'Succeeded':
                     raise RuntimeError('active probe failed/timed out; Pod preserved: ' + name)
                 delete_owned(client, plane, obj)
                 # Deletion must complete before a subsequent scale-in stage.
-                client.k(plane, 'wait', '--for=delete', 'pod/' + name, '-n', namespace, '--timeout=20s')
+                reads.k(plane, 'wait', '--for=delete', 'pod/' + name, '-n', namespace, '--timeout=20s', owned=obj)
                 break
             time.sleep(3)
     client.deadline = None
-    save(path / 'api-readyz.txt', client.k('w', 'get', '--raw=/readyz'))
+    save(path / 'api-readyz.txt', reads.k('w', 'get', '--raw=/readyz'))
 
 
 def main():

@@ -566,6 +566,7 @@ def main():
     parser.add_argument('--pilot-campaign',type=Path)
     parser.add_argument('--previous-campaign',type=Path)
     parser.add_argument('--transport-authorization',type=Path)
+    parser.add_argument('--supplemental-origin')
     parser.add_argument('--synthetic',action='store_true',help='offline fake backend; never primary evidence')
     parser.add_argument('--synthetic-report',action='store_true')
     parser.add_argument('--limit',type=int)
@@ -596,7 +597,7 @@ def main():
             if not args.transport_authorization or args.synthetic:
                 raise ValueError('explicit live transport authorization required')
             from fresh_transport_release import freeze_transport
-            print(freeze_transport(args.profile,args.campaign,args.transport_authorization,scenario=args.scenario,stage=args.stage));return
+            print(freeze_transport(args.profile,args.campaign,args.transport_authorization,scenario=args.scenario,stage=args.stage,origin=args.supplemental_origin));return
         if args.action=='freeze':
             print(freeze(args.profile,args.campaign,args.stage,args.scenario,args.policy_manifest,args.synthetic,args.pilot_campaign,args.previous_campaign));return
         if args.action=='report':
