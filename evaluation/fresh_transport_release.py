@@ -25,16 +25,92 @@ REVIEWED_FILES = frozenset({
     'evaluation/fresh_scenarios.py', 'evaluation/fresh_live.py',
     'evaluation/fresh_campaign.py', 'evaluation/fresh_release_driver.py',
     'tests/test_fresh_transport.py', 'tests/test_fresh_transport_release.py',
-    'tests/test_fresh_collection.py',
+    'tests/test_fresh_collection.py', 'evaluation/fresh_collection.py', 'tests/test_fresh_evaluation_review.py',
 })
 
 
 def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def normalize_ssh_read_boundaries(tree):
+    """Erase only the reviewed explicit read adapters for an AST comparison."""
+    expected_helpers = ast.parse("""class FreshOwnedLab:
+ def stop_probe(self, stop_path):
+  from fresh_transport import stop_probe_once
+  return stop_probe_once(self, stop_path)
+ def read_remote(self, script, *, timeout=120, host=None):
+  from fresh_transport import SSHReadBoundary
+  return SSHReadBoundary(self).remote(script, timeout=timeout, host=host)
+ def read_admin_json(self, *args, timeout=60):
+  from fresh_transport import SSHReadBoundary
+  return SSHReadBoundary(self).admin_json(args, timeout=timeout)
+ def read_host_stat(self, host):
+  from fresh_transport import SSHReadBoundary
+  return SSHReadBoundary(self).host_stat(host)
+""").body[0].body
+    for cls in tree.body:
+        if isinstance(cls, ast.ClassDef) and cls.name == 'FreshOwnedLab':
+            for expected in expected_helpers:
+                found = next((n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name==expected.name), None)
+                if found is not None:
+                    if ast.dump(found)!=ast.dump(expected):raise ValueError('SSH helper changes more than explicit reads')
+                    cls.body.remove(found)
+    expressions = ["'curl -fsS http://198.18.0.2:8090/progress'",
+                   "'sudo tc -s -j qdisc show dev s2-egress'",
+                   repr("python3 -c 'import time; print(time.time())'"),
+                   "'sudo cat '+shlex.quote(raw_path)",
+                   "'sudo docker exec nova_libvirt virsh domstate '+shlex.quote(source['instance_name'])",
+                   "'if sudo test -s '+shlex.quote(self.raw_path)+'; then echo ready; fi'"]
+    allowed = {ast.dump(ast.parse(x,mode='eval').body) for x in expressions}
+    ready_assignment=ast.parse('ready_deadline=time.monotonic()+60').body[0]
+    timeout_expression=ast.parse('max(.001,ready_deadline-time.monotonic())',mode='eval').body
+    class Reads(ast.NodeTransformer):
+        def visit_FunctionDef(self,node):
+            if node.name=='__enter__':
+                node.body=[n for n in node.body if ast.dump(n)!=ast.dump(ready_assignment)]
+            return self.generic_visit(node)
+        def visit_Call(self,node):
+            if isinstance(node.func,ast.Attribute) and node.func.attr=='stop_probe':
+                if ast.dump(node)!=ast.dump(ast.parse('self.runner.stop_probe(self.stop_path)',mode='eval').body):raise ValueError('probe stop boundary changed')
+                return ast.parse("self.runner.remote('sudo touch '+shlex.quote(self.stop_path))",mode='eval').body
+            if isinstance(node.func,ast.Attribute) and node.func.attr=='read_remote':
+                if len(node.args)!=1 or ast.dump(node.args[0]) not in allowed:
+                    raise ValueError('SSH retry crossed an explicit read boundary')
+                if node.keywords:
+                    if len(node.keywords)==1 and node.keywords[0].arg=='host' and ast.dump(node.keywords[0].value)==ast.dump(ast.parse("source['host']",mode='eval').body):pass
+                    elif len(node.keywords)==1 and node.keywords[0].arg=='timeout' and ast.dump(node.keywords[0].value)==ast.dump(timeout_expression):node.keywords=[]
+                    else:raise ValueError('SSH readiness deadline/target changed')
+                node.func.attr='remote'
+            if isinstance(node.func,ast.Attribute) and node.func.attr=='read_admin_json':
+                node.func.attr='admin_json'
+            if isinstance(node.func,ast.Attribute) and node.func.attr=='read_host_stat':
+                node.func=ast.parse('self.runtime.host_stat',mode='eval').body
+            if isinstance(node.func,ast.Name) and node.func.id=='remote_file' and len(node.args)>1:
+                fn=node.args[1]
+                if isinstance(fn,ast.Attribute) and fn.attr=='read_remote':
+                    if len(node.keywords)!=1 or node.keywords[0].arg!='bounded' or not isinstance(node.keywords[0].value,ast.Constant) or node.keywords[0].value.value is not True:
+                        raise ValueError('remote evidence must have one shared bounded budget')
+                    fn.attr='remote';node.keywords=[]
+            return self.generic_visit(node)
+    return Reads().visit(tree)
+
+
+def validate_collection_read_diff(previous,current):
+    old,new=ast.parse(previous),ast.parse(current)
+    method=next(n for n in new.body if isinstance(n,ast.FunctionDef) and n.name=='remote_file')
+    if method.args.kwonlyargs[-1].arg!='bounded' or ast.dump(method.args.kw_defaults[-1])!=ast.dump(ast.Constant(False)):
+        raise ValueError('bounded file collection must remain opt-in')
+    method.args.kwonlyargs.pop();method.args.kw_defaults.pop()
+    call=next(n.value for n in method.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='result' for t in n.targets))
+    expected=ast.parse("read_evidence(ev,source,lambda timeout:remote('sudo cat '+shlex.quote(source),timeout=timeout),attempts=1 if bounded else 3,per_attempt=90 if bounded else 30)",mode='eval').body
+    if ast.dump(call)!=ast.dump(expected):raise ValueError('collection retry budget changed')
+    call.keywords=[]
+    if ast.dump(old)!=ast.dump(new):raise ValueError('collection change exceeds bounded read adapter')
+
+
 def validate_scenario_transport_diff(previous, current):
     """All scenario/policy AST stays identical after removing the read wrapper."""
-    old, new = ast.parse(previous), ast.parse(current)
+    old, new = ast.parse(previous), normalize_ssh_read_boundaries(ast.parse(current))
     changed = next(n for n in new.body if isinstance(n, ast.ClassDef) and n.name == 'FreshS1')
     wrapper = next(n for n in changed.body if isinstance(n, ast.FunctionDef) and n.name == 'finish')
     expected = ast.parse('def finish(self):\n with self.transport_reads():\n  return self.finish_once()').body[0]
@@ -83,8 +159,10 @@ def historical_campaign(path, expected_manifest):
 def audit_transition(profile, authorization, root):
     from fresh_campaign import source_hashes, pilot_contract
     root = Path(root)
-    if authorization.get('kind') != 'user-authorized-transport-continuation-v1' or authorization.get('supplemental_limit') != 1:
+    if not (authorization.get('kind') == 'user-authorized-transport-continuation-v1' and authorization.get('supplemental_limit') == 1 or authorization.get('kind') == 'user-authorized-ssh-read-two-supplement-continuation-v2' and authorization.get('supplemental_limit') == 2 and authorization.get('supplemental_origins') == ['s1-b02-a','s2-b03-p']):
         raise ValueError('explicit transport continuation and exactly one supplement required')
+    if authorization.get('kind')=='user-authorized-transport-continuation-v1' and authorization.get('supplemental_origins', [authorization.get('supplemental_origin')]) != [authorization.get('supplemental_origin')]:
+        raise ValueError('one-supplement authorisation cannot add another origin')
     if not authorization.get('human_instruction') or not authorization.get('boundary_case'):
         raise ValueError('human instruction and safe boundary required')
     source = source_hashes(root)
@@ -110,6 +188,9 @@ def audit_transition(profile, authorization, root):
         raise ValueError('reviewed diff changed')
     validate_scenario_transport_diff((anchor_path/'source/evaluation/fresh_scenarios.py').read_text(),
                                     (root/'evaluation/fresh_scenarios.py').read_text())
+    if authorization.get('kind') == 'user-authorized-ssh-read-two-supplement-continuation-v2':
+        validate_collection_read_diff((anchor_path/'source/evaluation/fresh_collection.py').read_text(),
+                                      (root/'evaluation/fresh_collection.py').read_text())
     validate_live_transport_diff((anchor_path/'source/evaluation/fresh_live.py').read_text(),
                                 (root/'evaluation/fresh_live.py').read_text())
     before, after = copy.deepcopy(anchor['profile']), copy.deepcopy(profile)
@@ -154,25 +235,37 @@ def audit_transition(profile, authorization, root):
     remaining = [case['id'] for case in profile['cases'] if case['purpose'] == 'main' and case['id'] not in observed]
     if remaining != authorization['remaining_main_ids']:
         raise ValueError('remaining original main order differs; cannot copy completed work')
-    boundary = next(case for case in anchor['cases'] if case['id'] == authorization['boundary_case'])
+    boundaries=[case for manifest in prior.values() for case in manifest['cases'] if case['id']==authorization['boundary_case'] and case.get('attempts')]
+    if len(boundaries)!=1:raise ValueError('one actual sealed boundary case required')
+    boundary=boundaries[0]
     if boundary['status'] != 'finished' or len(boundary.get('attempts', [])) != 1:
         raise ValueError('active case has not naturally closed and sealed')
-    origin = next(case for case in anchor['cases'] if case['id'] == authorization['supplemental_origin'])
-    if len(origin.get('attempts', [])) != 1 or origin['judgement']['trial_valid'] is not False or origin['judgement']['cleanup'] is not True:
-        raise ValueError('supplement origin must remain one cleanly closed invalid first try')
+    for origin_id in supplemental_origins(authorization):
+        origins=[case for manifest in prior.values() for case in manifest['cases'] if case['id']==origin_id and case.get('attempts')]
+        if len(origins)!=1 or len(origins[0]['attempts'])!=1 or origins[0]['judgement']['trial_valid'] is not False or origins[0]['judgement']['cleanup'] is not True:
+            raise ValueError('supplement origin must remain one cleanly closed invalid first try')
     return dict(authorization=authorization, source_transition=sorted(changed),
                 reviewed_diff=diffs, preparation_reused=sorted(reusable),
                 predecessor_observed_main=sorted(observed), no_primary_replacement=True)
+
+
+def supplemental_origins(authorization):
+    if 'supplemental_origins' in authorization:return authorization['supplemental_origins']
+    return [authorization['supplemental_origin']]
 
 
 def select_cases(profile, authorization, scenario, stage):
     if stage == 'main':
         return [dict(case, status='pending', negative=False) for case in profile['cases']
                 if case['id'] in authorization['remaining_main_ids'] and case['scenario'] == scenario]
-    if stage == 'supplemental' and scenario == 's1':
-        original = next(case for case in profile['cases'] if case['id'] == authorization['supplemental_origin'])
-        return [dict(original, id=original['id']+'-supplement01', purpose='supplemental',
-            block='supplement-b02-a', order=38, status='pending', negative=False, depends_on=[])]
+    if stage == 'supplemental':
+        origins=supplemental_origins(authorization)
+        for index,origin in enumerate(origins):
+            original=next(case for case in profile['cases'] if case['id']==origin)
+            if original['scenario']==scenario:
+                return [dict(original,id=origin+'-supplement01',purpose='supplemental',
+                    block='supplement-'+original['block']+'-'+original['mode'].lower(),
+                    order=38+index,status='pending',negative=False,depends_on=[])]
     raise ValueError('unsupported transport continuation stage')
 
 
@@ -204,13 +297,21 @@ def freeze_transport(profile_path, destination, authorization_path, *, scenario,
         for saved in Path(ops['artifact_root']).glob('*/campaign.json'):
             manifest = json.loads(saved.read_text())
             for case in manifest['cases']:
-                if case['purpose'] == 'supplemental' and case.get('attempts'):
+                if case['purpose'] == 'supplemental' and case.get('attempts') and case['id'] in {c['id'] for c in selected}:
                     raise ValueError('one supplementary measurement already attempted')
                 if case['purpose'] == 'main' and case.get('attempts'):
                     if case['attempts'][0]['state'] != 'VERIFIED': raise ValueError('main still active')
                     actual.add(case['id'])
         if actual != {case['id'] for case in profile['cases'] if case['purpose'] == 'main'}:
             raise ValueError('original main29 must finish before supplement')
+        origins=supplemental_origins(authorization)
+        origin=selected[0]['id'].removesuffix('-supplement01')
+        required={value+'-supplement01' for value in origins[:origins.index(origin)]}
+        completed=set()
+        for saved in Path(ops['artifact_root']).glob('*/campaign.json'):
+            for case in json.loads(saved.read_text())['cases']:
+                if case['purpose']=='supplemental' and len(case.get('attempts',[]))==1 and case['attempts'][0]['state']=='VERIFIED' and case.get('status')=='finished':completed.add(case['id'])
+        if not required.issubset(completed):raise ValueError('earlier supplementary measurement must be sealed first')
     if not selected: raise ValueError('empty continuation selection')
     for saved in Path(ops['artifact_root']).glob('*/campaign.json'):
         existing = json.loads(saved.read_text())
@@ -239,7 +340,7 @@ def freeze_transport(profile_path, destination, authorization_path, *, scenario,
         schedule_counts=validate(profile), historical_results='excluded',
         override_path=str(override), override_sha256=sha(override),
         transport_transition_sha256=digest(audit),
-        supplemental_origin=authorization['supplemental_origin'] if stage == 'supplemental' else None,
+        supplemental_origin=selected[0]['id'].removesuffix('-supplement01') if stage == 'supplemental' else None,
         primary_rule='original main29 first attempts only; supplement excluded')
     if source_hashes(root) != source: raise ValueError('source changed during continuation freeze')
     atomic_json(destination/'campaign.json', manifest)

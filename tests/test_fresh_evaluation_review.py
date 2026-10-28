@@ -202,7 +202,7 @@ class AgreementReviewTests(unittest.TestCase):
 
     def test_remote_probe_captures_raw_on_failure(self):
         with tempfile.TemporaryDirectory() as root:
-            runner=Mock();runner.ev=Evidence(root);runner.remote.return_value='raw evidence'
+            runner=Mock();runner.ev=Evidence(root);runner.remote.return_value='raw evidence';runner.read_remote=runner.remote;runner.stop_probe=Mock()
             probe=RemoteProbe(runner,'command','/owned/fresh-api.jsonl','/owned/stop',40)
             probe.future=Mock();probe.future.result.side_effect=RuntimeError('remote failure');probe.pool=Mock()
             with self.assertRaises(RuntimeError):probe.__exit__(None,None,None)

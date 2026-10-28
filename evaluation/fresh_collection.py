@@ -47,13 +47,14 @@ def read_evidence(ev, label, reader, *, attempts=3, seconds=90, per_attempt=30):
     raise TimeoutError('evidence read budget exhausted: '+label)
 
 
-def remote_file(ev, remote, source, destination, *, host=None):
+def remote_file(ev, remote, source, destination, *, host=None, bounded=False):
     """Record a resumable read location before transfer; replace local file atomically."""
     target = ev.directory/destination
     if Path(destination).is_absolute() or '..' in Path(destination).parts:
         raise ValueError('evidence destination must stay inside attempt')
     append(ev.directory/'remote-files.jsonl', dict(utc=utc(), source=source, destination=destination, host=host))
-    result = read_evidence(ev, source, lambda timeout: remote('sudo cat '+shlex.quote(source), timeout=timeout))
+    result = read_evidence(ev, source, lambda timeout: remote('sudo cat '+shlex.quote(source), timeout=timeout),
+        attempts=1 if bounded else 3, per_attempt=90 if bounded else 30)
     checkpoint_text(target, result)
     append(ev.directory/'remote-files.jsonl', dict(utc=utc(), source=source, destination=destination, host=host,
         captured=True, sha256=hashlib.sha256(target.read_bytes()).hexdigest()))

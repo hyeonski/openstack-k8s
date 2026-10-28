@@ -24,7 +24,7 @@ assert AUTH['scope']=={'preparation':8,'main':29}
 assert hashlib.sha256(PROFILE.read_bytes()).hexdigest()==(ACTIVE['profile_sha256'] if ACTIVE else AUTH['profile_sha256'])
 TRANSITION=None
 if ACTIVE:
- from fresh_transport_release import audit_transition, historical_campaign
+ from fresh_transport_release import audit_transition, historical_campaign, supplemental_origins
  assert hashlib.sha256(Path(ACTIVE['authorization']).read_bytes()).hexdigest()==ACTIVE['authorization_sha256']
  TRANSITION=json.loads(Path(ACTIVE['authorization']).read_text())
  audit_transition(P,TRANSITION,ROOT)
@@ -162,16 +162,15 @@ def remaining_budget(label):
    end=next((epoch(r['utc']) for r in records if r['case_id']==c['id'] and r['attempt_id']=='attempt-01' and r['state']=='finished'),None)
    if start and end:observed[c['scenario']]=max(observed.get(c['scenario'],0),1.2*(end-start))
  nominal={'s1':44,'s2':37,'s3':32,'s4':37};pending=[c for c in P['cases'] if c['id'] not in completed]
- supplement_pending=bool(TRANSITION) and not any(c['purpose']=='supplemental' and c['status']=='finished' for saved in BED.glob('*/campaign.json') for c in check_frozen(saved.parent)['cases'])
- seconds=sum(max(nominal[c['scenario']]*72,observed.get(c['scenario'],0)) for c in pending)
- if supplement_pending:seconds+=max(nominal['s1']*72,observed.get('s1',0))
+ supplement_pending=[next(c for c in P['cases'] if c['id']==origin) for origin in supplemental_origins(TRANSITION) if origin+'-supplement01' not in completed] if TRANSITION else []
+ seconds=sum(max(nominal[c['scenario']]*72,observed.get(c['scenario'],0)) for c in pending+supplement_pending)
  idle=planned_idle(now)
- lifecycle=P['operations']['single_host_lifecycle_estimate_seconds'] if pending else P['operations']['host_shutdown_timeout_seconds']
+ lifecycle=P['operations']['single_host_lifecycle_estimate_seconds'] if pending or supplement_pending else P['operations']['host_shutdown_timeout_seconds']
  seconds+=idle+lifecycle
  ledger=BedLedger(P);ledger.save();usage=ledger.data['usage'];hard=epoch(P['operations']['hard_stop_utc'])
  projected=usage['estimated_cost_krw']+seconds/3600*P['operations']['cost_estimate']['bed_hour_krw']+seconds/86400*P['operations']['cost_estimate']['calendar_day_krw']
  DATA['observed_max_case_seconds']={k:v/1.2 for k,v in observed.items()}
- budget=dict(idle_seconds=idle,remaining_lifecycle_estimate_seconds=lifecycle,calendar_estimate_advisory=True,updated_utc=utc(),label=label,completed_registered_cases=len(completed),remaining_registered_cases=len(pending),supplemental_remaining=int(supplement_pending),remaining_plan_seconds=seconds,planned_finish_kst=dt.datetime.fromtimestamp(now+seconds,dt.timezone(dt.timedelta(hours=9))).isoformat(),calendar_margin_seconds=hard-now-seconds,soft_uptime_margin_after_plan_seconds=P['operations']['bed_uptime_soft_limit_seconds']-usage['bed_seconds']-seconds,projected_estimate_krw=projected,usage=usage,notes='case nominal or observed x1.2; one measured lifecycle25min, no fixed host rotation; scheduled idle included; total forecast advisory; phase deadlines and credit/cost gates remain; calendar/uptime advisory; completed work excluded; not Billing')
+ budget=dict(idle_seconds=idle,remaining_lifecycle_estimate_seconds=lifecycle,calendar_estimate_advisory=True,updated_utc=utc(),label=label,completed_registered_cases=len(completed),remaining_registered_cases=len(pending),supplemental_remaining=len(supplement_pending),remaining_plan_seconds=seconds,planned_finish_kst=dt.datetime.fromtimestamp(now+seconds,dt.timezone(dt.timedelta(hours=9))).isoformat(),calendar_margin_seconds=hard-now-seconds,soft_uptime_margin_after_plan_seconds=P['operations']['bed_uptime_soft_limit_seconds']-usage['bed_seconds']-seconds,projected_estimate_krw=projected,usage=usage,notes='case nominal or observed x1.2; one measured lifecycle25min, no fixed host rotation; scheduled idle included; total forecast advisory; phase deadlines and credit/cost gates remain; calendar/uptime advisory; completed work excluded; not Billing')
  prep_seconds=sum(max(nominal[c['scenario']]*72,observed.get(c['scenario'],0)) for c in pending if c['purpose']!='main')
  budget['first_main_forecast_kst']=dt.datetime.fromtimestamp(now+prep_seconds+(lifecycle if completed==set() else 0),dt.timezone(dt.timedelta(hours=9))).isoformat() if prep_seconds else ('main in progress or admitted' if pending else None)
  atomic_json(BASE/('remaining-budget-'+str(time.time_ns())+'.json'),budget);save('remaining work budget checked',remaining_budget=budget,first_main_forecast=budget['first_main_forecast_kst'],completion_forecast=budget['planned_finish_kst'])
@@ -280,11 +279,13 @@ try:
   assert observed_main=={c['id'] for c in P['cases'] if c['purpose']=='main'},'original main29 coverage incomplete'
   save('registered 29 main cases measured')
   if TRANSITION:
-   supplement=frozen('s1-supplement-transport-v2','supplemental','s1',pilots['s1'])
-   if any(c['status']=='pending' for c in check_frozen(supplement)['cases']):run_one(supplement)
-   measured(supplement)
-   assert sum(len(c.get('attempts',[])) for c in check_frozen(supplement)['cases'])==1,'exactly one authorised supplementary attempt required'
-   save('original main29 and supplementary A measured; ready for final owned cleanup')
+   for origin in supplemental_origins(TRANSITION):
+    original=next(c for c in P['cases'] if c['id']==origin);scenario=original['scenario']
+    supplement=frozen(scenario+'-supplement-transport-v2','supplemental',scenario,pilots[scenario])
+    if any(c['status']=='pending' for c in check_frozen(supplement)['cases']):run_one(supplement)
+    measured(supplement)
+    assert len(check_frozen(supplement)['cases'])==1 and sum(len(c.get('attempts',[])) for c in check_frozen(supplement)['cases'])==1,'exactly one authorised attempt per supplementary origin required'
+   save('original main29 and all authorised supplementary measurements sealed; ready for final owned cleanup')
  environment('down')
  save('hosts down verified; release ready for final analysis')
 except OperationalPause as exc:

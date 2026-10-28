@@ -237,4 +237,134 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(invoke.call_count,2)
 
 
+class SSHReadTests(unittest.TestCase):
+    def read(self, invoke, *, identity=None, timeout=30):
+        from fresh_transport import retry_ssh_read
+        clock=Clock();identity=identity or Mock()
+        with tempfile.TemporaryDirectory() as folder:
+            result=retry_ssh_read(invoke,timeout=timeout,identity=identity,label='progress',
+                evidence=folder,clock=clock,sleep=clock.sleep)
+            rows=[json.loads(x) for x in (Path(folder)/'ssh-read-attempts.jsonl').read_text().splitlines()]
+        return result,rows,clock,identity
+
+    def test_iap4047_retry_succeeds_only_after_same_target_identity(self):
+        invoke=Mock(side_effect=[RuntimeError("IAP4047 Failed to lookup instance"),'actual raw bytes'])
+        result,rows,clock,identity=self.read(invoke)
+        self.assertEqual(result,'actual raw bytes');self.assertEqual(invoke.call_count,2)
+        self.assertEqual(identity.call_count,2)
+        self.assertEqual(clock.now,1)
+        self.assertEqual(invoke.call_args.args[0],29)
+        self.assertTrue(all(row['observation_filled'] is False for row in rows))
+        self.assertNotIn('captured',rows[0])
+
+    def test_continued_failure_is_bounded_to_three_attempts(self):
+        invoke=Mock(side_effect=RuntimeError('SSH broken pipe'))
+        with self.assertRaisesRegex(TimeoutError,'attempt limit'):
+            self.read(invoke)
+        self.assertEqual(invoke.call_count,3)
+
+    def test_original_deadline_includes_identity_and_backoff(self):
+        from fresh_transport import retry_ssh_read
+        clock=Clock();calls=[]
+        def invoke(left):calls.append(left);clock.sleep(2);raise RuntimeError('connection reset')
+        def identity(remaining):clock.sleep(2);remaining()
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaisesRegex(TimeoutError,'deadline'):
+                retry_ssh_read(invoke,timeout=4,identity=identity,label='raw',evidence=folder,clock=clock,sleep=clock.sleep)
+        self.assertEqual(calls,[4]);self.assertEqual(clock.now,4)
+
+    def test_permanent_permission_configuration_and_missing_vm_errors_return_once(self):
+        for error in ['Forbidden','Permission denied','Invalid argument project','Not found instance','certificate verification failed']:
+            invoke=Mock(side_effect=RuntimeError(error));identity=Mock()
+            with self.assertRaises(RuntimeError):self.read(invoke,identity=identity)
+            self.assertEqual(invoke.call_count,1);identity.assert_not_called()
+
+    def test_changed_vm_or_namespace_stops_before_read_retry(self):
+        for error in ['VM identity/existence changed','namespace/run UID changed']:
+            invoke=Mock(side_effect=RuntimeError('IAP4047 Failed to lookup instance'))
+            identity=Mock(side_effect=RuntimeError(error))
+            with self.assertRaisesRegex(RuntimeError,'changed'):self.read(invoke,identity=identity)
+            self.assertEqual(invoke.call_count,1)
+
+    def test_mutations_and_arbitrary_shells_never_enter_read_boundary(self):
+        from fresh_transport import SSHReadBoundary
+        runner=Mock();runner.record={'run_id':'owned'}
+        reader=SSHReadBoundary(runner)
+        for script in ['sudo touch /owned/stop','sudo reboot','kubectl delete pod x',
+                'curl -fsS http://198.18.0.2:8090/progress; sudo reboot',
+                'sudo cat /other/fresh-api.jsonl','sudo cat /var/lib/openstack-k8s-graduation/owned/fresh-api.jsonl; reboot']:
+            with self.assertRaises(ValueError):reader.remote(script)
+        runner.remote.assert_not_called()
+
+    def test_bounded_remote_file_has_three_total_reads_not_nine_and_keeps_raw_bytes(self):
+        from fresh_transport import retry_ssh_read
+        from fresh_collection import remote_file
+        from fresh_evidence import Evidence
+        clock=Clock();invoke=Mock(side_effect=[RuntimeError('connection reset'),RuntimeError('broken pipe'),'original\nraw\n'])
+        with tempfile.TemporaryDirectory() as folder:
+            ev=Evidence(folder)
+            def remote(script,timeout):
+                return retry_ssh_read(invoke,timeout=timeout,identity=Mock(),label=script,evidence=folder,clock=clock,sleep=clock.sleep)
+            self.assertEqual(remote_file(ev,remote,'/owned/raw','requests.jsonl',bounded=True),'original\nraw\n')
+            self.assertEqual((Path(folder)/'requests.jsonl').read_bytes(),b'original\nraw\n')
+            collection=[json.loads(l) for l in (Path(folder)/'collection-attempts.jsonl').read_text().splitlines()]
+            self.assertEqual(len(collection),1)
+        self.assertEqual(invoke.call_count,3)
+
+    def test_lost_probe_stop_ack_reads_applied_state_without_repeating_mutation(self):
+        from fresh_transport import stop_probe_once
+        runner=Mock();runner.record={'run_id':'owned'};runner.client.remaining.side_effect=lambda limit:limit
+        runner.remote.side_effect=RuntimeError('SSH broken pipe');runner.read_remote.return_value='stopped'
+        stop_probe_once(runner,'/var/lib/openstack-k8s-graduation/owned/fresh-api.jsonl.stop')
+        self.assertEqual(runner.remote.call_count,1)
+        self.assertEqual(runner.read_remote.call_count,1)
+        self.assertIn('test -e',runner.read_remote.call_args.args[0])
+
+    def test_unconfirmed_stop_is_not_replayed_or_assumed_success(self):
+        from fresh_transport import stop_probe_once
+        runner=Mock();runner.record={'run_id':'owned'};runner.client.remaining.side_effect=lambda limit:limit
+        runner.remote.side_effect=RuntimeError('SSH broken pipe');runner.read_remote.return_value=''
+        with self.assertRaisesRegex(RuntimeError,'broken pipe'):
+            stop_probe_once(runner,'/var/lib/openstack-k8s-graduation/owned/fresh-api.jsonl.stop')
+        self.assertEqual(runner.remote.call_count,1)
+
+    def test_openstack_read_boundary_does_not_accept_set_delete_or_foreign_port(self):
+        from fresh_transport import SSHReadBoundary
+        runner=Mock();runner.record={'workers':[{'port':{'id':'owned'}}],'policy_id':'policy','rule_id':'rule'}
+        for args in [('port','set','owned'),('port','delete','owned'),('port','show','foreign'),('server','stop','owned')]:
+            with self.assertRaises(ValueError):SSHReadBoundary(runner).admin_json(args)
+        runner.admin_json.assert_not_called()
+
+    def test_owned_source_domstate_reads_once_and_keeps_original_host(self):
+        from fresh_transport import SSHReadBoundary
+        with tempfile.TemporaryDirectory() as folder,patch.dict('os.environ',{'CONTROLLER_NAME':'controller'}):
+            runner=Mock();runner.ev.directory=Path(folder)
+            runner.record={'run_id':'run','source':{'host':'compute','instance_name':'instance-0001'}}
+            runner.client.remaining.side_effect=lambda limit:limit;runner.remote.return_value='SHUTOFF\n'
+            self.assertEqual(SSHReadBoundary(runner).remote('sudo docker exec nova_libvirt virsh domstate instance-0001',host='compute'),'SHUTOFF\n')
+            self.assertEqual(runner.remote.call_count,1)
+            self.assertEqual(runner.remote.call_args.kwargs['host'],'compute')
+            with self.assertRaises(ValueError):SSHReadBoundary(runner).remote('sudo docker exec nova_libvirt virsh domstate instance-0001',host='foreign')
+            self.assertEqual(runner.remote.call_count,1)
+
+    def test_gcp4047_identity_checks_expected_id_project_zone_and_run_uid(self):
+        from fresh_transport import SSHReadBoundary
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as folder:
+            runner=SimpleNamespace(ev=SimpleNamespace(directory=Path(folder)),profile={'project':'project','zone':'zone'},
+                record={'environment_run_id':'env','fresh_attempt':str(Path(folder).resolve()),'namespace_uid':'nsuid','run_id':'run'},
+                client=SimpleNamespace(state=Path(folder),cluster='workload'),ns='graduation-s2',runtime=Mock())
+            runner.runtime.environment.return_value={'run_id':'env','final_hosts':{'host':{'id':'123'}}}
+            host={'name':'host','id':'123','status':'RUNNING','zone':'zones/zone'}
+            ns={'metadata':{'uid':'nsuid','labels':{'openstack-k8s.dev/experiment':'run'}}}
+            with patch.dict('os.environ',{'GCP_PROJECT_ID':'project','GCP_ZONE':'zone'}),patch('workload_state.command',side_effect=[json.dumps(host),json.dumps(ns)]) as command:
+                SSHReadBoundary(runner).identity('host',lambda:10)
+                self.assertIn('--project=project',command.call_args_list[0].args[0])
+                self.assertIn('--zone=zone',command.call_args_list[0].args[0])
+            host['id']='other'
+            with patch.dict('os.environ',{'GCP_PROJECT_ID':'project','GCP_ZONE':'zone'}),patch('workload_state.command',return_value=json.dumps(host)) as command:
+                with self.assertRaisesRegex(RuntimeError,'VM identity'):SSHReadBoundary(runner).identity('host',lambda:10)
+                self.assertEqual(command.call_count,1)
+
+
 if __name__ == '__main__': unittest.main()

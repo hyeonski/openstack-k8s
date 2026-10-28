@@ -377,8 +377,9 @@ class RemoteProbe:
         import concurrent.futures
         self.pool=concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.future=self.pool.submit(self.runner.remote,self.command,timeout=self.seconds+60)
+        ready_deadline=time.monotonic()+60
         try:
-            wait_for(lambda:self.runner.remote('if sudo test -s '+shlex.quote(self.raw_path)+'; then echo ready; fi').strip()=='ready',seconds=60,interval=1)
+            wait_for(lambda:self.runner.read_remote('if sudo test -s '+shlex.quote(self.raw_path)+'; then echo ready; fi',timeout=max(.001,ready_deadline-time.monotonic())).strip()=='ready',seconds=60,interval=1)
         except BaseException:
             self.__exit__(None,None,None)
             raise
@@ -386,18 +387,34 @@ class RemoteProbe:
 
     def __exit__(self,*_):
         try:
-            self.runner.remote('sudo touch '+shlex.quote(self.stop_path))
+            self.runner.stop_probe(self.stop_path)
             self.future.result(timeout=30)
         finally:
             self.pool.shutdown(wait=False,cancel_futures=True)
             for source,destination in ((self.raw_path,'requests.jsonl'),(self.raw_path+'.progress','uploader-progress.jsonl')):
                 try:
-                    remote_file(self.runner.ev, self.runner.remote, source, destination)
+                    remote_file(self.runner.ev, self.runner.read_remote, source, destination, bounded=True)
                 except Exception as exc:
                     self.runner.ev.event('evidence_capture_error',source=source,detail=str(exc))
 
 
 class FreshOwnedLab:
+    def stop_probe(self, stop_path):
+        from fresh_transport import stop_probe_once
+        return stop_probe_once(self, stop_path)
+
+    def read_remote(self, script, *, timeout=120, host=None):
+        from fresh_transport import SSHReadBoundary
+        return SSHReadBoundary(self).remote(script, timeout=timeout, host=host)
+
+    def read_admin_json(self, *args, timeout=60):
+        from fresh_transport import SSHReadBoundary
+        return SSHReadBoundary(self).admin_json(args, timeout=timeout)
+
+    def read_host_stat(self, host):
+        from fresh_transport import SSHReadBoundary
+        return SSHReadBoundary(self).host_stat(host)
+
     def write(self,phase,**values):
         self.record['fresh_attempt']=str(self.ev.directory.resolve())
         return super().write(phase,**values)
@@ -409,19 +426,19 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
         self.case,self.profile,self.ev=case,profile,ev
 
     def check_clock(self,phase):
-        return clock_check(self.ev,phase,lambda:float(self.remote("python3 -c 'import time; print(time.time())'").strip()),self.profile['s2']['max_clock_offset_seconds'],'receiver host wall clock; network namespace shares this clock')
+        return clock_check(self.ev,phase,lambda:float(self.read_remote("python3 -c 'import time; print(time.time())'").strip()),self.profile['s2']['max_clock_offset_seconds'],'receiver host wall clock; network namespace shares this clock')
 
     def set_rate(self,rate):
         result=super().set_rate(rate)
         atomic_json(self.ev.directory/'observations'/('qos-'+str(time.monotonic_ns())+'.json'),
-                    {'utc':utc_now(),'port':self.admin_json('port','show',self.record['workers'][1]['port']['id']),
-                     'rule':self.admin_json('network','qos','rule','show',self.record['policy_id'],self.record['rule_id'])})
+                    {'utc':utc_now(),'port':self.read_admin_json('port','show',self.record['workers'][1]['port']['id']),
+                     'rule':self.read_admin_json('network','qos','rule','show',self.record['policy_id'],self.record['rule_id'])})
         return result
 
     def diagnostic_snapshot(self):
         return {'utc':utc_now(),'monotonic':time.monotonic(),'clock_id':self.ev.clock_id,
-                'hosts':{w['host']:self.runtime.host_stat(w['host']) for w in self.record['workers']},
-                'qdisc':json.loads(self.remote('sudo tc -s -j qdisc show dev s2-egress'))[0]}
+                'hosts':{w['host']:self.read_host_stat(w['host']) for w in self.record['workers']},
+                'qdisc':json.loads(self.read_remote('sudo tc -s -j qdisc show dev s2-egress'))[0]}
 
     @staticmethod
     def contention_diagnosis(base,metric,before,after):
@@ -460,7 +477,7 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
                      and not any(o['kind'] == 'DaemonSet' for o in p['metadata'].get('ownerReferences', []))]
             if other or b['port'].get('qos_policy_id'):
                 raise RuntimeError('destination port is shared or has a preexisting QoS policy')
-            extensions = self.admin_json('extension', 'list', '--network')
+            extensions = self.read_admin_json('extension', 'list', '--network')
             if not any(e.get('Alias') == 'qos' for e in extensions):
                 raise RuntimeError('Neutron QoS is not enabled')
             run = self.record['run_id']
@@ -472,21 +489,21 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
             self.write('network-create-intent', network_attempted=True)
             self.remote('sudo bash /opt/openstack-k8s/graduation-s2-network.sh prepare ' + run)
             self.write('network-ready')
-            sg = self.admin_json('security', 'group', 'create', '--project', a['project_id'], run)
+            sg = self.read_admin_json('security', 'group', 'create', '--project', a['project_id'], run)
             self.write('security-group-created', security_group_id=sg['id'])
             self.admin('security', 'group', 'rule', 'create', '--protocol', 'tcp', '--dst-port', '30080',
                        '--remote-ip', '198.18.0.2/32', sg['id'])
             # OSC appends these groups to the current set; repeating existing IDs is rejected.
             self.admin('port', 'set', '--security-group', sg['id'], a['port']['id'])
-            updated_port = self.admin_json('port', 'show', a['port']['id'])
+            updated_port = self.read_admin_json('port', 'show', a['port']['id'])
             if set(updated_port['security_group_ids']) != set(a['port']['security_group_ids']) | {sg['id']}:
                 raise RuntimeError('source port security groups were not preserved')
-            fip = self.admin_json('floating', 'ip', 'create', '--project', a['project_id'],
+            fip = self.read_admin_json('floating', 'ip', 'create', '--project', a['project_id'],
                                   '--description', run, '--port', a['port']['id'], 'public')
             self.write('fip-created', fip=fip)
-            policy = self.admin_json('network', 'qos', 'policy', 'create', '--project', b['project_id'], run)
+            policy = self.read_admin_json('network', 'qos', 'policy', 'create', '--project', b['project_id'], run)
             self.write('policy-created', policy_id=policy['id'])
-            rule = self.admin_json('network', 'qos', 'rule', 'create', '--type', 'bandwidth-limit',
+            rule = self.read_admin_json('network', 'qos', 'rule', 'create', '--type', 'bandwidth-limit',
                                    '--max-kbps', '6000', '--max-burst-kbits', '600', '--egress', policy['id'])
             self.write('rule-created', rule_id=rule['id'])
             self.apply({'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': {'name': 'code', 'namespace': self.ns},
@@ -505,10 +522,10 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
             base = baseline['p95_ms']
             self.write('baseline-ready', api_before=self.pods('api')[0])
             cfg=self.profile['s2']
-            initial_progress=json.loads(self.remote('curl -fsS http://198.18.0.2:8090/progress'))
-            initial=dict(progress=initial_progress,port=self.admin_json('port','show',b['port']['id']),
+            initial_progress=json.loads(self.read_remote('curl -fsS http://198.18.0.2:8090/progress'))
+            initial=dict(progress=initial_progress,port=self.read_admin_json('port','show',b['port']['id']),
                          api_node=a['node'],upload_node=a['node'],api_uid=self.pods('api')[0]['metadata']['uid'],
-                         api_image_id=self.pods('api')[0]['status']['containerStatuses'][0]['imageID'],source_port=self.admin_json('port','show',a['port']['id']))
+                         api_image_id=self.pods('api')[0]['status']['containerStatuses'][0]['imageID'],source_port=self.read_admin_json('port','show',a['port']['id']))
             if initial_progress['bytes']!=0 or initial_progress['next']!=0:
                 raise RuntimeError('fresh uploader progress must begin at zero')
             raw_path='/var/lib/openstack-k8s-graduation/'+self.record['run_id']+'/fresh-api.jsonl'
@@ -527,15 +544,15 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
                 injection=self.ev.event('injection_applied',target=a['port']['id'],meaning='uploader Ready; congestion independently observed')
                 self.ev.state('INJECTED');self.ev.state('OBSERVING')
                 start=time.monotonic()
-                previous=json.loads(self.remote('curl -fsS http://198.18.0.2:8090/progress'))
+                previous=json.loads(self.read_remote('curl -fsS http://198.18.0.2:8090/progress'))
                 next_decision=start+60;diagnosed=False;detected=False
                 diagnostic_before=self.diagnostic_snapshot();diagnostic_progress=previous;consecutive=0
                 while time.monotonic()<start+cfg['horizon_seconds']:
                     time.sleep(min(10,max(0,start+cfg['horizon_seconds']-time.monotonic())))
-                    progress=json.loads(self.remote('curl -fsS http://198.18.0.2:8090/progress'))
+                    progress=json.loads(self.read_remote('curl -fsS http://198.18.0.2:8090/progress'))
                     windows.append(dict(time=utc_now(),before=previous,after=progress));previous=progress
                     if time.monotonic()>=next_decision:
-                        text=self.remote('sudo cat '+shlex.quote(raw_path))
+                        text=self.read_remote('sudo cat '+shlex.quote(raw_path))
                         checkpoint_text(self.ev.directory/'requests-checkpoint.jsonl',text)
                         samples=[json.loads(l) for l in text.splitlines() if l]
                         tail=[r for r in samples if r['time']>=time.time()-60]
@@ -571,8 +588,8 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
                 # the analyser still selects only the original runner-clock interval.
                 time.sleep(remote_tail_seconds(cfg))
             self.check_clock('horizon-end')
-            text=remote_file(self.ev,self.remote,raw_path,'requests.jsonl')
-            progress_text=remote_file(self.ev,self.remote,progress_path,'uploader-progress.jsonl')
+            text=remote_file(self.ev,self.read_remote,raw_path,'requests.jsonl',bounded=True)
+            progress_text=remote_file(self.ev,self.read_remote,progress_path,'uploader-progress.jsonl',bounded=True)
             from fresh_analysis import uploader_metrics
             upload=uploader_metrics([json.loads(l) for l in progress_text.splitlines() if l],epoch(injection['utc']),epoch(injection['utc'])+cfg['horizon_seconds'])
             windows=upload['windows']
@@ -585,7 +602,7 @@ files=[{'index':i,'size':(root/f'{i:06d}.chunk').stat().st_size,'sha256':hashlib
 print(json.dumps({'rows':rows,'files':files}))
 """.replace('ROOT',repr('/var/lib/openstack-k8s-graduation/'+self.record['run_id']))
             integrity=json.loads(self.remote('sudo python3 -',data=integrity_code,timeout=300))
-            final=dict(port=self.admin_json('port','show',b['port']['id']),upload_node=self.pods('upload')[0]['spec']['nodeName'],
+            final=dict(port=self.read_admin_json('port','show',b['port']['id']),upload_node=self.pods('upload')[0]['spec']['nodeName'],
                        api_uid=self.pods('api')[0]['metadata']['uid'],upload_image_id=self.pods('upload')[0]['status']['containerStatuses'][0]['imageID'])
             raw=dict(network_qdisc=json.loads((Path(self.record['evidence'])/'baseline.json').read_text())['qdisc_before'][0],initial=initial,final=final,policy_id=self.record['policy_id'],upload_windows=windows,upload_integrity=integrity,
                      upload_elapsed_seconds=cfg['horizon_seconds'],offered_seconds=cfg['uploader_seconds'],horizon_seconds=cfg['horizon_seconds'],max_chunks=4096,
@@ -739,7 +756,7 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
                      application_image_ids={'db':self.record['pod_before']['status']['containerStatuses'][0]['imageID']},
                      volume_after=self.admin_json('volume','show',self.record['volume_id']),
                      source_final=self.admin_json('server','show',source['nova_id']),source_host=source['host'],
-                     source_final_hypervisor=self.remote('sudo docker exec nova_libvirt virsh domstate '+shlex.quote(source['instance_name']),host=source['host']).strip(),
+                     source_final_hypervisor=self.read_remote('sudo docker exec nova_libvirt virsh domstate '+shlex.quote(source['instance_name']),host=source['host']).strip(),
                      target_vm=self.record['target']['nova_id'],target_node=self.record['target']['node'],
                      provenance={'file':'raw/committed-records-before.json','fields':['id','value'],'transform':'seed comparison only; read probes do not establish continuous write durability'})
             atomic_json(self.ev.directory/'observations/contract.json',raw)

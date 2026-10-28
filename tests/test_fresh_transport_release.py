@@ -1,5 +1,6 @@
 """Transport release boundaries and supplemental first-attempt separation."""
 import hashlib
+import ast
 import json
 from pathlib import Path
 import sys
@@ -74,6 +75,61 @@ class TransportReleaseTests(unittest.TestCase):
             self.assertIs(operational_judgement('.',{}, {}),expected)
         with patch('fresh_campaign.judge',side_effect=KeyboardInterrupt):
             with self.assertRaises(KeyboardInterrupt):operational_judgement('.',{}, {})
+
+    def _supplement_driver_flow(self, fail_second=False):
+        script=ast.parse((ROOT/'evaluation/fresh_release_driver.py').read_text())
+        loop=next(n for n in ast.walk(script) if isinstance(n,ast.For) and isinstance(n.target,ast.Name) and n.target.id=='origin')
+        tree=ast.Module(body=[loop,ast.parse("environment('down')").body[0]],type_ignores=[])
+        events=[];campaigns={}
+        profile={'cases':[{'id':'s1-b02-a','scenario':'s1'},{'id':'s2-b03-p','scenario':'s2'}]}
+        def frozen(name,*args):
+            campaigns[name]={'cases':[{'status':'pending'}]};return name
+        def run_one(name):
+            events.append(('run',name))
+            if fail_second and name.startswith('s2'):raise RuntimeError('second supplement failed')
+            campaigns[name]['cases'][0].update(status='finished',attempts=[{'state':'VERIFIED'}])
+        values=dict(TRANSITION={'supplemental_origins':['s1-b02-a','s2-b03-p']},
+            supplemental_origins=lambda a:a['supplemental_origins'],P=profile,pilots={'s1':'p1','s2':'p2'},
+            frozen=frozen,check_frozen=lambda name:campaigns[name],run_one=run_one,
+            measured=lambda name:events.append(('reported',name)),
+            environment=lambda name:events.append(('environment',name)))
+        try:exec(compile(tree,'driver-supplement-flow','exec'),values)
+        except RuntimeError:
+            if not fail_second:raise
+        return events
+
+    def test_driver_down_follows_both_actual_supplement_attempts(self):
+        events=self._supplement_driver_flow()
+        self.assertEqual([v for k,v in events if k=='run'],['s1-supplement-transport-v2','s2-supplement-transport-v2'])
+        self.assertEqual(events[-1],('environment','down'))
+        self.assertEqual(len([1 for k,v in events if k=='reported']),2)
+
+    def test_driver_does_not_down_when_second_supplement_has_not_finished(self):
+        events=self._supplement_driver_flow(fail_second=True)
+        self.assertFalse(any(k=='environment' for k,v in events))
+
+    def test_two_separate_supplements_keep_original_main_and_order(self):
+        profile=json.loads((ROOT/'config/graduation-evaluation-fresh.json').read_text())
+        from fresh_contract import schedule
+        profile['cases']=schedule(profile)
+        authorization={'supplemental_origins':['s1-b02-a','s2-b03-p']}
+        first=select_cases(profile,authorization,'s1','supplemental')[0]
+        second=select_cases(profile,authorization,'s2','supplemental')[0]
+        self.assertEqual((first['id'],second['id']),('s1-b02-a-supplement01','s2-b03-p-supplement01'))
+        self.assertEqual((first['purpose'],second['purpose']),('supplemental','supplemental'))
+        self.assertEqual((first['order'],second['order']),(38,39))
+        self.assertNotEqual(first['block'],second['block'])
+        self.assertEqual(sum(c['purpose']=='main' for c in profile['cases']),29)
+        self.assertNotIn('attempts',first);self.assertNotIn('attempts',second)
+
+    def test_scenario_read_guard_rejects_policy_horizon_mutation_changes(self):
+        previous=BEFORE+"\nclass FreshS2:\n def snapshot(self): return self.remote('curl -fsS http://198.18.0.2:8090/progress')\n"
+        current=AFTER+"\nclass FreshS2:\n def snapshot(self): return self.read_remote('curl -fsS http://198.18.0.2:8090/progress')\n"
+        validate_scenario_transport_diff(previous,current)
+        for script in ('sudo reboot','curl -fsS http://198.18.0.2:8090/progress; reboot'):
+            changed=current.replace("self.read_remote('curl -fsS http://198.18.0.2:8090/progress')",'self.read_remote('+repr(script)+')')
+            with self.assertRaises(ValueError):validate_scenario_transport_diff(previous,changed)
+        with self.assertRaises(ValueError):validate_scenario_transport_diff(previous,current.replace('seconds=1800','seconds=900'))
 
     def test_live_adapter_changes_only_reconnect_helper_and_calibration_stays_bound(self):
         current=(ROOT/'evaluation/fresh_live.py').read_text()
