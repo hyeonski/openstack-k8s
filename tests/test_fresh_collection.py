@@ -8,12 +8,26 @@ from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT/d) for d in ('evaluation','scripts','experiments')]
-from fresh_collection import read_evidence, remote_file, durable_host_stat, preserve_s1_partial, resume_download
+from fresh_collection import read_evidence, remote_file, durable_host_stat, preserve_s1_partial, resume_download, durable_pod_cpu
 from fresh_evidence import Evidence, utc
 from fresh_scenarios import FreshS1
 
 
 class CollectionTests(unittest.TestCase):
+    def test_cpu_capture_lost_ack_reads_same_tmpfs_file_without_recapture(self):
+        with tempfile.TemporaryDirectory() as root:
+            lab=Mock();lab.obj.return_value={'metadata':{'uid':'owned'}}
+            lab.k.side_effect=[RuntimeError('response lost'),'usage_usec 123\n']
+            with patch('lib.fresh_reads.context',return_value={'evidence':root}):
+                self.assertEqual(durable_pod_cpu(lab,'pod','namespace'),'usage_usec 123\n')
+            calls=lab.k.call_args_list
+            self.assertEqual(len(calls),2)
+            self.assertEqual(calls[0].args[5:7],('python','-c'))
+            source=calls[1].args[-1]
+            self.assertTrue(source.startswith('/dev/shm/fresh-cpu-'))
+            self.assertIn(repr(source),calls[0].args[-1])
+            self.assertEqual((Path(root)/'pod-cpu'/Path(source).name).read_text(),'usage_usec 123\n')
+
     def test_transient_read_error_preserved_and_retry_bounded(self):
         with tempfile.TemporaryDirectory() as root:
             ev=Evidence(root);reader=Mock(side_effect=[RuntimeError('TLS EOF'),'raw'])

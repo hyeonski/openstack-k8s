@@ -64,8 +64,20 @@ class StabilityTests(unittest.TestCase):
             self.assertEqual(once.call_count,1)
 
     def test_real_error_strings(self):
-        for error in ("Error while connecting [4047: 'Failed to lookup instance']",'TLS handshake timeout','connection reset by peer','broken pipe'):
+        for error in ("Error while connecting [4047: 'Failed to lookup instance']",'TLS handshake timeout','connection reset by peer','broken pipe',
+                      'The connection to the server 127.0.0.1:16444 was refused - did you specify the right host or port?'):
             self.assertTrue(transient_error(RuntimeError(error)))
+
+    def test_kubectl_refusal_reconnects_once_within_original_budget(self):
+        clock=Clock();error=RuntimeError('The connection to the server 127.0.0.1:16444 was refused')
+        invoke=Mock(side_effect=[error,'same owned Job log']);reconnect=Mock();identity=Mock()
+        with tempfile.TemporaryDirectory() as root:
+            self.assertEqual(read_with_budget(invoke,timeout=60,identity=identity,reconnect=reconnect,
+                label='job-log',evidence=root,clock=clock,sleep=clock.sleep),'same owned Job log')
+        self.assertEqual(invoke.call_count,2);reconnect.assert_called_once()
+        self.assertEqual(identity.call_count,2)  # Before retry and after readback.
+        self.assertLessEqual(clock.t,60)
+        self.assertFalse(transient_error(RuntimeError(str(error)+'; forbidden')))
 
     def test_missing_horizon_and_empty_raw_are_explicit_invalid(self):
         profile=synthetic_profile(json.loads((ROOT/'config/graduation-evaluation-fresh.json').read_text()))

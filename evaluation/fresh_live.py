@@ -236,6 +236,11 @@ class LiveBackend:
             raise RuntimeError('experiment record is not owned by this attempt; refusing cleanup')
         if record and not fresh_record and record.get('phase') not in ('completed','completed_with_gap','cleaned'):
             raise RuntimeError('prior experiment is unfinished; refusing to adopt it for cleanup')
+        if profile['operations'].get('stability'):
+            # Restore a missing local tunnel before the first cleanup command;
+            # the background watcher alone may react after that command fails.
+            h.call([Path(__file__).resolve().parents[1]/'scripts/gcp-workload-api-tunnel.sh','ensure'],
+                   'cleanup-transport-preflight.log',timeout=60)
         if fresh_record:
             metadata_path=ev.directory/'environment.json'
             metadata=json.loads(metadata_path.read_text()) if metadata_path.exists() else {}

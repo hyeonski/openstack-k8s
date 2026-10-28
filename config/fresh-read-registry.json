@@ -3,9 +3,9 @@
   "scope": "fresh live adapter and shared runtime; includes dormant legacy functions, not permission to run them",
   "source_sha256": {
     "evaluation/fresh_qualification.py": "2c7e6d71f84b6965578dbc97528a93705c8789f4eb02978eb39f87a7e78c98ca",
-    "evaluation/fresh_live.py": "a39373748c03ad85aafdb7b26417f65d2960dd2c70e618e873de93e2864b25b0",
+    "evaluation/fresh_live.py": "2cc1bfb16db1769911d2e131005363ad5928739ddffc23a9d5a6cc6ccad07c3f",
     "evaluation/fresh_scenarios.py": "4d1eafc100f2aab29553938e29ef70f47a6a2af693b8d6648b161aa9c22dbfd6",
-    "evaluation/fresh_collection.py": "987beaa4d384417daf9dd49e68b76738a771db417c246404559198a153672956",
+    "evaluation/fresh_collection.py": "a629c23f8020523898cb765c59921d3b08433afd3a61181535ee752fae4d9fc1",
     "evaluation/fresh_transport.py": "fb0e7df5e5826841e6bce2d3443f10a78900712c89c948fae67e36f409520c05",
     "evaluation/fresh_identity.py": "27a6ed17937159f8e2a6bc7fffffcd48f80d0dabf081fe0b27bd974ac5c51183",
     "evaluation/fresh_calibration.py": "02becc5f0ec1eaf1772a42fdda5d5c51d8f6b0219c45f1a542e47df2542e0e7c",
@@ -180,7 +180,7 @@
     {
       "file": "evaluation/fresh_live.py",
       "scope": "LiveBackend.cleanup",
-      "line": 261,
+      "line": 266,
       "method": "admin_json",
       "expression": "h.lab.admin_json('server', 'list', '--all-projects')",
       "sha256": "a6903a0a1521309b4133e8a1ce983f7a47e4d8d3df872c8fd83d4e9fb76ef4ec",
@@ -195,7 +195,7 @@
     {
       "file": "evaluation/fresh_live.py",
       "scope": "LiveBackend.cleanup",
-      "line": 270,
+      "line": 275,
       "method": "admin",
       "expression": "h.lab.admin('server', 'start', target['nova_id'])",
       "sha256": "f8ffa7a09d4a7500b9dd8f12ab3045ba12c8d107ec3d71eb53e3e87e7b3aa0e4",
@@ -210,7 +210,7 @@
     {
       "file": "evaluation/fresh_live.py",
       "scope": "LiveBackend.cleanup",
-      "line": 274,
+      "line": 279,
       "method": "nova_status",
       "expression": "nova_status(target['nova_id'])",
       "sha256": "b92758afac3195971b0769ed836d271a334edf21e90cad8b278deb49a1de8f43",
@@ -1335,7 +1335,7 @@
     {
       "file": "evaluation/fresh_collection.py",
       "scope": "durable_pod_cpu",
-      "line": 194,
+      "line": 196,
       "method": "k",
       "expression": "lab.k('-n', namespace, 'exec', pod, '--', 'python', '-c', code, timeout=20)",
       "sha256": "fd22a32ea75d9fe6475bd618ad844eddd37fd620887913e55c946b58b6ae2b45",
@@ -1350,7 +1350,7 @@
     {
       "file": "evaluation/fresh_collection.py",
       "scope": "durable_pod_cpu.verify",
-      "line": 199,
+      "line": 201,
       "method": "k",
       "expression": "lab.k('get', 'pod', pod, '-n', namespace, '-o', 'json', timeout=left())",
       "sha256": "e5bad42c9c1943df0f459daae65616a6cf64cb0a9669b32f8d53f71720b7c88c",
@@ -1365,7 +1365,7 @@
     {
       "file": "evaluation/fresh_collection.py",
       "scope": "durable_pod_cpu",
-      "line": 201,
+      "line": 203,
       "method": "k",
       "expression": "lab.k('-n', namespace, 'exec', pod, '--', 'cat', source, timeout=left())",
       "sha256": "e8f606bec9752e37d0889e3809befd79013bd1f25a42f0b56729d53ca9cd3375",

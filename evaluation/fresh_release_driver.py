@@ -24,7 +24,7 @@ assert AUTH['scope']=={'preparation':8,'main':29}
 assert hashlib.sha256(PROFILE.read_bytes()).hexdigest()==(ACTIVE['profile_sha256'] if ACTIVE else AUTH['profile_sha256'])
 TRANSITION=None
 if ACTIVE:
- from fresh_transport_release import audit_transition, historical_campaign, supplemental_origins
+ from fresh_transport_release import audit_transition, historical_campaign, supplemental_origins, supplemental_plan
  assert hashlib.sha256(Path(ACTIVE['authorization']).read_bytes()).hexdigest()==ACTIVE['authorization_sha256']
  TRANSITION=json.loads(Path(ACTIVE['authorization']).read_text())
  audit_transition(P,TRANSITION,ROOT)
@@ -69,7 +69,7 @@ def review_dev():
  prior=check_frozen(DEV)
  assert prior['git_head']=='6730ecfa68a0628b83b0f9e5924fffcbf72a95ae'
  unchanged=('kubernetes/graduation-s1/app.py','kubernetes/graduation-s1/loadgen.py','evaluation/fresh_baseline.py','evaluation/fresh_analysis.py','evaluation/fresh_contract.py','evaluation/fresh_calibration.py')
- if TRANSITION and TRANSITION.get('kind') in ('user-authorized-stability-continuation-v4','user-authorized-inventory-continuation-v5'):
+ if TRANSITION and TRANSITION.get('kind') in ('user-authorized-stability-continuation-v4','user-authorized-inventory-continuation-v5','user-authorized-s1-read-continuation-v6'):
   unchanged=tuple(n for n in unchanged if n not in ('evaluation/fresh_baseline.py','evaluation/fresh_analysis.py','evaluation/fresh_calibration.py'))
  for name in unchanged:
   assert hashlib.sha256((ROOT/name).read_bytes()).hexdigest()==prior['source_sha256'][name],name
@@ -164,7 +164,7 @@ def remaining_budget(label):
    end=next((epoch(r['utc']) for r in records if r['case_id']==c['id'] and r['attempt_id']=='attempt-01' and r['state'] in ('finished','resumed_cleanup_only')),None)
    if start and end:observed[c['scenario']]=max(observed.get(c['scenario'],0),1.2*(end-start))
  nominal={'s1':44,'s2':37,'s3':32,'s4':37};pending=[c for c in P['cases'] if c['id'] not in completed]
- supplement_pending=[next(c for c in P['cases'] if c['id']==origin) for origin in supplemental_origins(TRANSITION) if origin+'-supplement01' not in completed] if TRANSITION else []
+ supplement_pending=[next(c for c in P['cases'] if c['id']==entry['origin']) for entry in supplemental_plan(TRANSITION) if entry['id'] not in completed] if TRANSITION else []
  seconds=sum(max(nominal[c['scenario']]*72,observed.get(c['scenario'],0)) for c in pending+supplement_pending)
  idle=planned_idle(now)
  lifecycle=P['operations']['single_host_lifecycle_estimate_seconds'] if pending or supplement_pending else P['operations']['host_shutdown_timeout_seconds']

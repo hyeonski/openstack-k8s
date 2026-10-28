@@ -44,3 +44,10 @@
 기존 heartbeat `automation`을 Astra 채팅 `01a1829e-502e-7792-ab6c-ddbbd3f2fe91`의 30분 진행 점검·복구 일정으로 변경했다. 정상 진행의 반복 확인은 조용히 유지하고 의미 있는 진행·실패·수정·필요 조치·완료에 알린다. 전체 평가와 보충, 최종 분석·보고, 소유 자원 정리, VM 정지·원장 종료, 시각 원설정 복원을 확인한 뒤 일정을 종료한다.
 
 비용은 최신 표시 잔액 136,983원에서 보고 이후 경과 및 앞으로 남은 작업을 추정한다. 과거 원장을 새 잔액에서 중복 차감하지 않는다. 정리 40,000원, 기타 20,000원 및 미확인 청구 지연 12시간의 보수적 가정을 유지한다. 확대된 10건의 초안 추정은 약9.21시간, 이 예비비를 제외한 여유는 점검 당시 약7,678원이며 실측 청구 잔액이 아니다. 매 재개와 정기 확인 시 다시 계산한다. 현금 초과·유료 전환·새 GCP 호스트 VM은 승인되지 않았다.
+# Execution update
+
+The two remaining main cases completed. S1 supplement01 then encountered a
+CPU capture/root-filesystem issue and a local tunnel read/cleanup failure.
+Its invalid attempt is now closed and preserved. Continue from
+[the S1 read repair handoff](evaluation-s1-read-repair-2026-10-29.md) and
+`s1-read-repair-v9/go-review.json` once its GO handoff is recorded.

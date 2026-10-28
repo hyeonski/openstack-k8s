@@ -7,6 +7,7 @@ from contextvars import ContextVar
 from contextlib import contextmanager
 from pathlib import Path
 import math
+import re
 import subprocess
 import time
 
@@ -43,7 +44,8 @@ def transient_error(error):
             'certificate', 'notfound', 'not found', 'invalid argument', 'invalid choice',
             '403:', '401:', 'identity changed', 'uid changed')):
         return False
-    return isinstance(error, (subprocess.TimeoutExpired, ConnectionError)) or any(
+    return (bool(re.search(r'the connection to the server [^\n]+ was refused', text)) or
+        isinstance(error, (subprocess.TimeoutExpired, ConnectionError))) or any(
         x in text for x in ('4047', 'tls handshake timeout', 'connection reset',
         'connection refused', 'broken pipe', 'unexpected eof', 'i/o timeout',
         'context deadline exceeded', 'tls eof', 'unable to connect to the server',

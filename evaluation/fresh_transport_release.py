@@ -214,6 +214,9 @@ def validate_probe_read_diff(previous, current):
 
 
 def audit_transition(profile, authorization, root):
+    if authorization.get('kind')=='user-authorized-s1-read-continuation-v6':
+        from fresh_s1_read_release import audit_s1_read_transition
+        return audit_s1_read_transition(profile,authorization,root)
     if authorization.get('kind')=='user-authorized-inventory-continuation-v5':
         from fresh_inventory_release import audit_inventory_transition
         return audit_inventory_transition(profile,authorization,root)
@@ -323,6 +326,11 @@ def supplemental_origins(authorization):
     return [authorization['supplemental_origin']]
 
 
+def supplemental_plan(authorization):
+    if 'supplemental_plan' in authorization:return authorization['supplemental_plan']
+    return [dict(origin=x,id=x+'-supplement01',order=38+i) for i,x in enumerate(supplemental_origins(authorization))]
+
+
 def select_cases(profile, authorization, scenario, stage, origin=None):
     if stage == 'main':
         return [dict(case, status='pending', negative=False) for case in profile['cases']
@@ -334,9 +342,10 @@ def select_cases(profile, authorization, scenario, stage, origin=None):
         for index,value in enumerate(origins):
             original=next(case for case in profile['cases'] if case['id']==value)
             if value==matches[0]:
-                return [dict(original,id=value+'-supplement01',purpose='supplemental',
+                entry=next(p for p in supplemental_plan(authorization) if p['origin']==value)
+                return [dict(original,id=entry['id'],purpose='supplemental',
                     block='supplement-'+original['block']+'-'+original['mode'].lower(),
-                    order=38+index,status='pending',negative=False,depends_on=[])]
+                    order=entry['order'],status='pending',negative=False,depends_on=[])]
     raise ValueError('unsupported transport continuation stage')
 
 
@@ -375,9 +384,9 @@ def freeze_transport(profile_path, destination, authorization_path, *, scenario,
                     actual.add(case['id'])
         if actual != {case['id'] for case in profile['cases'] if case['purpose'] == 'main'}:
             raise ValueError('original main29 must finish before supplement')
-        origins=supplemental_origins(authorization)
-        origin=selected[0]['id'].removesuffix('-supplement01')
-        required={value+'-supplement01' for value in origins[:origins.index(origin)]}
+        plan=supplemental_plan(authorization)
+        entry=next(p for p in plan if p['id']==selected[0]['id'])
+        required={p['id'] for p in plan[:plan.index(entry)]}
         completed=set()
         for saved in Path(ops['artifact_root']).glob('*/campaign.json'):
             for case in json.loads(saved.read_text())['cases']:
@@ -411,7 +420,7 @@ def freeze_transport(profile_path, destination, authorization_path, *, scenario,
         schedule_counts=validate(profile), historical_results='excluded',
         override_path=str(override), override_sha256=sha(override),
         transport_transition_sha256=digest(audit),
-        supplemental_origin=selected[0]['id'].removesuffix('-supplement01') if stage == 'supplemental' else None,
+        supplemental_origin=next(p['origin'] for p in supplemental_plan(authorization) if p['id']==selected[0]['id']) if stage == 'supplemental' else None,
         primary_rule='original main29 first attempts only; supplement excluded')
     if source_hashes(root) != source: raise ValueError('source changed during continuation freeze')
     atomic_json(destination/'campaign.json', manifest)

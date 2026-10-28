@@ -187,7 +187,9 @@ def durable_pod_cpu(lab,pod,namespace):
     ev=Evidence(ctx['evidence'],'pod-capture')
     obj=lab.obj('pod',pod,namespace);uid=obj['metadata']['uid']
     token=hashlib.sha256((ctx['evidence']+str(time.monotonic_ns())).encode()).hexdigest()[:24]
-    source='/tmp/fresh-cpu-'+token+'.txt'
+    # The registered application has a read-only root filesystem. Its existing
+    # writable tmpfs preserves the one captured counter value for readback.
+    source='/dev/shm/fresh-cpu-'+token+'.txt'
     code="import os,pathlib; p=pathlib.Path("+repr(source)+"); f=p.open('x'); f.write(pathlib.Path('/sys/fs/cgroup/cpu.stat').read_text()); f.flush(); os.fsync(f.fileno()); f.close()"
     end=time.monotonic()+60
     append(ev.directory/'capture-intents.jsonl',dict(utc=utc(),kind='pod-cpu',pod_uid=uid,source=source))
