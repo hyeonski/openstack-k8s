@@ -260,6 +260,17 @@ def operational_judgement(directory, case, profile):
                     runner_summary_used=False)
 
 
+def operational_failure_action(result, *, cleanup_verified, budget_available):
+    from fresh_failure_policy import next_action
+    # Unknown scientific safety after an analyser exception is not evidence of
+    # an unsafe restored environment. Preserve the verdict and investigate.
+    if (result.get('execution') == 'judgement_failed' and cleanup_verified
+            and result.get('cleanup') is True and budget_available):
+        return 'investigate_before_next_case'
+    return next_action(result, cleanup_verified=cleanup_verified,
+                       budget_available=budget_available)
+
+
 def save_cleanup(directory,proof):
     directory=Path(directory)
     index=len(list(directory.glob('cleanup-attempt-*.json')))+1

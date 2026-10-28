@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/d) for d in ('evaluation','scripts','experiments')]
 from fresh_transport_release import (validate_scenario_transport_diff,
     validate_live_transport_diff,historical_campaign, audit_transition, select_cases, REVIEWED_FILES)
-from fresh_campaign import FreshCampaign, evidence_hashes, operational_judgement
+from fresh_campaign import FreshCampaign, evidence_hashes, operational_judgement, operational_failure_action
 
 BEFORE='''class FreshS1:
     def move_service(self): return self.policy()
@@ -35,6 +35,16 @@ class OtherScenario:
 
 
 class TransportReleaseTests(unittest.TestCase):
+    def test_clean_analyser_failure_pauses_without_inventing_scientific_safety(self):
+        result=dict(execution='judgement_failed',cleanup=True,safety=None,trial_valid=False)
+        self.assertEqual(operational_failure_action(result,cleanup_verified=True,budget_available=True),'investigate_before_next_case')
+        self.assertIsNone(result['safety'])
+
+    def test_analyser_failure_keeps_real_cleanup_and_budget_safety_gates(self):
+        result=dict(execution='judgement_failed',cleanup=True,safety=None,trial_valid=False)
+        self.assertEqual(operational_failure_action(result,cleanup_verified=False,budget_available=True),'resolve_owned_cleanup')
+        self.assertEqual(operational_failure_action(result,cleanup_verified=True,budget_available=False),'safe_shutdown')
+
     def test_analyser_exception_seals_only_invalid_unknown_outcomes_without_raw_writes(self):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)

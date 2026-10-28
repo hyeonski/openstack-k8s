@@ -8,7 +8,7 @@ from pathlib import Path
 import datetime as dt
 import json,os,subprocess,sys,time,traceback,fcntl,hashlib
 ROOT=Path.cwd();sys.path[:0]=[str(ROOT/d) for d in ('evaluation','scripts','experiments')]
-from fresh_campaign import check_frozen, report
+from fresh_campaign import check_frozen, report, operational_failure_action
 from fresh_operations import BedLedger
 from fresh_pause import pause_decision
 from fresh_host_lifetime import effective_host_deadline, validate_host_lifetime_policy
@@ -218,7 +218,7 @@ def run_one(path):
  out=measured(path)
  row=next(r for r in out['run_results'] if r['case_id']==pending['id'] and r['attempt']=='attempt-01')
  if not row['cleanup'] or row['safety'] is not True or not row['trial_valid']:
-  action=next_action(row,cleanup_verified=row['cleanup'] is True,budget_available=BedLedger(P).usage()['estimated_cost_krw']<P['operations']['new_work_budget_krw'])
+  action=operational_failure_action(row,cleanup_verified=row['cleanup'] is True,budget_available=BedLedger(P).usage()['estimated_cost_krw']<P['operations']['new_work_budget_krw'])
   atomic_json(BASE/'REPAIR-REQUIRED.json',dict(utc=utc(),action=action,case=pending['id'],result=row,no_fault_replay=True))
   DATA['failure_action']=action
   if action=='safe_shutdown':
