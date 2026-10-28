@@ -214,6 +214,9 @@ def validate_probe_read_diff(previous, current):
 
 
 def audit_transition(profile, authorization, root):
+    if authorization.get('kind')=='user-authorized-s3-capture-continuation-v7':
+        from fresh_s3_capture_release import audit_s3_capture_transition
+        return audit_s3_capture_transition(profile,authorization,root)
     if authorization.get('kind')=='user-authorized-s1-read-continuation-v6':
         from fresh_s1_read_release import audit_s1_read_transition
         return audit_s1_read_transition(profile,authorization,root)

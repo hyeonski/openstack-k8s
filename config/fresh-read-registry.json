@@ -4,7 +4,7 @@
   "source_sha256": {
     "evaluation/fresh_qualification.py": "2c7e6d71f84b6965578dbc97528a93705c8789f4eb02978eb39f87a7e78c98ca",
     "evaluation/fresh_live.py": "2cc1bfb16db1769911d2e131005363ad5928739ddffc23a9d5a6cc6ccad07c3f",
-    "evaluation/fresh_scenarios.py": "4d1eafc100f2aab29553938e29ef70f47a6a2af693b8d6648b161aa9c22dbfd6",
+    "evaluation/fresh_scenarios.py": "b2b47c870d53ee672c9b76c095e228f0381132f3e013cd2758f19a488cee050d",
     "evaluation/fresh_collection.py": "a629c23f8020523898cb765c59921d3b08433afd3a61181535ee752fae4d9fc1",
     "evaluation/fresh_transport.py": "fb0e7df5e5826841e6bce2d3443f10a78900712c89c948fae67e36f409520c05",
     "evaluation/fresh_identity.py": "27a6ed17937159f8e2a6bc7fffffcd48f80d0dabf081fe0b27bd974ac5c51183",
@@ -24,9 +24,25 @@
     "experiments/graduation_s3.py": "02f7f963bdf6f2205f83d3aa8b709d9e7c552e92fbaab2046f6e348ddd055e30",
     "experiments/graduation_s4.py": "b765e61e03af989316657978b82ef3cca4409664cefdbb7b42c857d04494777d",
     "experiments/graduation_s4_run.py": "f3bf58f5dcc671ea16337cb991d43bae84762e12bedd17d3d6485f4d5f3e9d66",
-    "scripts/workload-inventory.sh": "90abb0a8d275ae63d11c441fc83c9879716d032cc1ca563c7880c40ecc12554a"
+    "scripts/workload-inventory.sh": "90abb0a8d275ae63d11c441fc83c9879716d032cc1ca563c7880c40ecc12554a",
+    "evaluation/fresh_s3_capture.py": "bb80e1a115f3205234af711f241d0b67035d903349aa9bf7b9a89c508cf7e632"
   },
   "calls": [
+    {
+      "file": "evaluation/fresh_s3_capture.py",
+      "scope": "read_s3_capture",
+      "line": 17,
+      "method": "read_guest",
+      "expression": "runner.read_guest(source, script)",
+      "sha256": "e25d5b247cb6b6fe0a0b729e14ce09d209baccac573568a0d5c669766c327250",
+      "kind": "read",
+      "plane": "typed Kubernetes/OpenStack/GCP/SSH adapter",
+      "operation": "FreshS3.finish",
+      "boundary": "shared read_with_budget; owned target readback",
+      "required": true,
+      "identity": "registered VM IDs and Cluster/MD/CA UIDs; scenario object UID and ownership checks retained",
+      "deadline": "original caller/phase deadline; read max90s, command max20s, initial+2 retries, backoff10/25s; mutations/service requests once"
+    },
     {
       "file": "evaluation/fresh_qualification.py",
       "scope": "run.get",
@@ -225,7 +241,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS1.run_locked.collect",
-      "line": 99,
+      "line": 100,
       "method": "durable_host_stat",
       "expression": "durable_host_stat(self.ev, LabRuntime(self.client), host, sequence)",
       "sha256": "062d112150a5297c493943dfe23f92bef94a21cdef8b95ac3a9ae24be05ec33d",
@@ -240,7 +256,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS1.check_clock",
-      "line": 128,
+      "line": 129,
       "method": "k",
       "expression": "self.s1.k('-n', S1_NS, 'exec', pods[0]['metadata']['name'], '--', 'python', '-c', 'import time; print(time.time())')",
       "sha256": "33309e5c8f7bc54ba82f8fec728566cc40f2ab5f686f0af1111360c6dfdb412d",
@@ -255,7 +271,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS1.create_competitor.collect",
-      "line": 132,
+      "line": 133,
       "method": "k",
       "expression": "self.s1.k('-n', S1_NS, 'logs', 'job/' + record['job_name'], timeout=10)",
       "sha256": "70d0961705620e3c29a0e85b06e0dbf60b76fdb7a616ab65c29693702969a661",
@@ -270,7 +286,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS1.move_service",
-      "line": 195,
+      "line": 196,
       "method": "k",
       "expression": "self.s1.k('-n', S1_NS, 'patch', 'deployment', 'http', '--type=json', '-p', json.dumps(patch))",
       "sha256": "0f1faa3b5b6e5ab1401abf8230aec1b6e6cb58bdc4b50ac1ef7107cabf0f064f",
@@ -285,7 +301,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS1.transport_reads.invoke_client",
-      "line": 236,
+      "line": 237,
       "method": "command",
       "expression": "command(['kubectl', '--kubeconfig', self.client.state / 'kubeconfigs' / (config + '.yaml'), '--request-timeout=15s', *values], data=data, timeout=self.client.remaining(min(30, timeout)))",
       "sha256": "f8815a9b7761fc8afb022d3296bb82f7d532692bee5849089feeaa61a8a155cc",
@@ -300,7 +316,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "restore_mhc",
-      "line": 363,
+      "line": 364,
       "method": "k",
       "expression": "lab.k('patch', 'machinehealthcheck', MHC_NAME, '-n', lab.client.ns, '--type=json', '-p', json.dumps([{'op': 'test', 'path': '/metadata/uid', 'value': before['metadata']['uid']}, {'op': 'test', 'path': '/metadata/resourceVersion', 'value': current['metadata']['resourceVersion']}, {'op': 'add', 'path': '/metadata/annotations', 'value': original}]), plane='m')",
       "sha256": "c09e0e16620b777b68c9cbd91081a257ee7a4b929137dd7add326337b689428d",
@@ -315,7 +331,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "RemoteProbe.__enter__",
-      "line": 384,
+      "line": 385,
       "method": "read_remote",
       "expression": "self.runner.read_remote('if sudo test -s ' + shlex.quote(self.raw_path) + '; then echo ready; fi', timeout=max(0.001, ready_deadline - time.monotonic()))",
       "sha256": "356b8ba51d95ce07625d7293006054ffac9169d7ed947079d89312f22a8ae2e0",
@@ -330,7 +346,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "RemoteProbe.__exit__",
-      "line": 398,
+      "line": 399,
       "method": "remote_file",
       "expression": "remote_file(self.runner.ev, self.runner.read_remote, source, destination, bounded=True)",
       "sha256": "0933b2157b65d4c113fc295bffd83023169c2b8ca43b4a2bac1c3406dbf6ffbd",
@@ -345,7 +361,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.read_remote",
-      "line": 410,
+      "line": 411,
       "method": "remote",
       "expression": "SSHReadBoundary(self).remote(script, timeout=timeout, host=host)",
       "sha256": "a1e2f90613ffec1d819494641d4ed0b5c4ef083030fcb9f81d4cbd55bcaf6145",
@@ -360,7 +376,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.read_admin_json",
-      "line": 414,
+      "line": 415,
       "method": "admin_json",
       "expression": "SSHReadBoundary(self).admin_json(args, timeout=timeout)",
       "sha256": "ef89664bf1cb888d15184e43006edc3e2e48ac10b9ebfbe81618f76cccd4dadf",
@@ -375,7 +391,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.read_host_stat",
-      "line": 418,
+      "line": 419,
       "method": "host_stat",
       "expression": "SSHReadBoundary(self).host_stat(host)",
       "sha256": "9efdd5ddf63f3f724d52a858427b10d2ddd0a81dd31d4abd3bc548ea05bc7ece",
@@ -390,25 +406,10 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.create_owned.readback",
-      "line": 428,
+      "line": 429,
       "method": "admin_json",
       "expression": "self.admin_json(*prefix, 'list', self.record['policy_id'])",
       "sha256": "9724cbbdc63463999b8b89132c91a8003de50628efb43b25869fc0cab4e93923",
-      "kind": "read",
-      "plane": "typed Kubernetes/OpenStack/GCP/SSH adapter",
-      "operation": "FreshOwnedLab.create_owned.readback",
-      "boundary": "structured Kubernetes/OpenStack/S4 Nova registry; original convergence deadline",
-      "required": true,
-      "identity": "registered VM IDs and Cluster/MD/CA UIDs; scenario object UID and ownership checks retained",
-      "deadline": "original caller/phase deadline; read max90s, command max20s, initial+2 retries, backoff10/25s; mutations/service requests once"
-    },
-    {
-      "file": "evaluation/fresh_scenarios.py",
-      "scope": "FreshOwnedLab.create_owned.readback",
-      "line": 430,
-      "method": "admin_json",
-      "expression": "self.admin_json(*prefix, 'list')",
-      "sha256": "2565c05752a657d043b130cdc3141348c508a0186ef3c02a7c707a4c45826797",
       "kind": "read",
       "plane": "typed Kubernetes/OpenStack/GCP/SSH adapter",
       "operation": "FreshOwnedLab.create_owned.readback",
@@ -435,7 +436,22 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.create_owned.readback",
-      "line": 436,
+      "line": 432,
+      "method": "admin_json",
+      "expression": "self.admin_json(*prefix, 'list')",
+      "sha256": "2565c05752a657d043b130cdc3141348c508a0186ef3c02a7c707a4c45826797",
+      "kind": "read",
+      "plane": "typed Kubernetes/OpenStack/GCP/SSH adapter",
+      "operation": "FreshOwnedLab.create_owned.readback",
+      "boundary": "structured Kubernetes/OpenStack/S4 Nova registry; original convergence deadline",
+      "required": true,
+      "identity": "registered VM IDs and Cluster/MD/CA UIDs; scenario object UID and ownership checks retained",
+      "deadline": "original caller/phase deadline; read max90s, command max20s, initial+2 retries, backoff10/25s; mutations/service requests once"
+    },
+    {
+      "file": "evaluation/fresh_scenarios.py",
+      "scope": "FreshOwnedLab.create_owned.readback",
+      "line": 437,
       "method": "admin_json",
       "expression": "self.admin_json(*prefix, 'show', self.record['policy_id'], rid)",
       "sha256": "0d5be1417f9237f0d7534c73d3163c03e0b833582cdd464f04ded5b3a53e72a6",
@@ -450,7 +466,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.create_owned.readback",
-      "line": 437,
+      "line": 438,
       "method": "admin_json",
       "expression": "self.admin_json(*prefix, 'show', rid)",
       "sha256": "a3f9aec6f3fc2cd85ec6c313aeb6d1b2b3c0096a7ca1fc1c18fb27af3e7e70bb",
@@ -465,7 +481,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.create_owned",
-      "line": 445,
+      "line": 446,
       "method": "admin_json",
       "expression": "self.admin_json(*prefix, 'create', *args)",
       "sha256": "9fade28f6584986192b2b72c3b88d868c0061f0f48a917299e5b1f1ec355b9db",
@@ -480,7 +496,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.check_clock",
-      "line": 460,
+      "line": 461,
       "method": "read_remote",
       "expression": "self.read_remote(\"python3 -c 'import time; print(time.time())'\")",
       "sha256": "55e578735e4c825eacfc5259ba6f7243d514bdaf1d3ad9650737fbc2e2cffda4",
@@ -495,7 +511,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.set_rate",
-      "line": 465,
+      "line": 466,
       "method": "read_admin_json",
       "expression": "self.read_admin_json('port', 'show', self.record['workers'][1]['port']['id'])",
       "sha256": "02d29f44b8866769c878b65c04c8587563fc67f63d97b3b524d707c884a094a8",
@@ -510,7 +526,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.set_rate",
-      "line": 466,
+      "line": 467,
       "method": "read_admin_json",
       "expression": "self.read_admin_json('network', 'qos', 'rule', 'show', self.record['policy_id'], self.record['rule_id'])",
       "sha256": "3f18409ce7b4c8e5417a9c4a8378646125298756c499c7559629eb58e8622876",
@@ -525,7 +541,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.diagnostic_snapshot",
-      "line": 471,
+      "line": 472,
       "method": "read_host_stat",
       "expression": "self.read_host_stat(w['host'])",
       "sha256": "fae1ee1a8623adf33ca53b27657ecc58fc3a2de35948601dd57c04f323101d94",
@@ -540,7 +556,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.diagnostic_snapshot",
-      "line": 472,
+      "line": 473,
       "method": "read_remote",
       "expression": "self.read_remote('sudo tc -s -j qdisc show dev s2-egress')",
       "sha256": "1e9e56a95bfcfc2509810dfa5ae0c88e8ad4cac867fc16d04c5f6d08b963a4f9",
@@ -555,7 +571,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.split_if_enabled",
-      "line": 490,
+      "line": 491,
       "method": "k",
       "expression": "self.k('-n', self.ns, 'patch', 'deployment', 'upload', '--type=merge', '-p', json.dumps({'spec': {'template': {'spec': {'nodeSelector': {'kubernetes.io/hostname': b['node']}}}}}))",
       "sha256": "6f9a1462c500dfcf0159103f6ff31940c8fe39e4bf382a816264570ce8795d88",
@@ -570,7 +586,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 511,
+      "line": 512,
       "method": "read_admin_json",
       "expression": "self.read_admin_json('extension', 'list', '--network')",
       "sha256": "163d21a22052830ffc6f336e3b54d46b8c41c0123abad0ec4c8d95569db48b17",
@@ -585,7 +601,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 516,
+      "line": 517,
       "method": "remote",
       "expression": "self.remote('sudo tee /opt/openstack-k8s/graduation-s2-workload.py >/dev/null', data=(ROOT / 'kubernetes/graduation-s2/workload.py').read_text())",
       "sha256": "10a3690dafbb37e4b3abbfca0b92cf32b6c811d57f6757e72e1c6c653be60b47",
@@ -600,7 +616,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 518,
+      "line": 519,
       "method": "remote",
       "expression": "self.remote('sudo tee /opt/openstack-k8s/graduation-s2-network.sh >/dev/null', data=(ROOT / 'experiments/graduation-s2-network.sh').read_text())",
       "sha256": "d21cbd5d6b30a351a264f0f7aacc869dba68ec6e2740c20948903c3114baeda5",
@@ -615,7 +631,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 521,
+      "line": 522,
       "method": "remote",
       "expression": "self.remote('sudo bash /opt/openstack-k8s/graduation-s2-network.sh prepare ' + run)",
       "sha256": "c8dfc353b22ec0bfec116624ec748e83a09e2c8ef2484267101d456d214d79d3",
@@ -630,7 +646,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 523,
+      "line": 524,
       "method": "create_owned",
       "expression": "self.create_owned('security-group', '--project', a['project_id'], run)",
       "sha256": "e7cba38bfa64e0633fe788c4533d7f8c0ce703bf5c64799a1097d5053d930a34",
@@ -645,7 +661,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 525,
+      "line": 526,
       "method": "admin",
       "expression": "self.admin('security', 'group', 'rule', 'create', '--protocol', 'tcp', '--dst-port', '30080', '--remote-ip', '198.18.0.2/32', sg['id'])",
       "sha256": "45097996be61fc77bb9b18ffea9f31a965a629e0252ac9b99f10d9ae1abd6a3f",
@@ -660,7 +676,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 528,
+      "line": 529,
       "method": "admin",
       "expression": "self.admin('port', 'set', '--security-group', sg['id'], a['port']['id'])",
       "sha256": "b12c2ca1944aa05ec13631dc7c306e293837821a1791bbc033e738e5889b3f3e",
@@ -675,7 +691,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 529,
+      "line": 530,
       "method": "read_admin_json",
       "expression": "self.read_admin_json('port', 'show', a['port']['id'])",
       "sha256": "e85d03a54da2ea297504c5dbd12ef60728c5129f4637980c037c2e60fdf27575",
@@ -690,7 +706,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 532,
+      "line": 533,
       "method": "create_owned",
       "expression": "self.create_owned('floating-ip', '--project', a['project_id'], '--description', run, '--port', a['port']['id'], 'public')",
       "sha256": "95531a07e772e0dc52b494bcaa3da783f864553e1c4eb5cf11742aa88e18c714",
@@ -705,7 +721,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 535,
+      "line": 536,
       "method": "create_owned",
       "expression": "self.create_owned('qos-policy', '--project', b['project_id'], run)",
       "sha256": "f3ed767d633bb474b0a91e82c17a1a0cc3f246093fbe2250c63a2295ee741f6e",
@@ -720,7 +736,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 537,
+      "line": 538,
       "method": "create_owned",
       "expression": "self.create_owned('qos-rule', '--type', 'bandwidth-limit', '--max-kbps', '6000', '--max-burst-kbits', '600', '--egress', policy['id'])",
       "sha256": "cd0e5612285bd9708a9f5f948000fa8ad8e187512e181d019fa7f12396cdb25f",
@@ -735,7 +751,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 556,
+      "line": 557,
       "method": "read_remote",
       "expression": "self.read_remote('curl -fsS http://198.18.0.2:8090/progress')",
       "sha256": "e6731b5ce978ba4ef98bdfcd7e2e7ab6a5f4f6806d8532d02d0eb81ffaf67c7f",
@@ -750,7 +766,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 557,
+      "line": 558,
       "method": "read_admin_json",
       "expression": "self.read_admin_json('port', 'show', b['port']['id'])",
       "sha256": "49c3161c3502edcf26d6a7349e89e732a795dfed6f7518677724ad90eed7ed6f",
@@ -765,7 +781,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 559,
+      "line": 560,
       "method": "read_admin_json",
       "expression": "self.read_admin_json('port', 'show', a['port']['id'])",
       "sha256": "e85d03a54da2ea297504c5dbd12ef60728c5129f4637980c037c2e60fdf27575",
@@ -780,7 +796,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 578,
+      "line": 579,
       "method": "read_remote",
       "expression": "self.read_remote('curl -fsS http://198.18.0.2:8090/progress')",
       "sha256": "e6731b5ce978ba4ef98bdfcd7e2e7ab6a5f4f6806d8532d02d0eb81ffaf67c7f",
@@ -795,7 +811,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 583,
+      "line": 584,
       "method": "read_remote",
       "expression": "self.read_remote('curl -fsS http://198.18.0.2:8090/progress')",
       "sha256": "e6731b5ce978ba4ef98bdfcd7e2e7ab6a5f4f6806d8532d02d0eb81ffaf67c7f",
@@ -810,7 +826,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 586,
+      "line": 587,
       "method": "read_remote",
       "expression": "self.read_remote('sudo cat ' + shlex.quote(raw_path))",
       "sha256": "3d439a930c72e312e9eeac3a8eca5dcd306a1e028f3ee357948cbf93e51027e5",
@@ -825,7 +841,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 622,
+      "line": 623,
       "method": "remote_file",
       "expression": "remote_file(self.ev, self.read_remote, raw_path, 'requests.jsonl', bounded=True)",
       "sha256": "da126f6c0c67b86293ab075f96b986bc18e37e71932f512cf9ca052b89d0776b",
@@ -840,7 +856,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 623,
+      "line": 624,
       "method": "remote_file",
       "expression": "remote_file(self.ev, self.read_remote, progress_path, 'uploader-progress.jsonl', bounded=True)",
       "sha256": "f4cfffeb5b3a0e76e2f1be4318e797a049eb39910c12b8794b9b4684f7e365af",
@@ -855,7 +871,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 636,
+      "line": 637,
       "method": "durable_python_capture",
       "expression": "durable_python_capture(self.ev, self.runtime, integrity_code, 's2-upload-integrity', seconds=self.client.remaining(90))",
       "sha256": "aad82f00382630f95d68af550ed32a19d97aa0dd0a25c4ab0fbe10cb6cf63882",
@@ -870,7 +886,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 637,
+      "line": 638,
       "method": "read_admin_json",
       "expression": "self.read_admin_json('port', 'show', b['port']['id'])",
       "sha256": "49c3161c3502edcf26d6a7349e89e732a795dfed6f7518677724ad90eed7ed6f",
@@ -885,7 +901,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 679,
+      "line": 680,
       "method": "admin_json",
       "expression": "self.admin_json('port', 'list', '--network', workers[0]['port']['network_id'], '--device-owner', 'network:router_interface')",
       "sha256": "37eed830aad2b2231c36c2eb2268a2e63102c66b0d6ce59552519c5b3b23549d",
@@ -900,7 +916,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 682,
+      "line": 683,
       "method": "admin_json",
       "expression": "self.admin_json('port', 'show', interfaces[0]['ID'])",
       "sha256": "aa7a7eefed5415dcaf813d716936c1af4f4349087a41703e8f0ceb1b7f55ef72",
@@ -915,7 +931,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 691,
+      "line": 692,
       "method": "k",
       "expression": "self.k('-n', self.client.ns, 'annotate', 'machine', source['machine'], SKIP + '=' + self.record['run_id'], plane='m')",
       "sha256": "9b1eb35c48f3c824dd3eee3109d5faabda2dd268b36bacc5f735fd49c2853267",
@@ -930,7 +946,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 693,
+      "line": 694,
       "method": "sql",
       "expression": "self.sql(\"create table evidence(id integer primary key, value text not null); insert into evidence select i, md5(i::text || '\" + seed + \"') from generate_series(1,1000) i;\")",
       "sha256": "2ec0542a3f5d3a13fccc9d1bdda66534245f3e5ee07ad2c89940498875899d44",
@@ -945,7 +961,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 695,
+      "line": 696,
       "method": "read_sql",
       "expression": "self.read_sql(rows_query)",
       "sha256": "43ca5af3418fb7625d591a36cbe1d34bb1e9da0a0417c88f4fe8a6a39521b053",
@@ -960,7 +976,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 702,
+      "line": 703,
       "method": "read_sql",
       "expression": "self.read_sql(query)",
       "sha256": "d27cd12695328a5f37570155984e6b87ac7413977a4b62ff3eaa8bf4146eb02f",
@@ -975,7 +991,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 703,
+      "line": 704,
       "method": "read_sql",
       "expression": "self.read_sql(\"select current_setting('fsync') || ':' || current_setting('synchronous_commit') || ':' || current_setting('full_page_writes') || ':' || current_setting('data_directory')\")",
       "sha256": "f11435e0c8a4770449527232f071df2a7249d2975f52664f34bca424d45a2b7f",
@@ -990,7 +1006,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 711,
+      "line": 712,
       "method": "read_guest",
       "expression": "self.read_guest(cp, 'cat /etc/kubernetes/manifests/kube-controller-manager.yaml')",
       "sha256": "1947bb7c435e017daf42d762a16f95344559b05131a9b4c36aa3e1c7bbd8e4ec",
@@ -1005,7 +1021,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish.probe",
-      "line": 721,
+      "line": 722,
       "method": "k",
       "expression": "self.k('-n', self.ns, 'exec', 'probe', '--', 'env', 'PGCONNECT_TIMEOUT=' + str(int(cfg['deadline_seconds'])), 'PGOPTIONS=-c statement_timeout=' + str(int(cfg['deadline_seconds'] * 1000)), 'psql', '-X', '-At', '-v', 'ON_ERROR_STOP=1', '-h', 'db', '-U', 'postgres', '-d', 'postgres', '-c', 'select count(*) from evidence', timeout=cfg['deadline_seconds'] + 2)",
       "sha256": "80b1edbc1ef6e1335e102a12f622e6e004c4515a42b63183bc128f40e64dbfb8",
@@ -1020,7 +1036,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 747,
+      "line": 748,
       "method": "guest",
       "expression": "self.guest(source, fault)",
       "sha256": "6fbec62636e18884220fc673ae41f5d46e907274ef5f99a2768fc59887307764",
@@ -1028,21 +1044,6 @@
       "plane": "typed Kubernetes/OpenStack/GCP/SSH adapter",
       "operation": "FreshS3.finish",
       "boundary": "fault once; owned durable guest file/readback",
-      "required": true,
-      "identity": "registered VM IDs and Cluster/MD/CA UIDs; scenario object UID and ownership checks retained",
-      "deadline": "original caller/phase deadline; read max90s, command max20s, initial+2 retries, backoff10/25s; mutations/service requests once"
-    },
-    {
-      "file": "evaluation/fresh_scenarios.py",
-      "scope": "FreshS3.finish",
-      "line": 750,
-      "method": "read_guest",
-      "expression": "self.read_guest(source, 'test \"$(cat /run/osk8s-s3-owner)\" = ' + shlex.quote(self.record['run_id']) + ' && iptables -C OUTPUT -j OSK8S_S3_OUT && iptables -C FORWARD -j OSK8S_S3_DB && cat ' + shlex.quote('/run/osk8s-s3-capture-' + self.record['run_id'] + '.json'))",
-      "sha256": "282c31b32f007c33c8e9db29e6b10da466fb1fece8080766949d2cf8b3a36af7",
-      "kind": "read",
-      "plane": "typed Kubernetes/OpenStack/GCP/SSH adapter",
-      "operation": "FreshS3.finish",
-      "boundary": "shared read_with_budget; owned target readback",
       "required": true,
       "identity": "registered VM IDs and Cluster/MD/CA UIDs; scenario object UID and ownership checks retained",
       "deadline": "original caller/phase deadline; read max90s, command max20s, initial+2 retries, backoff10/25s; mutations/service requests once"

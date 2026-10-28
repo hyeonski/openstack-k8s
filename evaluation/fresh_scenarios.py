@@ -30,6 +30,7 @@ from fresh_evidence import Evidence, OpenLoopProbe, append, clock_check, utc
 from fresh_contract import digest
 from fresh_baseline import baseline_gate
 from fresh_collection import durable_host_stat, remote_file, preserve_s1_partial, checkpoint_text
+from fresh_s3_capture import read_s3_capture
 
 
 def fixture_ready(ev):
@@ -747,8 +748,7 @@ class FreshS3(FreshOwnedLab, EvaluationS3):
                 try:self.guest(source, fault)
                 except Exception as error:
                     self.ev.event('mutation_response_error',operation='S3 fault',detail=str(error),mutation_repeated=False)
-                process = self.read_guest(source,'test "$(cat /run/osk8s-s3-owner)" = '+shlex.quote(self.record['run_id'])+' && iptables -C OUTPUT -j OSK8S_S3_OUT && iptables -C FORWARD -j OSK8S_S3_DB && cat '+shlex.quote('/run/osk8s-s3-capture-'+self.record['run_id']+'.json'))
-                running = json.loads(process)
+                running = read_s3_capture(self,source)
                 self.save('old-db-running-after-fault.json', running)
                 old_pod = self.record['pod_before']
                 expected_container = old_pod['status']['containerStatuses'][0]['containerID'].split('://', 1)[-1]
