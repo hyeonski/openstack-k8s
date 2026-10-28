@@ -16,4 +16,6 @@ S1의 실제 `kubectl wait/get/logs/rollout status` 읽기 경로와 workload Cl
 
 추가 A는 기존 최대 실측 약 46분에 기반해 20%를 포함한 약 55분, 약 2,450원의 계획 비용을 반영한다. 공유 원장의 신규작업 146,234원·정리 reserve 40,000원·기존 불확실성 20,000원 1회 원칙을 유지한다. 중단 중 예측은 null이며 재개 후 완료 작업을 제외하고 추가 1건을 포함해 갱신한다.
 
-실제 평가와 같은 Python 3.11.16에서 전체 fresh 회귀 125건, 컴파일, 시나리오 AST 동일성, diff 검증을 통과했다. 최소 읽기 확인은 고정 3회 API `/readyz`, cluster/MD UID, Ready worker 1대, 실험 namespace 부재, 기존 GCP 3대 ID·종류·RUNNING의 7개 항목이 모두 통과했다. 이 결과와 새 source 234개, 정확한 변경 9개 파일 diff hash, 기존 frozen manifest·봉인 증거를 `transport-transition-authorization.json`에 묶었다. 실제 원자료를 사용한 전환 사전 감사에서 준비 8건 재사용과 잔여 main 20건·보충 1건을 확인했다. `transport-release-active.json`은 새 profile·승인 hash를 가리키며 기존 단일 heartbeat의 완료 조건도 main29와 보충 1회 모두를 요구하도록 갱신한다.
+실제 평가와 같은 Python 3.11.16에서 전체 fresh 회귀 127건, 컴파일, 시나리오 AST 동일성, diff 검증을 통과했다. 최소 읽기 확인은 고정 3회 API `/readyz`, cluster/MD UID, Ready worker 1대, 실험 namespace 부재, 기존 GCP 3대 ID·종류·RUNNING의 7개 항목이 모두 통과했다. 이 결과와 새 source 234개, 정확한 변경 9개 파일 diff hash, 기존 frozen manifest·봉인 증거를 `transport-transition-authorization.json`에 묶었다. 실제 원자료를 사용한 전환 사전 감사에서 준비 8건 재사용과 잔여 main 20건·보충 1건을 확인했다. `transport-release-active.json`은 새 profile·승인 hash를 가리키며 기존 단일 heartbeat의 완료 조건도 main29와 보충 1회 모두를 요구하도록 갱신한다.
+
+시작 전 DEV 검증에서 발견한 watcher SHA 비교 누락도 실행 전에 수정했다. 변경된 watcher를 과거와 동일하다고 취급하지 않고 양쪽 SHA와 명시적 변경 검토를 남긴다. Calibration 전체 AST는 기존 reconnect 호출에 단일 잠금·누적 60초 한도를 넣은 부분 외에 같아야 한다. 실제 과거 DEV source 검토와 과학 기준 변경 거부 회귀도 통과했으며, 새 cohort 시작 전 실행되지 않은 초기 승인 초안·실패한 localhost sandbox 바인딩 검사도 별도 보존했다.

@@ -32,6 +32,62 @@ REVIEWED_FILES = frozenset({
 def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+WATCH_RECONNECT = '''from fresh_transport import transport_lock
+deadline = time.monotonic() + 60
+def remaining():
+    left = deadline - time.monotonic()
+    if left <= 0:raise TimeoutError('transport reconnect cumulative deadline')
+    return left
+with transport_lock(os.environ['STATE_DIR'], remaining):
+    if not self.reachable():
+        self.helper.call([ROOT/'scripts/gcp-workload-api-tunnel.sh','ensure'],
+                         'transport-reconnect.log',timeout=remaining())
+'''
+
+
+def validate_calibration_transport_diff(previous, current):
+    """Only the existing watcher ensure gains the shared, bounded lock."""
+    old, new = ast.parse(previous), ast.parse(current)
+    def reconnect(tree):
+        cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'TransportWatch')
+        method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'check')
+        return next(n for n in method.body if isinstance(n, ast.Try))
+    before, after = reconnect(old), reconnect(new)
+    expected = ast.parse(WATCH_RECONNECT).body
+    original = ast.parse("self.helper.call([ROOT/'scripts/gcp-workload-api-tunnel.sh','ensure'], 'transport-reconnect.log',timeout=60)").body
+    if ([ast.dump(n) for n in after.body[:-1]] != [ast.dump(n) for n in expected]
+        or [ast.dump(n) for n in before.body[:-1]] != [ast.dump(n) for n in original]):
+        raise ValueError('calibration watcher repair extends beyond bounded shared reconnect')
+    after.body[:-1] = copy.deepcopy(before.body[:-1])
+    if ast.dump(old) != ast.dump(new):
+        raise ValueError('calibration scientific contract or other behavior changed')
+
+
+def review_dev_sources(prior, authorization, root):
+    """Record historical DEV reuse explicitly; never claim changed SHA identity."""
+    root = Path(root);review = {}
+    names = ('kubernetes/graduation-s1/app.py','kubernetes/graduation-s1/loadgen.py',
+             'evaluation/fresh_baseline.py','evaluation/fresh_analysis.py',
+             'evaluation/fresh_contract.py','evaluation/fresh_calibration.py')
+    for name in names:
+        historical = prior['source_sha256'][name];current = sha(root/name)
+        if current == historical:
+            review[name] = dict(historical_sha256=historical,current_sha256=current,kind='identical')
+            continue
+        if (name != 'evaluation/fresh_calibration.py' or not authorization
+            or name not in authorization['changed_files']
+            or current != authorization['approved_source_sha256'][name]):
+            raise ValueError('historical DEV scientific source changed: '+name)
+        original = Path(authorization['prior_campaigns']['s1-main-v1']['path'])/'source'/name
+        if sha(original) != historical:
+            raise ValueError('historical DEV watcher differs from reviewed predecessor')
+        validate_calibration_transport_diff(original.read_text(),(root/name).read_text())
+        review[name] = dict(historical_sha256=historical,current_sha256=current,
+            kind='explicit transport transition; historical DEV not reexecuted',
+            impact='shared reconnect lock only; calibration rule/samplers/analysis AST unchanged')
+    return review
+
+
 def validate_scenario_transport_diff(previous, current):
     """All scenario/policy AST stays identical after removing the read wrapper."""
     old, new = ast.parse(previous), ast.parse(current)
@@ -99,6 +155,8 @@ def audit_transition(profile, authorization, root):
         raise ValueError('reviewed diff changed')
     validate_scenario_transport_diff((anchor_path/'source/evaluation/fresh_scenarios.py').read_text(),
                                     (root/'evaluation/fresh_scenarios.py').read_text())
+    validate_calibration_transport_diff((anchor_path/'source/evaluation/fresh_calibration.py').read_text(),
+                                       (root/'evaluation/fresh_calibration.py').read_text())
     before, after = copy.deepcopy(anchor['profile']), copy.deepcopy(profile)
     before['operations'].pop('artifact_root');after['operations'].pop('artifact_root')
     if before != after:

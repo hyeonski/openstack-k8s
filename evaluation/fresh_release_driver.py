@@ -68,9 +68,8 @@ def review_dev():
  from fresh_analysis import judge
  prior=check_frozen(DEV)
  assert prior['git_head']=='6730ecfa68a0628b83b0f9e5924fffcbf72a95ae'
- unchanged=('kubernetes/graduation-s1/app.py','kubernetes/graduation-s1/loadgen.py','evaluation/fresh_baseline.py','evaluation/fresh_analysis.py','evaluation/fresh_contract.py','evaluation/fresh_calibration.py')
- for name in unchanged:
-  assert hashlib.sha256((ROOT/name).read_bytes()).hexdigest()==prior['source_sha256'][name],name
+ from fresh_transport_release import review_dev_sources
+ source_review=review_dev_sources(prior,TRANSITION,ROOT)
  case=prior['cases'][0];rows=[]
  for attempt in case['attempts']:
   path=DEV/attempt['path']
@@ -78,7 +77,7 @@ def review_dev():
   assert evidence_hashes(path)==attempt['evidence_sha256']
   judged=judge(path,case,prior['profile'])
   rows.append(dict(attempt=attempt['id'],**judged))
- value=dict(source_commit=prior['git_head'],reviewed_utc=utc(),primary_sample_count=0,run_results=rows,note='original-source evidence reuse; no old artifact rewritten; same SHA analysis recomputation')
+ value=dict(source_commit=prior['git_head'],reviewed_utc=utc(),primary_sample_count=0,run_results=rows,source_review=source_review,note='original-source DEV evidence reuse; no old artifact rewritten; unchanged SHA analysis recomputation; changed watcher explicitly reviewed under transport transition')
  atomic_json(BASE/'reused-dev-review.json',value)
  return value
 
