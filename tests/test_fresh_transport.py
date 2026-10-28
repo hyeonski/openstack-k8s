@@ -21,6 +21,30 @@ class Clock:
 
 
 class TransportTests(unittest.TestCase):
+    def test_existing_watcher_helper_and_reader_share_one_repair_and_mutations_delegate_once(self):
+        from fresh_transport import coordinate_reconnect
+        with tempfile.TemporaryDirectory() as folder,patch.dict('os.environ',{'WORKLOAD_LOCAL_API_PORT':'16444'}):
+            state={'ready':False};barrier=threading.Barrier(2);call=Mock(side_effect=lambda *a,**k:state.update(ready=True) or 0)
+            wrapped=coordinate_reconnect(call,folder,Path('/repo'))
+            def watcher():barrier.wait();wrapped(['/repo/scripts/gcp-workload-api-tunnel.sh','ensure'],'watch.log',timeout=60)
+            def reader():
+                barrier.wait()
+                with transport_lock(folder,lambda:60):
+                    if not state['ready']:call('reader ensure')
+            with patch('fresh_transport.listener_reachable',side_effect=lambda port:state['ready']):
+                threads=[threading.Thread(target=watcher),threading.Thread(target=reader)]
+                for t in threads:t.start()
+                for t in threads:t.join(3)
+                self.assertTrue(all(not t.is_alive() for t in threads));self.assertEqual(call.call_count,1)
+            call.reset_mock();wrapped(['kubectl','delete','job','owned'],'mutation.log',timeout=5);self.assertEqual(call.call_count,1)
+
+    def test_watcher_helper_keeps_original_cumulative_repair_deadline(self):
+        from fresh_transport import coordinate_reconnect
+        clock=Clock()
+        with tempfile.TemporaryDirectory() as folder,patch.dict('os.environ',{'WORKLOAD_LOCAL_API_PORT':'16444'}),patch('fresh_transport.listener_reachable',return_value=False):
+            def late(*args,**kwargs):clock.sleep(61);return 0
+            with self.assertRaisesRegex(TimeoutError,'deadline'):
+                coordinate_reconnect(late,folder,'/repo',clock=clock)(['/repo/scripts/gcp-workload-api-tunnel.sh','ensure'],'watch.log',timeout=60)
     def run_read(self, invoke, args, *, timeout=30, identity=None, reconnect=None, data=None):
         clock = Clock()
         identity = identity or Mock()

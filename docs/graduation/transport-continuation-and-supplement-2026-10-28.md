@@ -1,21 +1,15 @@
-# 읽기 연결 복구 후속 버전과 보충 A 측정
+# 연결 읽기 복원과 추가 A 1회: source 전환
 
-사용자는 S1 `s1-b02-a/attempt-01`의 연결 오류 읽기 재시도 누락 보완과 추가 A 측정 1회를 승인했다. 진행 중인 `s1-b03-p`는 기존 source로 자연 종료·cleanup·독립 판정·증거 봉인까지 유지한다. 기존 단일 driver의 다음 case 진입 gate에 운영 handoff 표식을 등록하며, 관측이나 정리를 중단하거나 별도 클라우드 실험을 실행하지 않는다. 패치와 오프라인 테스트는 `/private/tmp/openstack-k8s-transport-repair-20261028`에서 먼저 준비한다.
+사용자는 연결 오류 읽기 재시도 보완과 무효 `s1-b02-a`의 추가 측정 1회를 승인하면서 진행 중인 실험 중단을 금지했다. `s1-b03-p`는 기존 source에서 자연 종료·정리·독립 판정·봉인을 마쳤으며, 2026-10-28 10:04:56 KST에 canonical driver가 다음 case 전 운영 handoff 지점에서 종료했다. 유효·안전·정리 통과 및 `impact_realized=false`를 모두 보존한다.
 
-`s1-b03-p`는 2026-10-28 10:04:56 KST까지 유효·안전·정리 통과로 봉인됐고 canonical driver는 handoff gate에서 자연 종료했다. `impact_realized=false`도 그대로 보존하므로 정상 유지를 복구 효과와 혼동하지 않는다. 이 경계까지 실제 main 9건은 유효 8건·무효 1건이다. 기존 230개 source와 원자료는 전환 직전에도 동일했다.
+경계까지 preparation 10 attempt는 유효 8/무효 2, main 첫 attempt 9건은 유효 8/무효 1이다. 기존 230개 source와 모든 봉인 증거 hash는 동일하며 원판정 승격·원자료 보완·이전 결과 복사는 없다. 새 cohort는 미실행 main 20건을 원순서대로 실행하고, original main29가 모두 봉인된 뒤 `s1-b02-a-supplement01`을 별도 purpose/block에서 정확히 한 번 시도한다. 추가 A는 주분석 첫 29건이나 과거 동시 paired block을 대체하지 않는다.
 
-S1의 실제 `kubectl wait/get/logs/rollout status` 읽기 경로와 workload Client 읽기에 제한된 transport 래퍼를 적용한다. reset/refused/Broken pipe 등 명시적인 일시 연결 오류만 최대 3회, backoff와 재연결·UID 확인 시간을 합친 원래 단계의 총 deadline 안에서 재시도한다. `kubectl wait --timeout`도 남은 시간으로 줄여서 다시 시작한 대기가 시간을 초기화하지 않게 한다. 기존 preparation/cleanup watcher와 동일한 재연결 flock 및 listener 재확인을 사용한다. 동일 Job UID, 준비 cluster UID 또는 이미 확인한 최종 서비스 Pod UID를 재확인한다. 주입·patch·restart·delete·exec는 반복하지 않는다. 영구 오류·대상 변경·누적 deadline 초과는 종료하며 통신 공백을 보간하지 않는다. 원래 오류와 각 읽기 시도·재연결 로그는 증거에 남긴다.
+허용된 kubectl wait/get/logs/rollout status의 일시 연결 오류만 최대 3회 읽기 재시도한다. reconnect·동일 Job UID 전후 확인·backoff·실제 명령이 원래 단일 누적 deadline을 공유한다. UID 변경, 영구 오류, deadline 실패와 관측 공백은 보존하고 mutation/fault/restart/delete를 재생하지 않는다. 기존 watcher와 읽기 복구는 live helper의 정확한 로컬 tunnel ensure 호출에 같은 단일 flock을 사용한다. 기존 calibration 파일은 원본 SHA로 유지한다. calibration/DEV의 앱·부하·분석·기준·계측 source 6개 binding을 모두 그대로 통과한다.
 
-앱·부하·fault·정책·SLO·H·안정창·표본수·분석기는 변경하지 않는다. `FreshS1.finish`의 읽기 래퍼를 제거하고 `finish_once`를 원래 이름으로 정규화했을 때 전체 scenario 모듈 AST가 기존과 정확히 같아야 한다. 바뀐 mixed source 파일 전체와 새 transport/등록 코드도 후속 freeze의 source hash에 포함한다. 이전 source 검사를 제외하는 allowlist를 사용하지 않는다.
+초기 미실행 승인 초안 15479fb/8d71078과 시작 전 검증 실패를 보존했다. 과거 calibration binding을 우회하는 방법 대신 실행 helper에서 reconnect를 조정하도록 확정했다. 전체 source 234개를 새로 동결하며 변경 9파일의 정확한 diff hash, 테스트, 최소 읽기 확인, 기존 frozen manifest와 준비 8건 재판정을 명시적 승인에 결합한다. source exemption은 없다. 프로필은 새 artifact_root 외에는 동일하며 workload·SG·H/SLO·안정창·표본수·분석 기준을 변경하지 않는다.
 
-기존 `freeze`는 S1 adapter 파일의 transport 변경도 정책 경계 변경으로 분류하므로, 명시적인 `freeze-transport` 후속 등록 경로를 사용한다. 이 경로는 승인된 전체 새 source map·정확한 diff hash·오프라인 테스트 결과·최소 읽기 검증·이전 frozen manifest 및 모든 봉인 증거를 검증한다. profile은 artifact root만 바꾼다. 기존 preparation 8건은 원래 source/원자료로 독립 판정을 재검산하고 main과 scenario 계약이 같음을 확인한 뒤 재사용한다. prep를 재주입하거나 이전 완료 case를 새 cohort의 완료로 복사하지 않는다. 새 cohort에는 기존 main29 중 미실행 case만 원래 순서로 등록한다. 이전 freeze와 원래 무효 판정·raw는 그대로 남는다.
+production Python 3.11.16 fresh 회귀 128건, 컴파일, 시나리오와 live adapter AST, 과거 calibration/DEV source 동일성, diff 검사를 통과했다. localhost 서버 바인딩이 sandbox에서 거부된 검사도 별도 보존한 뒤 같은 source/검사를 허용 환경에서 통과했다. 최소 읽기 확인은 고정 3회 API readyz, cluster/MD UID, Ready worker 1대, 실험 namespace 부재, 기존 GCP3 ID·종류·RUNNING의 7항목을 통과했다.
 
-전환 경계는 `s1-b03-p` 종료 뒤, 다음 `s1-b03-m` 시작 전이다. 최종 보고는 각 arm의 source cohort와 경계를 공개한다. 기존 source의 b03 P와 후속 source의 M/A가 같은 block에 속한다는 사실과 source 전환도 함께 표시한다.
+승인은 `transport-transition-authorization.json`, 원증거 전환 감사는 `transport-transition-final-audit.json`, 최소 확인과 테스트는 `transport-repair-minimal-readback.json`/`transport-repair-tests.json`에 기록한다. `transport-release-active.json`은 새 profile·승인 hash를 고정한다. 기존 단일 heartbeat의 완료 조건은 original main29, 추가 A 실제 1회, 최종 원자료 분석·소유정리·기존 3대 TERMINATED·공유 원장 종료 검증 모두다.
 
-보충 case `s1-b02-a-supplement01`은 원래 main29 순서를 모두 마친 직후에 실행한다. purpose는 `supplemental`, block은 `supplement-b02-a`, 시도 한도는 1회다. 원래 b02 A 첫 시도의 무효를 대체하지 않으며 이후 시점의 A를 원 block과 동시 paired 관측으로 취급하지 않는다. 주 분석은 원래 29개 첫 시도를 유지하고, 보충 결과는 별도로 공개한다. driver 완료 조건은 main29와 추가 A 1회 모두 실제 측정된 뒤 최종 소유 정리·3대 종료·공유 원장 종료로 확장한다.
-
-추가 A는 기존 최대 실측 약 46분에 기반해 20%를 포함한 약 55분, 약 2,450원의 계획 비용을 반영한다. 공유 원장의 신규작업 146,234원·정리 reserve 40,000원·기존 불확실성 20,000원 1회 원칙을 유지한다. 중단 중 예측은 null이며 재개 후 완료 작업을 제외하고 추가 1건을 포함해 갱신한다.
-
-실제 평가와 같은 Python 3.11.16에서 전체 fresh 회귀 127건, 컴파일, 시나리오 AST 동일성, diff 검증을 통과했다. 최소 읽기 확인은 고정 3회 API `/readyz`, cluster/MD UID, Ready worker 1대, 실험 namespace 부재, 기존 GCP 3대 ID·종류·RUNNING의 7개 항목이 모두 통과했다. 이 결과와 새 source 234개, 정확한 변경 9개 파일 diff hash, 기존 frozen manifest·봉인 증거를 `transport-transition-authorization.json`에 묶었다. 실제 원자료를 사용한 전환 사전 감사에서 준비 8건 재사용과 잔여 main 20건·보충 1건을 확인했다. `transport-release-active.json`은 새 profile·승인 hash를 가리키며 기존 단일 heartbeat의 완료 조건도 main29와 보충 1회 모두를 요구하도록 갱신한다.
-
-시작 전 DEV 검증에서 발견한 watcher SHA 비교 누락도 실행 전에 수정했다. 변경된 watcher를 과거와 동일하다고 취급하지 않고 양쪽 SHA와 명시적 변경 검토를 남긴다. Calibration 전체 AST는 기존 reconnect 호출에 단일 잠금·누적 60초 한도를 넣은 부분 외에 같아야 한다. 실제 과거 DEV source 검토와 과학 기준 변경 거부 회귀도 통과했으며, 새 cohort 시작 전 실행되지 않은 초기 승인 초안·실패한 localhost sandbox 바인딩 검사도 별도 보존했다.
+추가 A는 기존 최대 실측 약 46분에 20%를 포함한 약 55분·약 2,450원의 계획 비용을 반영한다. 신규작업 146,234원·정리 reserve 40,000원·기존 불확실성 20,000원 단1회 원칙을 유지한다. 중단 예측은 null, 재개 예측은 완료 작업을 제외하고 보충 1건을 포함한다. 부족 예상은 조기 알린다.

@@ -110,6 +110,25 @@ def listener_reachable(port):
         return False
 
 
+def coordinate_reconnect(call, state, root, *, clock=time.monotonic):
+    """Wrap only the exact local tunnel ensure; delegate every mutation once."""
+    def invoke(args, log, timeout=5400, allowed=(0,)):
+        if list(map(str,args)) != [str(Path(root)/'scripts/gcp-workload-api-tunnel.sh'),'ensure']:
+            return call(args,log,timeout=timeout,allowed=allowed)
+        import os
+        end=clock()+min(60,timeout)
+        def remaining():
+            left=end-clock()
+            if left<=0:raise TimeoutError('transport reconnect cumulative deadline')
+            return left
+        with transport_lock(state,remaining):
+            if listener_reachable(os.environ['WORKLOAD_LOCAL_API_PORT']):return 0
+            result=call(args,log,timeout=remaining(),allowed=allowed)
+            remaining()
+            return result
+    return invoke
+
+
 @contextmanager
 def transport_lock(state, remaining, sleep=time.sleep):
     """One reconnect owner, also used by the existing TransportWatch."""

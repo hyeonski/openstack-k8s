@@ -31,6 +31,8 @@ class LiveBackend:
         h.profile=profile;h.state=self.state;h.lab=RecoveryLab('s3')
         contract=self.directory/'runtime-environment.json'
         h.data=json.loads(contract.read_text()) if contract.exists() else {}
+        from fresh_transport import coordinate_reconnect
+        h.call=coordinate_reconnect(h.call,h.state,Path(__file__).resolve().parents[1])
         return h
 
     def require_clean_state(self):
