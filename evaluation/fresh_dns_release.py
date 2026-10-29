@@ -1,12 +1,12 @@
 """Reviewed final supplement after Neutron remote-SG cache reconciliation."""
-import copy,difflib,json
+import ast,copy,difflib,json
 from pathlib import Path
 from fresh_stability_release import artifact,sha
 
 KIND='user-authorized-dns-readiness-continuation-v8'
 ORIGINS=['s3-b02-m3600']
 PLAN=[dict(origin=ORIGINS[0],id=ORIGINS[0]+'-supplement03',order=48)]
-FILES={'evaluation/fresh_dns_release.py','evaluation/fresh_transport_release.py','evaluation/fresh_release_driver.py','tests/test_fresh_dns_release.py'}
+FILES={'evaluation/fresh_dns_release.py','evaluation/fresh_transport_release.py','evaluation/fresh_release_driver.py','tests/test_fresh_dns_release.py','scripts/lib/neutron_members.py','scripts/test_resources.py','evaluation/fresh_read_registry.py','config/fresh-read-registry.json','tests/test_fresh_neutron_members.py'}
 
 def validate_scope(a):
     if (a.get('kind')!=KIND or a.get('remaining_main_ids')!=[] or a.get('supplemental_origins')!=ORIGINS or
@@ -18,6 +18,30 @@ def validate_delta(base,source,declared):
     changed={n for n in base.keys()|source.keys() if base.get(n)!=source.get(n)}
     if changed!=set(declared) or not changed.issubset(FILES):raise ValueError('outside DNS continuation gate envelope')
     return changed
+
+def validate_probe_hook(old,new):
+    before,after=ast.parse(old),ast.parse(new)
+    hook=ast.parse('if os.environ.get("FRESH_READ_CONTEXT"):\n from lib.neutron_members import reconcile_before_probe\n reconcile_before_probe(client, path)').body[0]
+    target=next(n for n in after.body if isinstance(n,ast.FunctionDef) and n.name=='probe')
+    if ast.dump(target.body[0])!=ast.dump(hook):raise ValueError('readiness hook crossed reviewed boundary')
+    target.body.pop(0)
+    if ast.dump(before)!=ast.dump(after):raise ValueError('existing probe policy, command or deadline changed')
+
+def validate_registry_change(old_program,new_program,old_data,new_data):
+    before,after=ast.parse(old_program),ast.parse(new_program)
+    assignment=next(n for n in after.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='FILES' for t in n.targets))
+    entries=assignment.value.elts
+    added=[n for n in entries if isinstance(n,ast.Constant) and n.value=='scripts/lib/neutron_members.py']
+    if len(added)!=1:raise ValueError('only explicit Neutron call inventory extension allowed')
+    entries.remove(added[0])
+    if ast.dump(before)!=ast.dump(after):raise ValueError('registry enforcement changed')
+    key=lambda x:(x['file'],x['scope'],x['sha256'])
+    lookup={key(x):x for x in new_data['calls']}
+    for row in old_data['calls']:
+        if {k:v for k,v in row.items() if k!='line'}!={k:v for k,v in lookup.get(key(row),{}).items() if k!='line'}:
+            raise ValueError('existing remote operation policy changed')
+    oldkeys={key(x) for x in old_data['calls']}
+    if any(x['file']!='scripts/lib/neutron_members.py' for x in new_data['calls'] if key(x) not in oldkeys):raise ValueError('unreviewed new remote call')
 
 def audit_dns_transition(profile,a,root):
     from fresh_campaign import source_hashes,pilot_contract
@@ -42,6 +66,8 @@ def audit_dns_transition(profile,a,root):
         if prior[k]['git_head']!='db82c5ba04a300ce177a09cd8869c13a7d34a589' or prior[k]['source_sha256']!=previous['approved_source_sha256']:
             raise ValueError('actual source259 v10 predecessor required')
     changed=validate_delta(old['source_sha256'],source,a['changed_files'])
+    validate_probe_hook((oldroot/'scripts/test_resources.py').read_text(),(root/'scripts/test_resources.py').read_text())
+    validate_registry_change((oldroot/'evaluation/fresh_read_registry.py').read_text(),(root/'evaluation/fresh_read_registry.py').read_text(),json.loads((oldroot/'config/fresh-read-registry.json').read_text()),json.loads((root/'config/fresh-read-registry.json').read_text()))
     diffs={}
     for n in sorted(changed):
         p=oldroot/n;q=root/n
@@ -57,7 +83,7 @@ def audit_dns_transition(profile,a,root):
         proof=artifact(a[k])
         if not proof.get('passed') or proof.get('source_sha256')!=source:raise ValueError('current-source '+k+' missing')
     proof=artifact(a['qualification'])
-    for k in ('no_experiment_attempt','one_two_one_original_probe_passed','same_security_policy','owned_cleanup_verified','identity_verified','source_unchanged','members_match_authority_both_hosts'):
+    for k in ('no_experiment_attempt','one_two_one_original_probe_passed','same_security_policy','owned_cleanup_verified','identity_verified','source_unchanged','members_match_authority_both_hosts','actual_stale_cache_repaired_by_production_hook'):
         if proof.get(k) is not True:raise ValueError('actual DNS readiness path not verified: '+k)
     if proof['environment_run_id']!=profile['operations']['stability']['read_identity']['environment_run_id'] or sha(a['qualification_runner']['path'])!=a['qualification_runner']['sha256'] or proof['runner_sha256']!=a['qualification_runner']['sha256']:
         raise ValueError('qualification environment/runner changed')
@@ -91,7 +117,7 @@ def audit_dns_transition(profile,a,root):
     if next(c for c in main if c['id']==ORIGINS[0])['judgement']['trial_valid'] is not False:raise ValueError('only original invalid origin can be supplemented')
     if reusable!={c['id'] for c in profile['cases'] if c['purpose']!='main'}:raise ValueError('eight preparations must remain reusable')
     audit(root);budget=artifact(a['remaining_budget']);estimates=budget['case_seconds']
-    if budget['remaining_case_ids']!=[p['id'] for p in PLAN] or set(estimates)!={p['id'] for p in PLAN} or any(estimates[p['id']]<{'s1':44,'s2':37,'s3':32,'s4':37}[p['origin'][:2]]*72 for p in PLAN) or budget['future_seconds']!=sum(estimates.values())+1500:
+    if budget['remaining_case_ids']!=[p['id'] for p in PLAN] or set(estimates)!={p['id'] for p in PLAN} or any(estimates[p['id']]<{'s1':44,'s2':37,'s3':32,'s4':37}[p['origin'][:2]]*72 for p in PLAN) or budget['future_seconds']!=sum(estimates.values())+1500 or budget.get('neutron_reconcile_overhead_seconds')!=600 or estimates[PLAN[0]['id']]<32*72+600:
         raise ValueError('final pending case and cleanup must be reserved')
     completed=set()
     for path in Path(profile['operations']['artifact_root']).glob('*/campaign.json'):

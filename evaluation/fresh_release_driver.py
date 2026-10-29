@@ -166,6 +166,7 @@ def remaining_budget(label):
  nominal={'s1':44,'s2':37,'s3':32,'s4':37};pending=[c for c in P['cases'] if c['id'] not in completed]
  supplement_pending=[next(c for c in P['cases'] if c['id']==entry['origin']) for entry in supplemental_plan(TRANSITION) if entry['id'] not in completed] if TRANSITION else []
  seconds=sum(max(nominal[c['scenario']]*72,observed.get(c['scenario'],0)) for c in pending+supplement_pending)
+ if TRANSITION and TRANSITION.get('kind')=='user-authorized-dns-readiness-continuation-v8':seconds+=600*len(supplement_pending)
  idle=planned_idle(now)
  lifecycle=P['operations']['single_host_lifecycle_estimate_seconds'] if pending or supplement_pending else P['operations']['host_shutdown_timeout_seconds']
  seconds+=idle+lifecycle

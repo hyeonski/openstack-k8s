@@ -2,6 +2,8 @@
   "version": 1,
   "scope": "fresh live adapter and shared runtime; includes dormant legacy functions, not permission to run them",
   "source_sha256": {
+    "scripts/lib/neutron_members.py": "5455854cd44f7ed18d5838082aa60fe05789539ea7137a20e4695a795c987a30",
+    "evaluation/fresh_s3_capture.py": "bb80e1a115f3205234af711f241d0b67035d903349aa9bf7b9a89c508cf7e632",
     "evaluation/fresh_qualification.py": "2c7e6d71f84b6965578dbc97528a93705c8789f4eb02978eb39f87a7e78c98ca",
     "evaluation/fresh_live.py": "2cc1bfb16db1769911d2e131005363ad5928739ddffc23a9d5a6cc6ccad07c3f",
     "evaluation/fresh_scenarios.py": "b2b47c870d53ee672c9b76c095e228f0381132f3e013cd2758f19a488cee050d",
@@ -13,7 +15,7 @@
     "evaluation/graduation_evaluation_case.py": "8566997dca7a09985b465d67f20848838235814d2a2563f3dc739cf8adf46978",
     "scripts/workload_state.py": "9e9adbabda7507ebedaa7fbbd16e7b1030eef0a1eda416c71db1194ee47265a6",
     "scripts/worker_control.py": "124dd33d6287383fc898ce3d9ce380b8109730540a79aa2427c4ff57616f88bf",
-    "scripts/test_resources.py": "d45b911e762f2ab40eaa199cc2bb12edb2b3872a7f52f64f51b7af62440284fd",
+    "scripts/test_resources.py": "84f8add20df472f56c2efc85c33e54b36858fbcd66af95184e9d2cdda90b7cc0",
     "scripts/lib/runtime.py": "3a725169ebf2e730a4a6777c5757acf909a3cb511b6eb1b46111697df26605ef",
     "scripts/lib/fresh_reads.py": "db2ae3aa13a487524b596537cf96cc0a51a550a40426e770bdc9b2ac20860f22",
     "experiments/graduation_recovery.py": "2e89e11d3132ae918f129622b1a9b648b834c903112a0af04dceb243c59aea06",
@@ -23,11 +25,79 @@
     "experiments/graduation_s2.py": "01ffc58550f9587a69819fb3ff3ced7b070a40d4d7749d181f642462edf9ce70",
     "experiments/graduation_s3.py": "02f7f963bdf6f2205f83d3aa8b709d9e7c552e92fbaab2046f6e348ddd055e30",
     "experiments/graduation_s4.py": "b765e61e03af989316657978b82ef3cca4409664cefdbb7b42c857d04494777d",
-    "experiments/graduation_s4_run.py": "f3bf58f5dcc671ea16337cb991d43bae84762e12bedd17d3d6485f4d5f3e9d66",
-    "scripts/workload-inventory.sh": "90abb0a8d275ae63d11c441fc83c9879716d032cc1ca563c7880c40ecc12554a",
-    "evaluation/fresh_s3_capture.py": "bb80e1a115f3205234af711f241d0b67035d903349aa9bf7b9a89c508cf7e632"
+    "experiments/graduation_s4_run.py": "f3bf58f5dcc671ea16337cb991d43bae84762e12bedd17d3d6485f4d5f3e9d66"
   },
   "calls": [
+    {
+      "file": "scripts/lib/neutron_members.py",
+      "scope": "authoritative",
+      "line": 47,
+      "method": "admin_json",
+      "expression": "runtime.admin_json('server', 'show', server_id, timeout=left())",
+      "sha256": "3ddb89f90aaa9d6187eadfd6aa0864fae3a100fe219367891e5c385516b19fa1",
+      "kind": "read",
+      "boundary": "neutron-readiness-explicit-read",
+      "required": true,
+      "identity": "frozen VM IDs and cluster UIDs; bound Nova node providers and Neutron SGs; same existing container; restored clock guard",
+      "deadline": "450s total reconciliation, each command <=45s, outside measurement; ambiguous restart never replayed",
+      "semantics": "read authoritative membership, fixed ipsets or existing agent identity; never mutate policy"
+    },
+    {
+      "file": "scripts/lib/neutron_members.py",
+      "scope": "authoritative",
+      "line": 55,
+      "method": "admin_json",
+      "expression": "runtime.admin_json('security', 'group', 'show', name, timeout=left())",
+      "sha256": "ea66b12ea414dca2fbf9321fdd1351e245406793ae7830ecffbcdfbec03c3757",
+      "kind": "read",
+      "boundary": "neutron-readiness-explicit-read",
+      "required": true,
+      "identity": "frozen VM IDs and cluster UIDs; bound Nova node providers and Neutron SGs; same existing container; restored clock guard",
+      "deadline": "450s total reconciliation, each command <=45s, outside measurement; ambiguous restart never replayed",
+      "semantics": "read authoritative membership, fixed ipsets or existing agent identity; never mutate policy"
+    },
+    {
+      "file": "scripts/lib/neutron_members.py",
+      "scope": "authoritative",
+      "line": 57,
+      "method": "admin_json",
+      "expression": "runtime.admin_json('port', 'list', '--security-group', group['id'], timeout=left())",
+      "sha256": "437b25058c3c60d25d40be50f831218788898fb429e6d6c1fc9933370bd77a23",
+      "kind": "read",
+      "boundary": "neutron-readiness-explicit-read",
+      "required": true,
+      "identity": "frozen VM IDs and cluster UIDs; bound Nova node providers and Neutron SGs; same existing container; restored clock guard",
+      "deadline": "450s total reconciliation, each command <=45s, outside measurement; ambiguous restart never replayed",
+      "semantics": "read authoritative membership, fixed ipsets or existing agent identity; never mutate policy"
+    },
+    {
+      "file": "scripts/lib/neutron_members.py",
+      "scope": "reconcile_hosts.remote_read",
+      "line": 69,
+      "method": "remote",
+      "expression": "runtime.remote(script, host=host, timeout=timeout)",
+      "sha256": "d3714f67e05d05307f530fb73dca116b219ef13939176804954f925535aad22b",
+      "kind": "read",
+      "boundary": "neutron-readiness-explicit-read",
+      "required": true,
+      "identity": "frozen VM IDs and cluster UIDs; bound Nova node providers and Neutron SGs; same existing container; restored clock guard",
+      "deadline": "450s total reconciliation, each command <=45s, outside measurement; ambiguous restart never replayed",
+      "semantics": "read authoritative membership, fixed ipsets or existing agent identity; never mutate policy"
+    },
+    {
+      "file": "scripts/lib/neutron_members.py",
+      "scope": "reconcile_hosts",
+      "line": 89,
+      "method": "remote",
+      "expression": "runtime.remote('sudo docker restart neutron_openvswitch_agent', host=host, timeout=left())",
+      "sha256": "4321902fd347720a9411b9408c76c2f543c8b12587388ae6c47e1462a6e4193c",
+      "kind": "mutation",
+      "boundary": "neutron-readiness-single-dispatch-with-durable-journal",
+      "required": true,
+      "identity": "frozen VM IDs and cluster UIDs; bound Nova node providers and Neutron SGs; same existing container; restored clock guard",
+      "deadline": "450s total reconciliation, each command <=45s, outside measurement; ambiguous restart never replayed",
+      "semantics": "restart existing mismatched agent once with unchanged security policy"
+    },
     {
       "file": "evaluation/fresh_s3_capture.py",
       "scope": "read_s3_capture",
@@ -2371,7 +2441,7 @@
     {
       "file": "scripts/test_resources.py",
       "scope": "probe",
-      "line": 281,
+      "line": 284,
       "method": "k",
       "expression": "client.k(plane, 'create', '-f', '-', '-o', 'json', data=json.dumps(pod))",
       "sha256": "177fb02e42353026fe69d03e5c687a01d3ad614e1c73abf7da73cf8ee6443815",
@@ -2386,7 +2456,7 @@
     {
       "file": "scripts/test_resources.py",
       "scope": "probe",
-      "line": 290,
+      "line": 293,
       "method": "k",
       "expression": "reads.k(plane, 'logs', name, '-n', namespace, owned=obj)",
       "sha256": "26313bd51ab07c8b11e53db039445e2b4e681db16f5cabb7f9712fedf62e0cde",
@@ -2401,7 +2471,7 @@
     {
       "file": "scripts/test_resources.py",
       "scope": "probe",
-      "line": 295,
+      "line": 298,
       "method": "k",
       "expression": "reads.k(plane, 'wait', '--for=delete', 'pod/' + name, '-n', namespace, '--timeout=20s', owned=obj)",
       "sha256": "ad001987ce999439af1126b6ce093b4ca4c9e542a6e57a8105102b621c376b7d",
@@ -2416,7 +2486,7 @@
     {
       "file": "scripts/test_resources.py",
       "scope": "probe",
-      "line": 299,
+      "line": 302,
       "method": "k",
       "expression": "reads.k('w', 'get', '--raw=/readyz')",
       "sha256": "78d606544d0cec8fecdeb4ef5f64d2982027807efe6c45f57426eff27509b8d3",
@@ -5173,5 +5243,6 @@
       "identity": "registered VM IDs and Cluster/MD/CA UIDs; scenario object UID and ownership checks retained",
       "deadline": "original caller/phase deadline; read max90s, command max20s, initial+2 retries, backoff10/25s; mutations/service requests once"
     }
-  ]
+  ],
+  "review": "v11 Neutron cache reconciliation before owned readiness probes only; one-shot restart journal; clock lease forbids mutation; existing measurement/fault calls unchanged"
 }

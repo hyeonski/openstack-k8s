@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 FILES=(
+ 'scripts/lib/neutron_members.py',
  'evaluation/fresh_s3_capture.py',
  'evaluation/fresh_qualification.py',
  'evaluation/fresh_live.py','evaluation/fresh_scenarios.py','evaluation/fresh_collection.py',

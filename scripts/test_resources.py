@@ -261,6 +261,9 @@ class OwnedProbeReads:
 
 
 def probe(client, path, run_id, owner_id=None):
+    if os.environ.get("FRESH_READ_CONTEXT"):
+        from lib.neutron_members import reconcile_before_probe
+        reconcile_before_probe(client, path)
     labels = {OWNER: client.cluster, RUN: owner_id or run_id}
     cluster = client.get('m', 'cluster', client.cluster, '-n', client.ns)
     endpoint = cluster['spec']['controlPlaneEndpoint']

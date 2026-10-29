@@ -1,7 +1,7 @@
 import json,sys,unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path[:0]=[str(ROOT/x) for x in ('evaluation','scripts','experiments')]
-from fresh_dns_release import KIND,ORIGINS,PLAN,validate_scope,validate_delta
+from fresh_dns_release import KIND,ORIGINS,PLAN,validate_scope,validate_delta,validate_probe_hook
 from fresh_transport_release import select_cases
 
 class DNSReleaseTests(unittest.TestCase):
@@ -28,5 +28,11 @@ class DNSReleaseTests(unittest.TestCase):
             edited={**current,name:'changed'}
             with self.assertRaises(ValueError):validate_delta(base,edited,[allowed,name])
         with self.assertRaises(ValueError):validate_delta(base,current,[])
+
+    def test_original_readiness_criterion_and_timeout_cannot_change(self):
+        old='def probe(client, path, run_id, owner_id=None):\n    timeout=360\n    return timeout\n'
+        new=old.replace('    timeout=360','    if os.environ.get("FRESH_READ_CONTEXT"):\n        from lib.neutron_members import reconcile_before_probe\n        reconcile_before_probe(client, path)\n    timeout=360')
+        validate_probe_hook(old,new)
+        with self.assertRaises(ValueError):validate_probe_hook(old,new.replace('timeout=360','timeout=600'))
 
 if __name__=='__main__':unittest.main()
