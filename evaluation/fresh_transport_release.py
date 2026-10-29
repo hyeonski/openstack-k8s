@@ -214,6 +214,9 @@ def validate_probe_read_diff(previous, current):
 
 
 def audit_transition(profile, authorization, root):
+    if authorization.get('kind')=='user-authorized-dns-readiness-continuation-v8':
+        from fresh_dns_release import audit_dns_transition
+        return audit_dns_transition(profile,authorization,root)
     if authorization.get('kind')=='user-authorized-s3-capture-continuation-v7':
         from fresh_s3_capture_release import audit_s3_capture_transition
         return audit_s3_capture_transition(profile,authorization,root)
