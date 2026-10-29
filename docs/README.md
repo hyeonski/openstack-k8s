@@ -58,10 +58,10 @@
 - [0016: 준비·관측 분리와 worker 자동 증감](adr/0016-separate-observation-and-enable-worker-scale-in.md)
 - [0017: 복구 목적지 compute01 증설](adr/0017-increase-recovery-target-compute-capacity.md)
 
-## 보고서 그림과 외부 코드 출처
+## 보고서 근거와 외부 코드 출처
 
+- [최종보고서 개요](graduation/final-report-outline.md): 장별 구성, 그림·표 목록. 그림은 모두 새로 그린다
 - [S4 동일 코드 재측정](graduation/interim-report/s4-rerun-2026-09-27.md): 중간보고서 표의 원본 근거
-- 그림: [시스템 구조](graduation/interim-report/system-architecture.svg), [실행 흐름](graduation/interim-report/execution-flow.svg), [S4 시간선](graduation/interim-report/s4-timeline.svg)
 - [Cinder CSI 출처](../kubernetes/graduation-s3/csi/SOURCE.md)와 [라이선스](../kubernetes/graduation-s3/csi/LICENSE)
 
 ## 보관 (과거 이력)
