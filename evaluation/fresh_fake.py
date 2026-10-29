@@ -128,7 +128,7 @@ def fake_raw(case):
              compute_before='h1',compute_after='h2' if mode=='P' else 'h1',node_before=source,node_after=source,
              vm_before={'id':'v1'},vm_after={'id':'v1'},host_metrics={'cpu_utilization':.9,'cpu_pressure_some':.2},completion_host_metrics={'cpu_utilization':.9,'cpu_pressure_some':.2},
              initial=dict(progress={'bytes':0,'next':0},port={'qos_policy_id':None},api_node='n1',upload_node='n1',api_uid='api'),
-             final=dict(port={'qos_policy_id':'qos' if mode=='P' else None},upload_node='n2' if mode=='P' else 'n1',api_uid='api'),
+             final=dict(port={'qos_policy_id':'qos' if mode=='P' else None},upload_node='n2' if mode in ('P','S') else 'n1',api_uid='api'),
              policy_id='qos',upload_integrity={'rows':[[0,4096,'digest']],'files':[{'index':0,'size':4096,'sha256':'digest'}]},upload_windows=[{'before':{'bytes':0},'after':{'bytes':4096}}],upload_elapsed_seconds=40,
              statefulset={'spec':{'template':{'spec':{'tolerations':[{'key':k,'tolerationSeconds':3600} for k in ('node.kubernetes.io/not-ready','node.kubernetes.io/unreachable')]}}}},
              old_database_processes={'containers':[{'id':'container','state':'CONTAINER_RUNNING','labels':{'io.kubernetes.pod.uid':'db-old'}}]},pod_before={'metadata':{'uid':'db-old'},'status':{'containerStatuses':[{'containerID':'containerd://container'}]}},controller_manifest='--disable-force-detach-on-timeout=true',mhc_snapshot={'items':[mhc]},source_vm='v1',

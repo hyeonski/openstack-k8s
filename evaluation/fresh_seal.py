@@ -24,7 +24,9 @@ def seal_measurement(ev, case, profile):
     events=rows(directory/'events.jsonl')
     phases=[e['phase'] for e in events if e['kind']=='phase']
     expected=list(STATES)[:list(STATES).index('CLEANUP')]
-    result=_judge(directory,case,profile,include_cleanup=False)
+    from fresh_extension import is_split_only, judge_split_only
+    judge = judge_split_only if is_split_only(case) else _judge
+    result=judge(directory,case,profile,include_cleanup=False)
     missing=[x for x in result['missing'] if x not in ('phase_sequence_incomplete','cleanup_incomplete')]
     if phases!=expected: missing.append('measurement_phase_sequence_incomplete')
     if not (directory/'identity.json').is_file():missing.append('attempt_identity_missing')

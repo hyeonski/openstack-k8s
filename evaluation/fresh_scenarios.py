@@ -484,10 +484,12 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
                 'egress_bps':egress,'overlimits':overlimits,'cpu_utilization':cpu}
 
     def split_if_enabled(self,a,b,current):
-        if self.case['mode']!='P':
+        if self.case['mode'] not in ('P','S'):
             return False
         self.ev.event('action_requested',target=b['port']['id'],actor='policy')
-        self.set_rate(current)
+        # S is the Kubernetes-only ablation: the same relocation without Neutron QoS.
+        if self.case['mode']=='P':
+            self.set_rate(current)
         self.k('-n',self.ns,'patch','deployment','upload','--type=merge','-p',json.dumps({'spec':{'template':{'spec':{'nodeSelector':{'kubernetes.io/hostname':b['node']}}}}}))
         wait_for(lambda:self.ready('upload',b['node']))
         old=self.pods('upload')
@@ -601,7 +603,7 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
                         if not diagnosed and consecutive>=2:
                             self.ev.event('diagnosis_completed',target=a['port']['id']);diagnosed=True
                         if not split and diagnosed:
-                            if self.case['mode']=='P' and time.monotonic()+420<start+cfg['horizon_seconds']:
+                            if self.case['mode'] in ('P','S') and time.monotonic()+420<start+cfg['horizon_seconds']:
                                 split=self.split_if_enabled(a,b,current)
                         elif split and self.case['mode']=='P' and not rate_locked and time.monotonic()+120<start+cfg['horizon_seconds']:
                             # Same bounded rate ladder; failure at floor remains a service result.

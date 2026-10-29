@@ -247,6 +247,9 @@ def operational_judgement(directory, case, profile):
     The function is pure: reporting sealed evidence must never append to raw.
     """
     try:
+        from fresh_extension import is_split_only, judge_split_only
+        if is_split_only(case):
+            return judge_split_only(directory, case, profile)
         return judge(directory, case, profile)
     except Exception as exc:
         cleanup = read(Path(directory) / 'cleanup.json', {})
@@ -353,7 +356,7 @@ class FreshCampaign:
                     if not prior or prior['status']!='finished' or not prior.get('judgement',{}).get('trial_valid') or not prior['judgement'].get('safety'):
                         raise RuntimeError('case dependency not verified: '+dependency)
                 previous = case.get('attempts', [])
-                cap = 1 if self.data['stage'] == 'supplemental' else self.profile['max_attempts']
+                cap = 1 if self.data['stage'] in ('supplemental','extension') else self.profile['max_attempts']
                 if len(previous) >= cap:
                     raise ValueError('registered retry cap exhausted')
                 attempt = {'id': f'attempt-{len(previous)+1:02}', 'state':'PREPARED',
@@ -570,7 +573,7 @@ def report(directory, allow_synthetic=False):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=('schedule','validate','freeze','freeze-transport','run','status','report','resume-cleanup','environment-ensure','environment-down','environment-rotate'))
+    parser.add_argument('action',choices=('schedule','validate','freeze','freeze-transport','freeze-extension','run','status','report','resume-cleanup','environment-ensure','environment-down','environment-rotate'))
     parser.add_argument('--profile',type=Path,default=ROOT/'config/graduation-evaluation-fresh.json')
     parser.add_argument('--campaign',type=Path)
     parser.add_argument('--stage',choices=('main','preparation','development','supplemental'),default='preparation')
@@ -611,6 +614,9 @@ def main():
                 raise ValueError('explicit live transport authorization required')
             from fresh_transport_release import freeze_transport
             print(freeze_transport(args.profile,args.campaign,args.transport_authorization,scenario=args.scenario,stage=args.stage,origin=args.supplemental_origin));return
+        if args.action=='freeze-extension':
+            from fresh_extension import freeze_extension
+            print(freeze_extension(args.profile,args.campaign,ROOT,args.synthetic));return
         if args.action=='freeze':
             print(freeze(args.profile,args.campaign,args.stage,args.scenario,args.policy_manifest,args.synthetic,args.pilot_campaign,args.previous_campaign));return
         if args.action=='report':
