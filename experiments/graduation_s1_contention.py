@@ -10,7 +10,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shlex
 import time
 import uuid
 
@@ -18,7 +17,7 @@ from lib.state import atomic_json, utc_now
 from lib.runtime import LabRuntime
 from graduation_s1 import (IMAGE, LABEL, NAMESPACE, S1, host_cpu_pressure,
                            host_cpu_utilization, percentile, pod_cpu_delta)
-from workload_state import artifact_dir, command, condition
+from workload_state import artifact_dir, condition
 
 
 HOST_PATTERN = re.compile(r'osk8s-compute[0-9]+\Z')

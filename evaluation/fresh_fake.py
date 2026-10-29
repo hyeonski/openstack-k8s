@@ -8,7 +8,7 @@ import sys
 import uuid
 
 from fresh_evidence import append, utc
-from fresh_contract import STATES, digest, BASELINE_CONTRACT
+from fresh_contract import digest, BASELINE_CONTRACT
 
 
 def operational_fixture(operations):

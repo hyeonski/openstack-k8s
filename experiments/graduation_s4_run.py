@@ -18,7 +18,7 @@ from lib.state import atomic_json, utc_now
 from graduation_s4 import (EXPERIMENT, HTTP_NAME, LABEL_KEY, MHC_NAME,
                            NAMESPACE, ROOT, S4Preparation, owned)
 from worker_control import WorkerControl
-from workload_state import Client, artifact_dir, command, condition, evaluate
+from workload_state import artifact_dir, command, condition, evaluate
 
 
 HTTP_PATH = f'/api/v1/namespaces/{NAMESPACE}/services/{HTTP_NAME}:http/proxy/healthz'

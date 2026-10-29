@@ -7,11 +7,9 @@ import json
 from pathlib import Path
 import secrets
 import shlex
-import time
 
 from lib.state import utc_now
 from graduation_recovery import RecoveryLab, wait_for
-from lib.runtime import LABEL
 from workload_state import condition
 
 SKIP = 'cluster.x-k8s.io/skip-remediation'

@@ -237,7 +237,7 @@ class FreshTests(unittest.TestCase):
     def test_B02_open_loop_probe_records_every_arrival_offline(self):
         from fresh_evidence import OpenLoopProbe
         with tempfile.TemporaryDirectory() as root:
-            with OpenLoopProbe(Path(root)/'requests.jsonl',lambda:{'ok':True,'correct':True},1000,.004,.1) as sampler:
+            with OpenLoopProbe(Path(root)/'requests.jsonl',lambda:{'ok':True,'correct':True},1000,.004,.1):
                 pass
             actual=rows(Path(root)/'requests.jsonl')
             self.assertEqual({r['request_id'] for r in actual},{str(i) for i in range(4)})

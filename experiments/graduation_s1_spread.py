@@ -2,7 +2,6 @@
 """Prepare two compute placements by live-migrating only a new, empty test worker."""
 import fcntl
 import json
-from pathlib import Path
 
 from lib.state import atomic_json, utc_now
 from graduation_recovery import RecoveryLab, wait_for

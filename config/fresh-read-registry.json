@@ -5,27 +5,27 @@
     "scripts/lib/neutron_members.py": "5455854cd44f7ed18d5838082aa60fe05789539ea7137a20e4695a795c987a30",
     "evaluation/fresh_s3_capture.py": "bb80e1a115f3205234af711f241d0b67035d903349aa9bf7b9a89c508cf7e632",
     "evaluation/fresh_qualification.py": "2c7e6d71f84b6965578dbc97528a93705c8789f4eb02978eb39f87a7e78c98ca",
-    "evaluation/fresh_live.py": "2cc1bfb16db1769911d2e131005363ad5928739ddffc23a9d5a6cc6ccad07c3f",
-    "evaluation/fresh_scenarios.py": "8f4dd00af9bce85c32cfe2af86758ed9e00328a52b3e1a8ba8983996606c0466",
+    "evaluation/fresh_live.py": "90e3aa0a5e250e6db4fa510582d1a3ef5a9b7fcb7b9831b586f94ba52c275987",
+    "evaluation/fresh_scenarios.py": "bdceb5b942d70e559bd24cb1146ac849164f9c9314007bd973ca32eebf0ec4da",
     "evaluation/fresh_collection.py": "a629c23f8020523898cb765c59921d3b08433afd3a61181535ee752fae4d9fc1",
-    "evaluation/fresh_transport.py": "fb0e7df5e5826841e6bce2d3443f10a78900712c89c948fae67e36f409520c05",
+    "evaluation/fresh_transport.py": "440de76d20d608cddb9e384c8e27e20835706865edf1bd5c7a8bb8b73ec74f29",
     "evaluation/fresh_identity.py": "27a6ed17937159f8e2a6bc7fffffcd48f80d0dabf081fe0b27bd974ac5c51183",
-    "evaluation/fresh_calibration.py": "02becc5f0ec1eaf1772a42fdda5d5c51d8f6b0219c45f1a542e47df2542e0e7c",
+    "evaluation/fresh_calibration.py": "93faa806acc9be060079bb6bc7fc5e9e53fe147250f21f35dde54cb38eb9609f",
     "evaluation/graduation_evaluation.py": "a81325a1585d6d129db103b91b60b2d99f896624ae39685b26d5628d49c346e7",
-    "evaluation/graduation_evaluation_case.py": "8566997dca7a09985b465d67f20848838235814d2a2563f3dc739cf8adf46978",
+    "evaluation/graduation_evaluation_case.py": "47cba8d2586d45385551e84980aa43deaabb73deafe5bc69f225d07a5c3c642c",
     "scripts/workload_state.py": "9e9adbabda7507ebedaa7fbbd16e7b1030eef0a1eda416c71db1194ee47265a6",
     "scripts/worker_control.py": "124dd33d6287383fc898ce3d9ce380b8109730540a79aa2427c4ff57616f88bf",
     "scripts/test_resources.py": "84f8add20df472f56c2efc85c33e54b36858fbcd66af95184e9d2cdda90b7cc0",
     "scripts/lib/runtime.py": "3a725169ebf2e730a4a6777c5757acf909a3cb511b6eb1b46111697df26605ef",
     "scripts/lib/fresh_reads.py": "db2ae3aa13a487524b596537cf96cc0a51a550a40426e770bdc9b2ac20860f22",
     "experiments/graduation_recovery.py": "2e89e11d3132ae918f129622b1a9b648b834c903112a0af04dceb243c59aea06",
-    "experiments/graduation_s1.py": "5f03b28f0077aa792a56393e2bbcec317584584fb79996fed89af26374f62e75",
-    "experiments/graduation_s1_contention.py": "433f9e683e65331e7308abd39b5d08763a0cdec38b3bae5e6d2f076517a12b60",
+    "experiments/graduation_s1.py": "591aaaf2065f2f42140fe5c61456cdd51c2c502efa8dc84a8f9d603909a6323f",
+    "experiments/graduation_s1_contention.py": "03912d6d77d1f0596fc56efb20257f28e893748f9f245dd088e0fa1adab90713",
     "experiments/graduation_s1_auto.py": "76069dc0e8e86e6cbe384516091361d05ae01d44f7d68a22ec0a1966c43c2c67",
-    "experiments/graduation_s2.py": "01ffc58550f9587a69819fb3ff3ced7b070a40d4d7749d181f642462edf9ce70",
-    "experiments/graduation_s3.py": "02f7f963bdf6f2205f83d3aa8b709d9e7c552e92fbaab2046f6e348ddd055e30",
-    "experiments/graduation_s4.py": "b765e61e03af989316657978b82ef3cca4409664cefdbb7b42c857d04494777d",
-    "experiments/graduation_s4_run.py": "f3bf58f5dcc671ea16337cb991d43bae84762e12bedd17d3d6485f4d5f3e9d66"
+    "experiments/graduation_s2.py": "bcde2b73847cdf06d1b83f015547c29767dcf2f977d2a63f02425c8722a64ecb",
+    "experiments/graduation_s3.py": "013ec970ba70a7694b0b1abdfd8f9f7f5f5ede8d234ef5761fbac1d522a48177",
+    "experiments/graduation_s4.py": "6e406bce46f8c802bd8e4271e546e5bef44bb83cdbf34f94bcfd4cf24be68345",
+    "experiments/graduation_s4_run.py": "0a76d1598bb46cca4f8efb519a307597c663ebdd10f6dc06229ee6067b6a9636"
   },
   "calls": [
     {
@@ -311,7 +311,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS1.run_locked.collect",
-      "line": 100,
+      "line": 99,
       "method": "durable_host_stat",
       "expression": "durable_host_stat(self.ev, LabRuntime(self.client), host, sequence)",
       "sha256": "062d112150a5297c493943dfe23f92bef94a21cdef8b95ac3a9ae24be05ec33d",
@@ -326,7 +326,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS1.check_clock",
-      "line": 129,
+      "line": 128,
       "method": "k",
       "expression": "self.s1.k('-n', S1_NS, 'exec', pods[0]['metadata']['name'], '--', 'python', '-c', 'import time; print(time.time())')",
       "sha256": "33309e5c8f7bc54ba82f8fec728566cc40f2ab5f686f0af1111360c6dfdb412d",
@@ -341,7 +341,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS1.create_competitor.collect",
-      "line": 133,
+      "line": 132,
       "method": "k",
       "expression": "self.s1.k('-n', S1_NS, 'logs', 'job/' + record['job_name'], timeout=10)",
       "sha256": "70d0961705620e3c29a0e85b06e0dbf60b76fdb7a616ab65c29693702969a661",
@@ -356,7 +356,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS1.move_service",
-      "line": 196,
+      "line": 195,
       "method": "k",
       "expression": "self.s1.k('-n', S1_NS, 'patch', 'deployment', 'http', '--type=json', '-p', json.dumps(patch))",
       "sha256": "0f1faa3b5b6e5ab1401abf8230aec1b6e6cb58bdc4b50ac1ef7107cabf0f064f",
@@ -371,7 +371,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS1.transport_reads.invoke_client",
-      "line": 237,
+      "line": 236,
       "method": "command",
       "expression": "command(['kubectl', '--kubeconfig', self.client.state / 'kubeconfigs' / (config + '.yaml'), '--request-timeout=15s', *values], data=data, timeout=self.client.remaining(min(30, timeout)))",
       "sha256": "f8815a9b7761fc8afb022d3296bb82f7d532692bee5849089feeaa61a8a155cc",
@@ -386,7 +386,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "restore_mhc",
-      "line": 364,
+      "line": 363,
       "method": "k",
       "expression": "lab.k('patch', 'machinehealthcheck', MHC_NAME, '-n', lab.client.ns, '--type=json', '-p', json.dumps([{'op': 'test', 'path': '/metadata/uid', 'value': before['metadata']['uid']}, {'op': 'test', 'path': '/metadata/resourceVersion', 'value': current['metadata']['resourceVersion']}, {'op': 'add', 'path': '/metadata/annotations', 'value': original}]), plane='m')",
       "sha256": "c09e0e16620b777b68c9cbd91081a257ee7a4b929137dd7add326337b689428d",
@@ -401,7 +401,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "RemoteProbe.__enter__",
-      "line": 385,
+      "line": 384,
       "method": "read_remote",
       "expression": "self.runner.read_remote('if sudo test -s ' + shlex.quote(self.raw_path) + '; then echo ready; fi', timeout=max(0.001, ready_deadline - time.monotonic()))",
       "sha256": "356b8ba51d95ce07625d7293006054ffac9169d7ed947079d89312f22a8ae2e0",
@@ -416,7 +416,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "RemoteProbe.__exit__",
-      "line": 399,
+      "line": 398,
       "method": "remote_file",
       "expression": "remote_file(self.runner.ev, self.runner.read_remote, source, destination, bounded=True)",
       "sha256": "0933b2157b65d4c113fc295bffd83023169c2b8ca43b4a2bac1c3406dbf6ffbd",
@@ -431,7 +431,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.read_remote",
-      "line": 411,
+      "line": 410,
       "method": "remote",
       "expression": "SSHReadBoundary(self).remote(script, timeout=timeout, host=host)",
       "sha256": "a1e2f90613ffec1d819494641d4ed0b5c4ef083030fcb9f81d4cbd55bcaf6145",
@@ -446,7 +446,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.read_admin_json",
-      "line": 415,
+      "line": 414,
       "method": "admin_json",
       "expression": "SSHReadBoundary(self).admin_json(args, timeout=timeout)",
       "sha256": "ef89664bf1cb888d15184e43006edc3e2e48ac10b9ebfbe81618f76cccd4dadf",
@@ -461,7 +461,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.read_host_stat",
-      "line": 419,
+      "line": 418,
       "method": "host_stat",
       "expression": "SSHReadBoundary(self).host_stat(host)",
       "sha256": "9efdd5ddf63f3f724d52a858427b10d2ddd0a81dd31d4abd3bc548ea05bc7ece",
@@ -476,7 +476,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.create_owned.readback",
-      "line": 429,
+      "line": 428,
       "method": "admin_json",
       "expression": "self.admin_json(*prefix, 'list', self.record['policy_id'])",
       "sha256": "9724cbbdc63463999b8b89132c91a8003de50628efb43b25869fc0cab4e93923",
@@ -491,7 +491,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.create_owned.readback",
-      "line": 432,
+      "line": 431,
       "method": "admin_json",
       "expression": "self.admin_json(*prefix, 'list')",
       "sha256": "2565c05752a657d043b130cdc3141348c508a0186ef3c02a7c707a4c45826797",
@@ -506,7 +506,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.create_owned.readback",
-      "line": 432,
+      "line": 431,
       "method": "admin_json",
       "expression": "self.admin_json(*prefix, 'list')",
       "sha256": "2565c05752a657d043b130cdc3141348c508a0186ef3c02a7c707a4c45826797",
@@ -521,7 +521,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.create_owned.readback",
-      "line": 437,
+      "line": 436,
       "method": "admin_json",
       "expression": "self.admin_json(*prefix, 'show', self.record['policy_id'], rid)",
       "sha256": "0d5be1417f9237f0d7534c73d3163c03e0b833582cdd464f04ded5b3a53e72a6",
@@ -536,7 +536,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.create_owned.readback",
-      "line": 438,
+      "line": 437,
       "method": "admin_json",
       "expression": "self.admin_json(*prefix, 'show', rid)",
       "sha256": "a3f9aec6f3fc2cd85ec6c313aeb6d1b2b3c0096a7ca1fc1c18fb27af3e7e70bb",
@@ -551,7 +551,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshOwnedLab.create_owned",
-      "line": 446,
+      "line": 445,
       "method": "admin_json",
       "expression": "self.admin_json(*prefix, 'create', *args)",
       "sha256": "9fade28f6584986192b2b72c3b88d868c0061f0f48a917299e5b1f1ec355b9db",
@@ -566,7 +566,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.check_clock",
-      "line": 461,
+      "line": 460,
       "method": "read_remote",
       "expression": "self.read_remote(\"python3 -c 'import time; print(time.time())'\")",
       "sha256": "55e578735e4c825eacfc5259ba6f7243d514bdaf1d3ad9650737fbc2e2cffda4",
@@ -581,7 +581,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.set_rate",
-      "line": 466,
+      "line": 465,
       "method": "read_admin_json",
       "expression": "self.read_admin_json('port', 'show', self.record['workers'][1]['port']['id'])",
       "sha256": "02d29f44b8866769c878b65c04c8587563fc67f63d97b3b524d707c884a094a8",
@@ -596,7 +596,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.set_rate",
-      "line": 467,
+      "line": 466,
       "method": "read_admin_json",
       "expression": "self.read_admin_json('network', 'qos', 'rule', 'show', self.record['policy_id'], self.record['rule_id'])",
       "sha256": "3f18409ce7b4c8e5417a9c4a8378646125298756c499c7559629eb58e8622876",
@@ -611,7 +611,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.diagnostic_snapshot",
-      "line": 472,
+      "line": 471,
       "method": "read_host_stat",
       "expression": "self.read_host_stat(w['host'])",
       "sha256": "fae1ee1a8623adf33ca53b27657ecc58fc3a2de35948601dd57c04f323101d94",
@@ -626,7 +626,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.diagnostic_snapshot",
-      "line": 473,
+      "line": 472,
       "method": "read_remote",
       "expression": "self.read_remote('sudo tc -s -j qdisc show dev s2-egress')",
       "sha256": "1e9e56a95bfcfc2509810dfa5ae0c88e8ad4cac867fc16d04c5f6d08b963a4f9",
@@ -641,7 +641,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.split_if_enabled",
-      "line": 493,
+      "line": 492,
       "method": "k",
       "expression": "self.k('-n', self.ns, 'patch', 'deployment', 'upload', '--type=merge', '-p', json.dumps({'spec': {'template': {'spec': {'nodeSelector': {'kubernetes.io/hostname': b['node']}}}}}))",
       "sha256": "6f9a1462c500dfcf0159103f6ff31940c8fe39e4bf382a816264570ce8795d88",
@@ -656,7 +656,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 514,
+      "line": 512,
       "method": "read_admin_json",
       "expression": "self.read_admin_json('extension', 'list', '--network')",
       "sha256": "163d21a22052830ffc6f336e3b54d46b8c41c0123abad0ec4c8d95569db48b17",
@@ -671,7 +671,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 519,
+      "line": 517,
       "method": "remote",
       "expression": "self.remote('sudo tee /opt/openstack-k8s/graduation-s2-workload.py >/dev/null', data=(ROOT / 'kubernetes/graduation-s2/workload.py').read_text())",
       "sha256": "10a3690dafbb37e4b3abbfca0b92cf32b6c811d57f6757e72e1c6c653be60b47",
@@ -686,7 +686,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 521,
+      "line": 519,
       "method": "remote",
       "expression": "self.remote('sudo tee /opt/openstack-k8s/graduation-s2-network.sh >/dev/null', data=(ROOT / 'experiments/graduation-s2-network.sh').read_text())",
       "sha256": "d21cbd5d6b30a351a264f0f7aacc869dba68ec6e2740c20948903c3114baeda5",
@@ -701,7 +701,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 524,
+      "line": 522,
       "method": "remote",
       "expression": "self.remote('sudo bash /opt/openstack-k8s/graduation-s2-network.sh prepare ' + run)",
       "sha256": "c8dfc353b22ec0bfec116624ec748e83a09e2c8ef2484267101d456d214d79d3",
@@ -716,7 +716,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 526,
+      "line": 524,
       "method": "create_owned",
       "expression": "self.create_owned('security-group', '--project', a['project_id'], run)",
       "sha256": "e7cba38bfa64e0633fe788c4533d7f8c0ce703bf5c64799a1097d5053d930a34",
@@ -731,7 +731,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 528,
+      "line": 526,
       "method": "admin",
       "expression": "self.admin('security', 'group', 'rule', 'create', '--protocol', 'tcp', '--dst-port', '30080', '--remote-ip', '198.18.0.2/32', sg['id'])",
       "sha256": "45097996be61fc77bb9b18ffea9f31a965a629e0252ac9b99f10d9ae1abd6a3f",
@@ -746,7 +746,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 531,
+      "line": 529,
       "method": "admin",
       "expression": "self.admin('port', 'set', '--security-group', sg['id'], a['port']['id'])",
       "sha256": "b12c2ca1944aa05ec13631dc7c306e293837821a1791bbc033e738e5889b3f3e",
@@ -761,7 +761,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 562,
+      "line": 560,
       "method": "read_admin_json",
       "expression": "self.read_admin_json('port', 'show', a['port']['id'])",
       "sha256": "e85d03a54da2ea297504c5dbd12ef60728c5129f4637980c037c2e60fdf27575",
@@ -776,7 +776,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 535,
+      "line": 533,
       "method": "create_owned",
       "expression": "self.create_owned('floating-ip', '--project', a['project_id'], '--description', run, '--port', a['port']['id'], 'public')",
       "sha256": "95531a07e772e0dc52b494bcaa3da783f864553e1c4eb5cf11742aa88e18c714",
@@ -791,7 +791,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 538,
+      "line": 536,
       "method": "create_owned",
       "expression": "self.create_owned('qos-policy', '--project', b['project_id'], run)",
       "sha256": "f3ed767d633bb474b0a91e82c17a1a0cc3f246093fbe2250c63a2295ee741f6e",
@@ -806,7 +806,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 540,
+      "line": 538,
       "method": "create_owned",
       "expression": "self.create_owned('qos-rule', '--type', 'bandwidth-limit', '--max-kbps', '6000', '--max-burst-kbits', '600', '--egress', policy['id'])",
       "sha256": "cd0e5612285bd9708a9f5f948000fa8ad8e187512e181d019fa7f12396cdb25f",
@@ -821,7 +821,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 586,
+      "line": 584,
       "method": "read_remote",
       "expression": "self.read_remote('curl -fsS http://198.18.0.2:8090/progress')",
       "sha256": "e6731b5ce978ba4ef98bdfcd7e2e7ab6a5f4f6806d8532d02d0eb81ffaf67c7f",
@@ -836,7 +836,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 640,
+      "line": 638,
       "method": "read_admin_json",
       "expression": "self.read_admin_json('port', 'show', b['port']['id'])",
       "sha256": "49c3161c3502edcf26d6a7349e89e732a795dfed6f7518677724ad90eed7ed6f",
@@ -851,7 +851,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 562,
+      "line": 560,
       "method": "read_admin_json",
       "expression": "self.read_admin_json('port', 'show', a['port']['id'])",
       "sha256": "e85d03a54da2ea297504c5dbd12ef60728c5129f4637980c037c2e60fdf27575",
@@ -866,7 +866,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 586,
+      "line": 584,
       "method": "read_remote",
       "expression": "self.read_remote('curl -fsS http://198.18.0.2:8090/progress')",
       "sha256": "e6731b5ce978ba4ef98bdfcd7e2e7ab6a5f4f6806d8532d02d0eb81ffaf67c7f",
@@ -881,7 +881,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 586,
+      "line": 584,
       "method": "read_remote",
       "expression": "self.read_remote('curl -fsS http://198.18.0.2:8090/progress')",
       "sha256": "e6731b5ce978ba4ef98bdfcd7e2e7ab6a5f4f6806d8532d02d0eb81ffaf67c7f",
@@ -896,7 +896,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 589,
+      "line": 587,
       "method": "read_remote",
       "expression": "self.read_remote('sudo cat ' + shlex.quote(raw_path))",
       "sha256": "3d439a930c72e312e9eeac3a8eca5dcd306a1e028f3ee357948cbf93e51027e5",
@@ -911,7 +911,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 625,
+      "line": 623,
       "method": "remote_file",
       "expression": "remote_file(self.ev, self.read_remote, raw_path, 'requests.jsonl', bounded=True)",
       "sha256": "da126f6c0c67b86293ab075f96b986bc18e37e71932f512cf9ca052b89d0776b",
@@ -926,7 +926,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 626,
+      "line": 624,
       "method": "remote_file",
       "expression": "remote_file(self.ev, self.read_remote, progress_path, 'uploader-progress.jsonl', bounded=True)",
       "sha256": "f4cfffeb5b3a0e76e2f1be4318e797a049eb39910c12b8794b9b4684f7e365af",
@@ -941,7 +941,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 639,
+      "line": 637,
       "method": "durable_python_capture",
       "expression": "durable_python_capture(self.ev, self.runtime, integrity_code, 's2-upload-integrity', seconds=self.client.remaining(90))",
       "sha256": "aad82f00382630f95d68af550ed32a19d97aa0dd0a25c4ab0fbe10cb6cf63882",
@@ -956,7 +956,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS2.finish",
-      "line": 640,
+      "line": 638,
       "method": "read_admin_json",
       "expression": "self.read_admin_json('port', 'show', b['port']['id'])",
       "sha256": "49c3161c3502edcf26d6a7349e89e732a795dfed6f7518677724ad90eed7ed6f",
@@ -971,7 +971,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 682,
+      "line": 680,
       "method": "admin_json",
       "expression": "self.admin_json('port', 'list', '--network', workers[0]['port']['network_id'], '--device-owner', 'network:router_interface')",
       "sha256": "37eed830aad2b2231c36c2eb2268a2e63102c66b0d6ce59552519c5b3b23549d",
@@ -986,7 +986,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 685,
+      "line": 683,
       "method": "admin_json",
       "expression": "self.admin_json('port', 'show', interfaces[0]['ID'])",
       "sha256": "aa7a7eefed5415dcaf813d716936c1af4f4349087a41703e8f0ceb1b7f55ef72",
@@ -1001,7 +1001,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 694,
+      "line": 692,
       "method": "k",
       "expression": "self.k('-n', self.client.ns, 'annotate', 'machine', source['machine'], SKIP + '=' + self.record['run_id'], plane='m')",
       "sha256": "9b1eb35c48f3c824dd3eee3109d5faabda2dd268b36bacc5f735fd49c2853267",
@@ -1016,7 +1016,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 696,
+      "line": 694,
       "method": "sql",
       "expression": "self.sql(\"create table evidence(id integer primary key, value text not null); insert into evidence select i, md5(i::text || '\" + seed + \"') from generate_series(1,1000) i;\")",
       "sha256": "2ec0542a3f5d3a13fccc9d1bdda66534245f3e5ee07ad2c89940498875899d44",
@@ -1031,7 +1031,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 698,
+      "line": 696,
       "method": "read_sql",
       "expression": "self.read_sql(rows_query)",
       "sha256": "43ca5af3418fb7625d591a36cbe1d34bb1e9da0a0417c88f4fe8a6a39521b053",
@@ -1046,7 +1046,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 705,
+      "line": 703,
       "method": "read_sql",
       "expression": "self.read_sql(query)",
       "sha256": "d27cd12695328a5f37570155984e6b87ac7413977a4b62ff3eaa8bf4146eb02f",
@@ -1061,7 +1061,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 706,
+      "line": 704,
       "method": "read_sql",
       "expression": "self.read_sql(\"select current_setting('fsync') || ':' || current_setting('synchronous_commit') || ':' || current_setting('full_page_writes') || ':' || current_setting('data_directory')\")",
       "sha256": "f11435e0c8a4770449527232f071df2a7249d2975f52664f34bca424d45a2b7f",
@@ -1076,7 +1076,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 714,
+      "line": 712,
       "method": "read_guest",
       "expression": "self.read_guest(cp, 'cat /etc/kubernetes/manifests/kube-controller-manager.yaml')",
       "sha256": "1947bb7c435e017daf42d762a16f95344559b05131a9b4c36aa3e1c7bbd8e4ec",
@@ -1091,7 +1091,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish.probe",
-      "line": 724,
+      "line": 722,
       "method": "k",
       "expression": "self.k('-n', self.ns, 'exec', 'probe', '--', 'env', 'PGCONNECT_TIMEOUT=' + str(int(cfg['deadline_seconds'])), 'PGOPTIONS=-c statement_timeout=' + str(int(cfg['deadline_seconds'] * 1000)), 'psql', '-X', '-At', '-v', 'ON_ERROR_STOP=1', '-h', 'db', '-U', 'postgres', '-d', 'postgres', '-c', 'select count(*) from evidence', timeout=cfg['deadline_seconds'] + 2)",
       "sha256": "80b1edbc1ef6e1335e102a12f622e6e004c4515a42b63183bc128f40e64dbfb8",
@@ -1106,7 +1106,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 750,
+      "line": 748,
       "method": "guest",
       "expression": "self.guest(source, fault)",
       "sha256": "6fbec62636e18884220fc673ae41f5d46e907274ef5f99a2768fc59887307764",
@@ -1121,7 +1121,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 788,
+      "line": 786,
       "method": "read_sql",
       "expression": "self.read_sql(rows_query, timeout=cfg['evidence_timeout_seconds'])",
       "sha256": "5cc153ffcff7b8862b491f8db7d4723b6e4f5d1cc5119ade35055a8570a4eb81",
@@ -1136,7 +1136,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 799,
+      "line": 797,
       "method": "admin_json",
       "expression": "self.admin_json('volume', 'show', self.record['volume_id'])",
       "sha256": "b339429418cccf18f7d495af2ac664b5ef7bcf0b90d2aa2c332bea61e0e0ee67",
@@ -1151,7 +1151,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 800,
+      "line": 798,
       "method": "admin_json",
       "expression": "self.admin_json('server', 'show', source['nova_id'])",
       "sha256": "cf79afd9fce892fd056b1fcb2afd2c33eaaa52d0ea2a8dba5836eb4901587cf5",
@@ -1166,7 +1166,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS3.finish",
-      "line": 801,
+      "line": 799,
       "method": "read_remote",
       "expression": "self.read_remote('sudo docker exec nova_libvirt virsh domstate ' + shlex.quote(source['instance_name']), host=source['host'])",
       "sha256": "df9e2c459158b4e88b564987fe8b63361f4a14d296c02f8156b2f4e0c0e587bf",
@@ -1181,7 +1181,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS4Run.snapshot.collect",
-      "line": 826,
+      "line": 824,
       "method": "nova",
       "expression": "nova('list')",
       "sha256": "8e2078c16870c481004e95d42ecc4803cab1923fa470e6a5960d160967688395",
@@ -1196,7 +1196,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "FreshS4Run.create_probe",
-      "line": 862,
+      "line": 860,
       "method": "k",
       "expression": "self.preparation.k('w', 'apply', '-f', '-', data=json.dumps(manifest))",
       "sha256": "12f8c6b70a8ad62bf37f537608215d14df723f7d43e4a6a925af53a1eb51c6ef",
@@ -1211,7 +1211,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "run_s4",
-      "line": 877,
+      "line": 875,
       "method": "k",
       "expression": "lab.k('patch', 'machinehealthcheck', MHC_NAME, '-n', lab.client.ns, '--type=json', '-p', json.dumps([{'op': 'test', 'path': '/metadata/uid', 'value': before['metadata']['uid']}, {'op': 'test', 'path': '/metadata/resourceVersion', 'value': before['metadata']['resourceVersion']}, {'op': 'add', 'path': '/metadata/annotations', 'value': {**before['metadata'].get('annotations', {}), 'cluster.x-k8s.io/paused': 'true', 'openstack-k8s.dev/fresh-owner': case['id']}}]), plane='m')",
       "sha256": "faef5a0484979c6e1b7e07f6c6c7ba4a884aac00385d5c7f991060336aa966b4",
@@ -1226,7 +1226,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "run_s4",
-      "line": 903,
+      "line": 901,
       "method": "nova",
       "expression": "nova('stop', target['nova_id'])",
       "sha256": "a1ceb48774afc0c5bc4f4f15d154b7a2f2127e8822d33cda25024b4432fbcdea",
@@ -1241,7 +1241,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "run_s4",
-      "line": 906,
+      "line": 904,
       "method": "nova_status",
       "expression": "nova_status(target['nova_id'])",
       "sha256": "b92758afac3195971b0769ed836d271a334edf21e90cad8b278deb49a1de8f43",
@@ -1256,7 +1256,7 @@
     {
       "file": "evaluation/fresh_scenarios.py",
       "scope": "run_s4",
-      "line": 906,
+      "line": 904,
       "method": "nova_status",
       "expression": "nova_status(target['nova_id'])",
       "sha256": "b92758afac3195971b0769ed836d271a334edf21e90cad8b278deb49a1de8f43",
@@ -1451,7 +1451,7 @@
     {
       "file": "evaluation/fresh_transport.py",
       "scope": "SSHReadBoundary.identity",
-      "line": 158,
+      "line": 156,
       "method": "command",
       "expression": "command(['gcloud', 'compute', 'instances', 'describe', host, '--project=' + project, '--zone=' + zone, '--format=json(name,id,status,zone)'], timeout=min(30, remaining()))",
       "sha256": "f3191d0c8d1f55fedbcdbb34b89151295a616e1d07f66cf31bdcedeef37cd3e4",
@@ -1466,7 +1466,7 @@
     {
       "file": "evaluation/fresh_transport.py",
       "scope": "SSHReadBoundary.identity",
-      "line": 164,
+      "line": 162,
       "method": "command",
       "expression": "command(['kubectl', '--kubeconfig', runner.client.state / 'kubeconfigs' / (runner.client.cluster + '.yaml'), '--request-timeout=' + str(min(15, remaining())) + 's', 'get', 'namespace', runner.ns, '-o', 'json'], timeout=min(20, remaining()))",
       "sha256": "f93eaad01b45c83372077a868fe44e1735cbddcebf865eac4f79341642e2e8ba",
@@ -1481,7 +1481,7 @@
     {
       "file": "evaluation/fresh_transport.py",
       "scope": "SSHReadBoundary.remote",
-      "line": 193,
+      "line": 191,
       "method": "remote",
       "expression": "runner.remote(script, timeout=left, **{'host': host} if host is not None else {})",
       "sha256": "98f057481475d9e824e6c64cbdaaeff87434e0581eca51c15043c2c2c909a987",
@@ -1496,7 +1496,7 @@
     {
       "file": "evaluation/fresh_transport.py",
       "scope": "SSHReadBoundary.admin_json",
-      "line": 206,
+      "line": 204,
       "method": "admin_json",
       "expression": "runner.admin_json(*args, timeout=left)",
       "sha256": "089ac3a1b1e17a1a7c1bbd3772b4b437b8c7fa982bf389267f03b32603dac005",
@@ -1511,7 +1511,7 @@
     {
       "file": "evaluation/fresh_transport.py",
       "scope": "SSHReadBoundary.host_stat",
-      "line": 217,
+      "line": 215,
       "method": "durable_host_stat",
       "expression": "durable_host_stat(runner.ev, runner.runtime, host, runner._host_stat_sequence, identity=lambda left: self.identity(host, left), seconds=runner.client.remaining(90))",
       "sha256": "cc2bc43353542ea901524a4bc929dc6a6cedd6304e226204720ac6a915d869f0",
@@ -1526,7 +1526,7 @@
     {
       "file": "evaluation/fresh_transport.py",
       "scope": "stop_probe_once",
-      "line": 232,
+      "line": 230,
       "method": "remote",
       "expression": "runner.remote('sudo touch ' + shlex.quote(stop_path), timeout=remaining())",
       "sha256": "9aa6354b95f8477f904b0567ae384b762949f2231dcc3fac27f66d824fffd941",
@@ -1541,7 +1541,7 @@
     {
       "file": "evaluation/fresh_transport.py",
       "scope": "stop_probe_once",
-      "line": 236,
+      "line": 234,
       "method": "read_remote",
       "expression": "runner.read_remote('if sudo test -e ' + shlex.quote(stop_path) + '; then echo stopped; fi', timeout=remaining())",
       "sha256": "e1f93b90ab66d8eb6f62e7a1f0808753cd36cd5c4d02bf38c71834961eb8c530",
@@ -1556,7 +1556,7 @@
     {
       "file": "evaluation/fresh_transport.py",
       "scope": "read_owned_s3_binding.query",
-      "line": 283,
+      "line": 281,
       "method": "admin_json",
       "expression": "runner.admin_json(*args, timeout=seconds)",
       "sha256": "db55e02f69ac25499dc20cff8b70c49e14475b78da4c2331078d45ae06c7a726",
@@ -2006,7 +2006,7 @@
     {
       "file": "evaluation/graduation_evaluation_case.py",
       "scope": "EvaluationS1.move_service",
-      "line": 78,
+      "line": 76,
       "method": "k",
       "expression": "self.s1.k('patch', 'node', name, '--type=json', '-p', json.dumps([{'op': 'test', 'path': '/metadata/uid', 'value': node['metadata']['uid']}, {'op': 'test', 'path': '/metadata/resourceVersion', 'value': node['metadata']['resourceVersion']}, {'op': 'add', 'path': '/spec/taints', 'value': taints + [added]}]))",
       "sha256": "4a6ae9c7c0a0abe47eeedde40f1259637009cbeada2747142e4d4d2f51b1ef89",
@@ -2021,7 +2021,7 @@
     {
       "file": "evaluation/graduation_evaluation_case.py",
       "scope": "EvaluationS1.move_service",
-      "line": 102,
+      "line": 100,
       "method": "k",
       "expression": "self.s1.k('patch', 'node', name, '--type=json', '-p', json.dumps([{'op': 'test', 'path': '/metadata/uid', 'value': node['metadata']['uid']}, {'op': 'test', 'path': '/metadata/resourceVersion', 'value': current['metadata']['resourceVersion']}, {'op': 'add', 'path': '/spec/taints', 'value': [t for t in present if t != added]}]))",
       "sha256": "0d8ddd39a20f63d0335b094513e90e769b6b0ee598a69d2d421e6800060fc7d6",
@@ -2036,7 +2036,7 @@
     {
       "file": "evaluation/graduation_evaluation_case.py",
       "scope": "EvaluationS2.set_rate",
-      "line": 173,
+      "line": 171,
       "method": "admin_json",
       "expression": "self.admin_json('port', 'show', self.record['workers'][1]['port']['id'])",
       "sha256": "b787243f7c4d576a776de7657abfe480cc28412f191628021d2d620b6419ab77",
@@ -2051,7 +2051,7 @@
     {
       "file": "evaluation/graduation_evaluation_case.py",
       "scope": "EvaluationS2.set_rate",
-      "line": 174,
+      "line": 172,
       "method": "admin_json",
       "expression": "self.admin_json('network', 'qos', 'rule', 'show', self.record['policy_id'], self.record['rule_id'])",
       "sha256": "edefe50b5d25df6e8074ccf65f656d4787109ba6b1dc37ea27d346ff15f66f98",
@@ -2066,7 +2066,7 @@
     {
       "file": "evaluation/graduation_evaluation_case.py",
       "scope": "EvaluationS2.set_rate",
-      "line": 173,
+      "line": 171,
       "method": "admin_json",
       "expression": "self.admin_json('port', 'show', self.record['workers'][1]['port']['id'])",
       "sha256": "b787243f7c4d576a776de7657abfe480cc28412f191628021d2d620b6419ab77",
@@ -2081,7 +2081,7 @@
     {
       "file": "evaluation/graduation_evaluation_case.py",
       "scope": "EvaluationS2.set_rate",
-      "line": 174,
+      "line": 172,
       "method": "admin_json",
       "expression": "self.admin_json('network', 'qos', 'rule', 'show', self.record['policy_id'], self.record['rule_id'])",
       "sha256": "edefe50b5d25df6e8074ccf65f656d4787109ba6b1dc37ea27d346ff15f66f98",
@@ -2096,7 +2096,7 @@
     {
       "file": "evaluation/graduation_evaluation_case.py",
       "scope": "EvaluationS3.fence",
-      "line": 221,
+      "line": 219,
       "method": "admin_json",
       "expression": "self.admin_json('server', 'show', source['nova_id'])",
       "sha256": "cf79afd9fce892fd056b1fcb2afd2c33eaaa52d0ea2a8dba5836eb4901587cf5",
@@ -2111,7 +2111,7 @@
     {
       "file": "evaluation/graduation_evaluation_case.py",
       "scope": "EvaluationS3.fence",
-      "line": 225,
+      "line": 223,
       "method": "admin_json",
       "expression": "self.admin_json('volume', 'show', self.record['volume_id'])",
       "sha256": "b339429418cccf18f7d495af2ac664b5ef7bcf0b90d2aa2c332bea61e0e0ee67",
@@ -2126,7 +2126,7 @@
     {
       "file": "evaluation/graduation_evaluation_case.py",
       "scope": "EvaluationS4Preparation.verify_http",
-      "line": 258,
+      "line": 256,
       "method": "k",
       "expression": "self.k('w', '-n', 'graduation-s4', 'patch', 'deployment', 'http', '--type=merge', '-p', json.dumps(patch))",
       "sha256": "46229931b94b8052a238a1739991cf154cfd9d49d648b94e7ac255c2804f171b",
@@ -2141,7 +2141,7 @@
     {
       "file": "evaluation/graduation_evaluation_case.py",
       "scope": "EvaluationS4Preparation.verify_http",
-      "line": 259,
+      "line": 257,
       "method": "k",
       "expression": "self.k('w', '-n', 'graduation-s4', 'rollout', 'status', 'deployment/http', '--timeout=5m', timeout=330)",
       "sha256": "78e597487fd1ebda320b6630493baded817d40fad9a66ed672f632abf62fb540",
@@ -2156,7 +2156,7 @@
     {
       "file": "evaluation/graduation_evaluation_case.py",
       "scope": "s4_runner",
-      "line": 272,
+      "line": 270,
       "method": "command",
       "expression": "command(args, timeout=timeout)",
       "sha256": "b3a374bc608622124d6ef47e5f86cc11c8d87465aac1ad6ecda2feed2dcbdb8f",
@@ -2846,7 +2846,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1.k",
-      "line": 104,
+      "line": 102,
       "method": "command",
       "expression": "command(['kubectl', '--kubeconfig', self.workload, '--request-timeout=20s', *args], data=data, timeout=timeout)",
       "sha256": "0bd1612be2f430f75636ee787888fdc4300ee4898eab9e8c14a859b1e3dbff1a",
@@ -2861,7 +2861,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1.obj",
-      "line": 111,
+      "line": 109,
       "method": "k",
       "expression": "self.k(*args, '--ignore-not-found', '-o', 'json')",
       "sha256": "b880b1101c5f13149e40acb734d2f4ec0fba528a3826f7f65ef200f3c6d1397d",
@@ -2876,7 +2876,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1.prepare",
-      "line": 201,
+      "line": 199,
       "method": "k",
       "expression": "self.k('apply', '--dry-run=client', '-f', MANIFEST)",
       "sha256": "5459409e4c8c0dfa7338144e3f4be1b14f3f3f5e1436566f0b03851efca9ddcc",
@@ -2891,7 +2891,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1.prepare",
-      "line": 203,
+      "line": 201,
       "method": "command",
       "expression": "command([ROOT / 'scripts/cluster-autoscaler.sh', 'mode', 'fixed'], timeout=480)",
       "sha256": "f999a9863eb467c9920ea5324f93f92ca5d519f0064cd37de69570ce82e463fb",
@@ -2906,7 +2906,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1.prepare",
-      "line": 205,
+      "line": 203,
       "method": "command",
       "expression": "command([ROOT / 'scripts/workload-cluster.sh', 'scale', '2'], timeout=4200)",
       "sha256": "cca9531fc9521a264875630164bf53a4638390cd5443485f11386be2bb738308",
@@ -2921,7 +2921,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1.prepare",
-      "line": 208,
+      "line": 206,
       "method": "k",
       "expression": "self.k('apply', '-f', MANIFEST, timeout=180)",
       "sha256": "b71149199f629bf1e192267a73bf2a2af9ff3982f56ba6de7ac6762a95bce606",
@@ -2936,7 +2936,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1.prepare",
-      "line": 213,
+      "line": 211,
       "method": "k",
       "expression": "self.k('apply', '-f', '-', data=json.dumps(config), timeout=120)",
       "sha256": "880091d6f58e058744a37b54f52e8921db653919b469d1971e93c89ad095ac57",
@@ -2951,7 +2951,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1.prepare",
-      "line": 214,
+      "line": 212,
       "method": "k",
       "expression": "self.k('-n', NAMESPACE, 'rollout', 'status', 'deployment/http', '--timeout=10m', timeout=660)",
       "sha256": "da9b6be8d24b005138ddce689ba418196cb494ca2565e4f2482be0ab36acff3f",
@@ -2966,7 +2966,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1._baseline_locked",
-      "line": 334,
+      "line": 332,
       "method": "host_stat",
       "expression": "self.host_stat(host)",
       "sha256": "27a06ca49ad9dfcaa87d393fed97617fb2743a32692db181e61425eb2e1dd178",
@@ -2981,7 +2981,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1._baseline_locked",
-      "line": 316,
+      "line": 314,
       "method": "k",
       "expression": "self.k('apply', '-f', '-', data=json.dumps(job))",
       "sha256": "953de2f4a774b82970e00799e1ca9d1b474a7e928fc0142bea45d28643b5236d",
@@ -2996,7 +2996,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1._baseline_locked",
-      "line": 319,
+      "line": 317,
       "method": "k",
       "expression": "self.k('-n', NAMESPACE, 'wait', '--for=condition=complete', 'job/' + job_name, f'--timeout={warmup + measure + 180}s', timeout=warmup + measure + 210)",
       "sha256": "5c096cca6ef89e0b2d524c595787675ad67d16f7eed4f586ec99307ed4bd652c",
@@ -3011,7 +3011,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1._baseline_locked",
-      "line": 384,
+      "line": 382,
       "method": "k",
       "expression": "self.k('-n', NAMESPACE, 'logs', 'job/' + job_name, timeout=120)",
       "sha256": "d2df543e448eae8fd9f587c46d3b2be2fd36e5fbf49cfe875701b87961b9970e",
@@ -3026,7 +3026,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1._baseline_locked",
-      "line": 334,
+      "line": 332,
       "method": "host_stat",
       "expression": "self.host_stat(host)",
       "sha256": "27a06ca49ad9dfcaa87d393fed97617fb2743a32692db181e61425eb2e1dd178",
@@ -3041,7 +3041,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1._baseline_locked",
-      "line": 384,
+      "line": 382,
       "method": "k",
       "expression": "self.k('-n', NAMESPACE, 'logs', 'job/' + job_name, timeout=120)",
       "sha256": "d2df543e448eae8fd9f587c46d3b2be2fd36e5fbf49cfe875701b87961b9970e",
@@ -3056,7 +3056,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1._baseline_locked",
-      "line": 392,
+      "line": 390,
       "method": "k",
       "expression": "self.k('delete', 'job', job_name, '-n', NAMESPACE, '--wait=true', '--timeout=3m', timeout=210)",
       "sha256": "0789b61d9d694fdc8cbd1e98629e05b8b5388c74d53c09b1c93730d94a72b095",
@@ -3071,7 +3071,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1.cpu_stat",
-      "line": 403,
+      "line": 401,
       "method": "k",
       "expression": "self.k('-n', NAMESPACE, 'exec', pod, '--', 'cat', '/sys/fs/cgroup/cpu.stat', timeout=60)",
       "sha256": "9907df9860934a8e2799fd4a655ee93678f5d0074c07a6a9d854ffed1b088b2b",
@@ -3086,7 +3086,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1.placement",
-      "line": 411,
+      "line": 409,
       "method": "command",
       "expression": "command([ROOT / 'experiments/graduation-s1-placement.sh', nova_id], timeout=90)",
       "sha256": "821fbf93f069a4adc730458f41fe8b9f812580473354320855570455b5f7cd06",
@@ -3101,7 +3101,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1.host_stat",
-      "line": 421,
+      "line": 419,
       "method": "host_stat",
       "expression": "LabRuntime.host_stat(host)",
       "sha256": "45e43ddfe41eeed2789e71c1ce3a834638d065f104d50192fc0ea0d02eb7c82b",
@@ -3116,7 +3116,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1.cleanup",
-      "line": 464,
+      "line": 462,
       "method": "k",
       "expression": "self.k('delete', 'namespace', NAMESPACE, '--wait=true', '--timeout=5m', timeout=330)",
       "sha256": "7330ffbf8a82f880a7b5c65fea8496d3b478a0e7b2bdcee5c0f842c8e0a18fa8",
@@ -3131,7 +3131,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1.cleanup",
-      "line": 469,
+      "line": 467,
       "method": "command",
       "expression": "command([ROOT / 'scripts/workload-cluster.sh', 'scale', str(record['original_workers'])], timeout=4200)",
       "sha256": "6d9692a227d91fbe999760aa9694fbadc09df264ed31de7e1f483c9ac6abf0de",
@@ -3146,7 +3146,7 @@
     {
       "file": "experiments/graduation_s1.py",
       "scope": "S1.cleanup",
-      "line": 472,
+      "line": 470,
       "method": "command",
       "expression": "command([ROOT / 'scripts/cluster-autoscaler.sh', 'mode', record['original_mode']], timeout=480)",
       "sha256": "f98fc2e7c82de119efa3a6513331b076e0126364e452f02c3af7f3d735e72808",
@@ -3161,7 +3161,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.admin",
-      "line": 145,
+      "line": 144,
       "method": "admin",
       "expression": "LabRuntime(self.client).admin(*args, **kwargs)",
       "sha256": "66f4fc690db38e39bf68f27422c6885fe10f2116a6dbd1cc4c382d4907e94719",
@@ -3176,7 +3176,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.admin_json",
-      "line": 148,
+      "line": 147,
       "method": "admin",
       "expression": "self.admin(*args, '-f', 'json', **kwargs)",
       "sha256": "a03d481ff2e5ffdad1f290d4ae2d6b50cbfa18c0135776dc90997450206d954e",
@@ -3191,7 +3191,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.server",
-      "line": 151,
+      "line": 150,
       "method": "admin_json",
       "expression": "self.admin_json('server', 'show', server_id)",
       "sha256": "b707eb0bbea9a37947277542c564d326e1e16b74bb128fb188eef8e8a4538e6c",
@@ -3206,7 +3206,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.create_competitor",
-      "line": 164,
+      "line": 163,
       "method": "admin_json",
       "expression": "self.admin_json('flavor', 'create', '--vcpus', '4', '--ram', '1024', '--disk', '10', flavor)",
       "sha256": "3517746f698da3d6a5c49a8529b8bb63baf38e97c3f556187ee3f1b33a851069",
@@ -3221,7 +3221,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.create_competitor",
-      "line": 168,
+      "line": 167,
       "method": "admin_json",
       "expression": "self.admin_json('server', 'create', '--wait', '--config-drive', 'true', '--availability-zone', 'nova:' + host, '--flavor', record['flavor_id'], '--image', os.environ['UBUNTU_IMAGE_NAME'], '--network', os.environ['TENANT_NETWORK_NAME'], '--user-data', '@user-data', server_name, timeout=900, user_data=stress_user_data(record['seconds']))",
       "sha256": "53792efba86c6beace7334368a25a730be3519b5c915e19c0bce9be4a62b6201",
@@ -3236,7 +3236,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.create_competitor",
-      "line": 182,
+      "line": 181,
       "method": "admin",
       "expression": "self.admin('console', 'log', 'show', record['server_id'])",
       "sha256": "8e2f6760fac789d05454e4c02c69365052d787e0ff58aae6a27b48c51d3928f7",
@@ -3251,7 +3251,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.remove_competitor",
-      "line": 192,
+      "line": 191,
       "method": "admin_json",
       "expression": "self.admin_json('server', 'list', '--name', record['server_name'])",
       "sha256": "ddad2db0fa2a801c1f6ae0a6dd21f0852c52e034ec3a3bc8ba37e02377c5fc74",
@@ -3266,7 +3266,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.remove_competitor",
-      "line": 198,
+      "line": 197,
       "method": "admin",
       "expression": "self.admin('server', 'delete', '--wait', owned[0]['ID'], timeout=600)",
       "sha256": "3a322a47c39e39613180ba51c80adf0972f07eb835fcc03aa298fa154034b2a4",
@@ -3281,7 +3281,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.remove_competitor",
-      "line": 200,
+      "line": 199,
       "method": "admin_json",
       "expression": "self.admin_json('flavor', 'list', '--long')",
       "sha256": "b258d092c9fc8cb36e26e823e58cb0a7ed8b1cf30174683fb69a8a8be1a8a03c",
@@ -3296,7 +3296,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.remove_competitor",
-      "line": 205,
+      "line": 204,
       "method": "admin_json",
       "expression": "self.admin_json('flavor', 'show', record['flavor_name'])",
       "sha256": "84df23cfe8b497b975dfb7d7485e998ea6df287dc5086a7de018376d178b0d4b",
@@ -3311,7 +3311,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.remove_competitor",
-      "line": 208,
+      "line": 207,
       "method": "admin",
       "expression": "self.admin('flavor', 'delete', flavor['id'])",
       "sha256": "0041ffe0fd70151fcb5ccf73f8ab78edf1bf50f02cefff2597a2a01e3f877703",
@@ -3326,7 +3326,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.wait_probe_samples",
-      "line": 215,
+      "line": 214,
       "method": "k",
       "expression": "self.s1.k('-n', NAMESPACE, 'logs', 'job/' + job_name, timeout=30)",
       "sha256": "6f5e46a8fb5d831c4578d0aa01117793726a9bb7d7af9686181497b73d4d59e8",
@@ -3341,7 +3341,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.capture_failed_job",
-      "line": 244,
+      "line": 243,
       "method": "k",
       "expression": "self.s1.k('-n', NAMESPACE, 'logs', 'job/' + record['job_name'], timeout=120)",
       "sha256": "99f92a1950dc7f0a8fd1f25dad30e6b24a016e08e2978e8ed1580c757600d352",
@@ -3356,7 +3356,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.run",
-      "line": 349,
+      "line": 348,
       "method": "k",
       "expression": "self.s1.k('-n', NAMESPACE, 'patch', 'deployment', 'http', '--type=merge', '-p', json.dumps(initial_patch))",
       "sha256": "4f5f6d6f640afc5209e78d6ab1f503cdf61147ed04fc5c9c607a194d418e3ad0",
@@ -3371,7 +3371,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.run",
-      "line": 351,
+      "line": 350,
       "method": "k",
       "expression": "self.s1.k('-n', NAMESPACE, 'rollout', 'status', 'deployment/http', '--timeout=5m', timeout=330)",
       "sha256": "2266b2f8059772e0cc08bd605d9059a3ea0a0c61b0b004c7345537a9a14fdb53",
@@ -3386,7 +3386,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.move_service",
-      "line": 371,
+      "line": 370,
       "method": "k",
       "expression": "self.s1.k('-n', NAMESPACE, 'patch', 'deployment', 'http', '--type=merge', '-p', json.dumps(patch))",
       "sha256": "3e8d90093ebd2a0e0b66948b892bc23fdc4f0eaf71c6d1040c5e6afc81823cbe",
@@ -3401,7 +3401,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.run_locked.host_sample",
-      "line": 401,
+      "line": 400,
       "method": "host_stat",
       "expression": "self.s1.host_stat(host)",
       "sha256": "2d42be75190080083eac6283f437834562cbd26ba166df1872210aed1c0919ec",
@@ -3416,7 +3416,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.run_locked",
-      "line": 411,
+      "line": 410,
       "method": "k",
       "expression": "self.s1.k('apply', '-f', '-', data=json.dumps(job))",
       "sha256": "c9d6b82d64a5c460d23680f1f7bc4c0faf6d49593117abbb0190070ca297ee45",
@@ -3431,7 +3431,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.run_locked",
-      "line": 430,
+      "line": 429,
       "method": "k",
       "expression": "self.s1.k('-n', NAMESPACE, 'rollout', 'status', 'deployment/http', '--timeout=5m', timeout=330)",
       "sha256": "2266b2f8059772e0cc08bd605d9059a3ea0a0c61b0b004c7345537a9a14fdb53",
@@ -3446,7 +3446,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.run_locked",
-      "line": 438,
+      "line": 437,
       "method": "k",
       "expression": "self.s1.k('-n', NAMESPACE, 'wait', '--for=condition=complete', 'job/' + job_name, f\"--timeout={record['seconds'] + 180}s\", timeout=record['seconds'] + 210)",
       "sha256": "838c2158f7a21bdaa211f8cc0540407b5e9df04d5da97c368c34ac8b3ae06f71",
@@ -3461,7 +3461,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.run_locked",
-      "line": 452,
+      "line": 451,
       "method": "k",
       "expression": "self.s1.k('-n', NAMESPACE, 'logs', 'job/' + job_name, timeout=120)",
       "sha256": "1a30208ee91cac6b4254b40a0cfc4e597f3ea9c2f196891028f6fd072b1e3975",
@@ -3476,7 +3476,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.run_locked",
-      "line": 529,
+      "line": 528,
       "method": "k",
       "expression": "self.s1.k('delete', 'job', job_name, '-n', NAMESPACE, '--wait=true', '--timeout=3m', timeout=210)",
       "sha256": "7e6b4b5385c8c70f888dd52194ec1b8263c3b2715925b144116bf87b65e15cf1",
@@ -3491,7 +3491,7 @@
     {
       "file": "experiments/graduation_s1_contention.py",
       "scope": "S1Contention.cleanup",
-      "line": 563,
+      "line": 562,
       "method": "k",
       "expression": "self.s1.k('delete', 'job', record['job_name'], '-n', NAMESPACE, '--wait=true', '--timeout=3m', timeout=210)",
       "sha256": "cd3fdb0d36c9092ef7208ed411815a5f1be7bbd7da284c77ac86f2b7465b9269",
@@ -3566,7 +3566,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.set_rate",
-      "line": 77,
+      "line": 75,
       "method": "admin_json",
       "expression": "self.admin_json('port', 'show', r['workers'][1]['port']['id'])",
       "sha256": "505d86306b6ad1aecdce990d40df94431a685b01126bf4bff8b6784ea6189b5f",
@@ -3581,7 +3581,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.set_rate",
-      "line": 81,
+      "line": 79,
       "method": "admin",
       "expression": "self.admin('network', 'qos', 'rule', 'set', '--max-kbps', str(rate), '--max-burst-kbits', str(BURST_KBITS), r['policy_id'], r['rule_id'])",
       "sha256": "8fd0e47086f6bad1d6939f1011a7d83118adb1202cb2abe377a72412c1d4e2e1",
@@ -3596,7 +3596,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.set_rate",
-      "line": 83,
+      "line": 81,
       "method": "admin",
       "expression": "self.admin('port', 'set', '--qos-policy', r['policy_id'], port['id'])",
       "sha256": "c65ebaf7049aaea0e8e55c61161eb0c5f5c72498d1e1b8c0893ff53ce8db51d5",
@@ -3611,7 +3611,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.set_rate",
-      "line": 84,
+      "line": 82,
       "method": "admin_json",
       "expression": "self.admin_json('network', 'qos', 'rule', 'show', r['policy_id'], r['rule_id'])",
       "sha256": "a4cd9cad9462356dc80ce7029fa279e31812b98420e207b5965733362309debd",
@@ -3626,7 +3626,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.set_rate",
-      "line": 85,
+      "line": 83,
       "method": "admin_json",
       "expression": "self.admin_json('port', 'show', port['id'])",
       "sha256": "efe8555947ea86a1b810a333acba5976ca4e533227c9d304603790d033b69d79",
@@ -3641,7 +3641,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.set_rate.installed",
-      "line": 90,
+      "line": 88,
       "method": "operational_remote",
       "expression": "self.operational_remote('s2-ovs-enforcement', 'sudo docker exec openvswitch_vswitchd ovs-vsctl --format=json --columns=name,ingress_policing_rate,ingress_policing_burst find Interface ' + shlex.quote('external_ids:iface-id=' + port['id']), host=r['workers'][1]['host'])",
       "sha256": "7720df740d40f898ec2a14ef7b7d0530909fa4c9e5d72324cb6e91b26a47bb90",
@@ -3656,7 +3656,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.window",
-      "line": 118,
+      "line": 116,
       "method": "host_stat",
       "expression": "self.runtime.host_stat(h)",
       "sha256": "0ce0529eb54644e21594b7e1c4a434ee303cc23463930fa1664bd56582193774",
@@ -3671,7 +3671,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.window",
-      "line": 117,
+      "line": 115,
       "method": "remote",
       "expression": "self.remote('sudo python3 -', data=code, timeout=150)",
       "sha256": "f07f58961cd96eb44253db25c7ce06ff5c61b40ce7ff73217c27b918c5f88d44",
@@ -3686,7 +3686,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.window",
-      "line": 118,
+      "line": 116,
       "method": "host_stat",
       "expression": "self.runtime.host_stat(h)",
       "sha256": "0ce0529eb54644e21594b7e1c4a434ee303cc23463930fa1664bd56582193774",
@@ -3701,7 +3701,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 158,
+      "line": 156,
       "method": "admin_json",
       "expression": "self.admin_json('extension', 'list', '--network')",
       "sha256": "1f2265406eff69c2d018f288f4a1379b4dad4d66218bdf3c47c5f5973d4c296a",
@@ -3716,7 +3716,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 163,
+      "line": 161,
       "method": "remote",
       "expression": "self.remote('sudo tee /opt/openstack-k8s/graduation-s2-workload.py >/dev/null', data=(ROOT / 'kubernetes/graduation-s2/workload.py').read_text())",
       "sha256": "10a3690dafbb37e4b3abbfca0b92cf32b6c811d57f6757e72e1c6c653be60b47",
@@ -3731,7 +3731,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 165,
+      "line": 163,
       "method": "remote",
       "expression": "self.remote('sudo tee /opt/openstack-k8s/graduation-s2-network.sh >/dev/null', data=(ROOT / 'experiments/graduation-s2-network.sh').read_text())",
       "sha256": "d21cbd5d6b30a351a264f0f7aacc869dba68ec6e2740c20948903c3114baeda5",
@@ -3746,7 +3746,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 168,
+      "line": 166,
       "method": "remote",
       "expression": "self.remote('sudo bash /opt/openstack-k8s/graduation-s2-network.sh prepare ' + run)",
       "sha256": "c8dfc353b22ec0bfec116624ec748e83a09e2c8ef2484267101d456d214d79d3",
@@ -3761,7 +3761,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 170,
+      "line": 168,
       "method": "admin_json",
       "expression": "self.admin_json('security', 'group', 'create', '--project', a['project_id'], run)",
       "sha256": "51394aa02b597b067cac5267c42b09a3d18e3f82956bb6c6ea64665220de5ce6",
@@ -3776,7 +3776,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 172,
+      "line": 170,
       "method": "admin",
       "expression": "self.admin('security', 'group', 'rule', 'create', '--protocol', 'tcp', '--dst-port', '30080', '--remote-ip', '198.18.0.2/32', sg['id'])",
       "sha256": "45097996be61fc77bb9b18ffea9f31a965a629e0252ac9b99f10d9ae1abd6a3f",
@@ -3791,7 +3791,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 175,
+      "line": 173,
       "method": "admin",
       "expression": "self.admin('port', 'set', '--security-group', sg['id'], a['port']['id'])",
       "sha256": "b12c2ca1944aa05ec13631dc7c306e293837821a1791bbc033e738e5889b3f3e",
@@ -3806,7 +3806,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 176,
+      "line": 174,
       "method": "admin_json",
       "expression": "self.admin_json('port', 'show', a['port']['id'])",
       "sha256": "350d67f19d3bca6a9cb667a6c4302db993249a0adf4ad8cb2e98883cfb2cf101",
@@ -3821,7 +3821,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 179,
+      "line": 177,
       "method": "admin_json",
       "expression": "self.admin_json('floating', 'ip', 'create', '--project', a['project_id'], '--description', run, '--port', a['port']['id'], 'public')",
       "sha256": "1b97c0e8cdd442f0a136bbea897e6b1c61ba1c12ec0bc8c7a5a32ae34eac7cab",
@@ -3836,7 +3836,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 182,
+      "line": 180,
       "method": "admin_json",
       "expression": "self.admin_json('network', 'qos', 'policy', 'create', '--project', b['project_id'], run)",
       "sha256": "8159433be1226dd08deb3c62edbf5ea2787130062016923c52566caae3d39e5c",
@@ -3851,7 +3851,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 184,
+      "line": 182,
       "method": "admin_json",
       "expression": "self.admin_json('network', 'qos', 'rule', 'create', '--type', 'bandwidth-limit', '--max-kbps', '6000', '--max-burst-kbits', '600', '--egress', policy['id'])",
       "sha256": "8b35306889b3717095f31492051cea4dff9d206fc26dedf761fd6989ef79284f",
@@ -3866,7 +3866,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 213,
+      "line": 211,
       "method": "k",
       "expression": "self.k('-n', self.ns, 'logs', old['metadata']['name'])",
       "sha256": "6b67cb4378184d9835e56db2ad393cc546fa355390d3624429cdf8bcdb096252",
@@ -3881,7 +3881,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 235,
+      "line": 233,
       "method": "remote",
       "expression": "self.remote('curl -fsS http://198.18.0.2:8090/progress')",
       "sha256": "9f63fa87ddca696e89d0fc81f8c774e14fb062f5745000c0a6c74f1442e23cdd",
@@ -3896,7 +3896,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 216,
+      "line": 214,
       "method": "k",
       "expression": "self.k('-n', self.ns, 'patch', 'deployment', 'upload', '--type=merge', '-p', json.dumps({'spec': {'template': {'spec': {'nodeSelector': {'kubernetes.io/hostname': b['node']}}}}}))",
       "sha256": "6f9a1462c500dfcf0159103f6ff31940c8fe39e4bf382a816264570ce8795d88",
@@ -3911,7 +3911,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 227,
+      "line": 225,
       "method": "admin",
       "expression": "self.admin('port', 'unset', '--qos-policy', b['port']['id'])",
       "sha256": "1b9d0102fcdfebf171729312163f4f7260711c18c296e55a344a92b1b86e6be6",
@@ -3926,7 +3926,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 235,
+      "line": 233,
       "method": "remote",
       "expression": "self.remote('curl -fsS http://198.18.0.2:8090/progress')",
       "sha256": "9f63fa87ddca696e89d0fc81f8c774e14fb062f5745000c0a6c74f1442e23cdd",
@@ -3941,7 +3941,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 236,
+      "line": 234,
       "method": "k",
       "expression": "self.k('-n', self.ns, 'logs', 'deployment/upload')",
       "sha256": "94819d5bc930d5dba9bcd77d6157f6019dc08893a6e3627323341371f93ac8ce",
@@ -3956,7 +3956,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.run",
-      "line": 245,
+      "line": 243,
       "method": "remote",
       "expression": "self.remote('sudo python3 -', data=integrity_code)",
       "sha256": "350a78daf9be50519311e833d7fbed62f6637dbe8f6c81d7d023e6abf811fc69",
@@ -3971,7 +3971,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.cleanup.restore_qos",
-      "line": 282,
+      "line": 280,
       "method": "admin_json",
       "expression": "self.admin_json('port', 'show', r['workers'][1]['port']['id'])",
       "sha256": "505d86306b6ad1aecdce990d40df94431a685b01126bf4bff8b6784ea6189b5f",
@@ -3986,7 +3986,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.cleanup.restore_qos",
-      "line": 284,
+      "line": 282,
       "method": "admin",
       "expression": "self.admin('port', 'unset', '--qos-policy', port['id'])",
       "sha256": "2feaacd854f6c70ccc25d3d7acf0e2ae66c8ac66936a268bcf8f5b915cc8a424",
@@ -4001,7 +4001,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.cleanup.restore_qos",
-      "line": 287,
+      "line": 285,
       "method": "admin_json",
       "expression": "self.admin_json('port', 'show', port['id'])",
       "sha256": "efe8555947ea86a1b810a333acba5976ca4e533227c9d304603790d033b69d79",
@@ -4016,7 +4016,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.cleanup.restore_qos",
-      "line": 291,
+      "line": 289,
       "method": "admin_json",
       "expression": "self.admin_json('network', 'qos', 'policy', 'list')",
       "sha256": "cb5feb4b11643cc7a44e74d5c0b3f0979c96fcda26f7766cc73f3e75c5dddbb6",
@@ -4031,7 +4031,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.cleanup.restore_qos",
-      "line": 293,
+      "line": 291,
       "method": "admin",
       "expression": "self.admin('network', 'qos', 'policy', 'delete', r['policy_id'])",
       "sha256": "925e1846f7996e724934d7531f30ea1eb7456056ad4cabe7e64ba211cedfd3d0",
@@ -4046,7 +4046,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.cleanup.remove_fip",
-      "line": 297,
+      "line": 295,
       "method": "admin_json",
       "expression": "self.admin_json('floating', 'ip', 'list')",
       "sha256": "fff88f8476aa7dbf8b01c934b50d95dc16c7ae2e08fadbf4993e4412da885ec3",
@@ -4061,7 +4061,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.cleanup.remove_fip",
-      "line": 299,
+      "line": 297,
       "method": "admin_json",
       "expression": "self.admin_json('floating', 'ip', 'show', r['fip']['id'])",
       "sha256": "8fa6ce5b0e8542b6c0aaa4060f5aa2b784a7de76b6adc20e6556750ae676f8f0",
@@ -4076,7 +4076,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.cleanup.remove_fip",
-      "line": 302,
+      "line": 300,
       "method": "admin",
       "expression": "self.admin('floating', 'ip', 'delete', obj['id'])",
       "sha256": "5a60d00b444e52aa6199b7129aec9a356e853b9ada0c360b59354516fa69860a",
@@ -4091,7 +4091,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.cleanup.remove_sg",
-      "line": 306,
+      "line": 304,
       "method": "admin_json",
       "expression": "self.admin_json('security', 'group', 'list')",
       "sha256": "4e355f0b315a36a799c194597c3f7580a5784ae96229806723c7a2fb4c846820",
@@ -4106,7 +4106,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.cleanup.remove_sg",
-      "line": 308,
+      "line": 306,
       "method": "admin_json",
       "expression": "self.admin_json('port', 'show', r['workers'][0]['port']['id'])",
       "sha256": "7cbb6ccccec5f3bde4f7bab1cb86bf9468f59403515445383432119863d9c0b5",
@@ -4121,7 +4121,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.cleanup.remove_sg",
-      "line": 310,
+      "line": 308,
       "method": "admin",
       "expression": "self.admin('port', 'unset', '--security-group', r['security_group_id'], port['id'])",
       "sha256": "6b2d3b46fe611e639864cdc01ca840a90d5fc308d1065abd201e4873f513a754",
@@ -4136,7 +4136,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.cleanup.remove_sg",
-      "line": 311,
+      "line": 309,
       "method": "admin",
       "expression": "self.admin('security', 'group', 'delete', r['security_group_id'])",
       "sha256": "126e229ef0f4efdf91fab6a6e99abeffacb189854790f8fb0234d94e7a29b8b2",
@@ -4151,7 +4151,7 @@
     {
       "file": "experiments/graduation_s2.py",
       "scope": "S2.cleanup",
-      "line": 314,
+      "line": 312,
       "method": "remote",
       "expression": "self.remote('sudo bash /opt/openstack-k8s/graduation-s2-network.sh cleanup ' + r['run_id'])",
       "sha256": "f7d4d4557df2910f7970c17407371ed563c7e7c078cdebd5ea0ff8338dda227c",
@@ -4166,7 +4166,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.guest",
-      "line": 50,
+      "line": 48,
       "method": "remote",
       "expression": "self.remote('sudo install -d -m 700 ' + shlex.quote(str(Path(known_hosts).parent)) + ' && ' + shlex.join(args), data=script, timeout=timeout)",
       "sha256": "bdb2066a37c618179f2d2a58f1f76b8598304b94bdffd0c4091c0b9d8c97b8db",
@@ -4181,7 +4181,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.read_guest",
-      "line": 55,
+      "line": 53,
       "method": "guest",
       "expression": "self.guest(binding, script, timeout=left)",
       "sha256": "ed663f3617a4906884c27d832dc1843e2a0ed415e3cc160779afee9fd117cad8",
@@ -4196,7 +4196,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.read_sql",
-      "line": 59,
+      "line": 57,
       "method": "sql",
       "expression": "self.sql(sql, timeout=left)",
       "sha256": "3dbbc871f574caf319ead91fd036fdd708db19c9e63156b8ab525967b2a265ba",
@@ -4211,7 +4211,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.controller_policy",
-      "line": 64,
+      "line": 62,
       "method": "read_guest",
       "expression": "self.read_guest(cp, 'cat ' + path)",
       "sha256": "cb41e314918b359fa8ecc888b5f9ac301152f0acb3897dc4d076740c6296816c",
@@ -4226,7 +4226,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.controller_policy",
-      "line": 73,
+      "line": 71,
       "method": "guest",
       "expression": "self.guest(cp, \"python3 - <<'PYCODE'\\nimport base64,os\\nfrom pathlib import Path\\np=Path('\" + path + \"')\\ntmp=Path('/etc/kubernetes/s3-controller-manager.tmp')\\ntmp.write_bytes(base64.b64decode('\" + base64.b64encode(configured.encode()).decode() + \"'))\\nos.replace(tmp,p)\\nPYCODE\\n\")",
       "sha256": "31e7bf90bc311a8603c7341c68d07f7ec9e34bee0f4732c21de633c6de040c3b",
@@ -4241,7 +4241,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.sql",
-      "line": 81,
+      "line": 79,
       "method": "k",
       "expression": "self.k('-n', self.ns, 'exec', 'probe', '--', 'psql', '-X', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-h', 'db', '-U', 'postgres', '-d', 'postgres', '-c', sql, timeout=timeout)",
       "sha256": "13f533778a049898e549aa52189c3124c342e96f51e079fc82cd736d37c33e5f",
@@ -4256,7 +4256,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.build_database",
-      "line": 127,
+      "line": 125,
       "method": "admin_json",
       "expression": "self.admin_json('volume', 'show', pv['spec']['csi']['volumeHandle'])",
       "sha256": "71e68029cf3de6ec769693add2dcb21445ac73d7cc4523aa2217289e73fe88bd",
@@ -4271,7 +4271,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.sample",
-      "line": 135,
+      "line": 133,
       "method": "k",
       "expression": "self.k('-n', self.ns, 'exec', 'probe', '--', 'sh', '-c', 'i=0; while [ \"$i\" -lt ' + str(seconds) + ' ]; do stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ); PGCONNECT_TIMEOUT=2 psql -X -At -h db -U postgres -d postgres -c \"select count(*) from evidence\" >/dev/null 2>&1; rc=$?; printf \"%s %s\\\\n\" \"$stamp\" \"$rc\"; i=$((i+1)); sleep 1; done', timeout=seconds * 4 + 30)",
       "sha256": "447f51784c96c11d22132e4f7745346bd41f492a13113fbeccedc6307eb1026b",
@@ -4286,7 +4286,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.fence",
-      "line": 147,
+      "line": 145,
       "method": "admin",
       "expression": "self.admin('server', 'stop', source['nova_id'])",
       "sha256": "74c07d872cd6b99b37688d05b50ec72acdcf682e07faa0e8b05cf7d120b72ce2",
@@ -4301,7 +4301,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.fence.stopped",
-      "line": 149,
+      "line": 147,
       "method": "admin_json",
       "expression": "self.admin_json('server', 'show', source['nova_id'])",
       "sha256": "cf79afd9fce892fd056b1fcb2afd2c33eaaa52d0ea2a8dba5836eb4901587cf5",
@@ -4316,7 +4316,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.fence.stopped",
-      "line": 154,
+      "line": 152,
       "method": "operational_remote",
       "expression": "self.operational_remote('s3-hypervisor-state', 'sudo docker exec nova_libvirt virsh domstate ' + shlex.quote(source['instance_name']), host=source['host'])",
       "sha256": "d571a50c38a3e8d34f7d8994d9b8640cb397e21cc234be47802c8ce1f21e773d",
@@ -4331,7 +4331,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.mark_out_of_service",
-      "line": 164,
+      "line": 162,
       "method": "admin_json",
       "expression": "self.admin_json('server', 'show', source['nova_id'])",
       "sha256": "cf79afd9fce892fd056b1fcb2afd2c33eaaa52d0ea2a8dba5836eb4901587cf5",
@@ -4346,7 +4346,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.mark_out_of_service",
-      "line": 167,
+      "line": 165,
       "method": "operational_remote",
       "expression": "self.operational_remote('s3-hypervisor-state', 'sudo docker exec nova_libvirt virsh domstate ' + shlex.quote(source['instance_name']), host=source['host'])",
       "sha256": "d571a50c38a3e8d34f7d8994d9b8640cb397e21cc234be47802c8ce1f21e773d",
@@ -4361,7 +4361,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.mark_out_of_service",
-      "line": 179,
+      "line": 177,
       "method": "k",
       "expression": "self.k('patch', 'node', source['node'], '--type=json', '-p', json.dumps(patch))",
       "sha256": "e16d1e30ca406377ab8d860aa0b141f46a94b04651c96aa30e51b5cf45ee0941",
@@ -4376,7 +4376,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 201,
+      "line": 199,
       "method": "admin_json",
       "expression": "self.admin_json('port', 'list', '--network', workers[0]['port']['network_id'], '--device-owner', 'network:router_interface')",
       "sha256": "37eed830aad2b2231c36c2eb2268a2e63102c66b0d6ce59552519c5b3b23549d",
@@ -4391,7 +4391,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 204,
+      "line": 202,
       "method": "admin_json",
       "expression": "self.admin_json('port', 'show', interfaces[0]['ID'])",
       "sha256": "aa7a7eefed5415dcaf813d716936c1af4f4349087a41703e8f0ceb1b7f55ef72",
@@ -4406,7 +4406,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 213,
+      "line": 211,
       "method": "k",
       "expression": "self.k('-n', self.client.ns, 'annotate', 'machine', source['machine'], SKIP + '=' + self.record['run_id'], plane='m')",
       "sha256": "9b1eb35c48f3c824dd3eee3109d5faabda2dd268b36bacc5f735fd49c2853267",
@@ -4421,7 +4421,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 215,
+      "line": 213,
       "method": "sql",
       "expression": "self.sql(\"create table evidence(id integer primary key, value text not null); insert into evidence select i, md5(i::text || '\" + seed + \"') from generate_series(1,1000) i;\")",
       "sha256": "2ec0542a3f5d3a13fccc9d1bdda66534245f3e5ee07ad2c89940498875899d44",
@@ -4436,7 +4436,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 281,
+      "line": 279,
       "method": "sql",
       "expression": "self.sql(rows_query)",
       "sha256": "719334cddd6178b7b95f92abc0b3fe0d9f8243387ec46209335429a236670462",
@@ -4451,7 +4451,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 280,
+      "line": 278,
       "method": "sql",
       "expression": "self.sql(query)",
       "sha256": "78e5e4224cdf8f255876f954dcc821e50c54a91c3b8274d7eec7f378ab0f746f",
@@ -4466,7 +4466,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 225,
+      "line": 223,
       "method": "sql",
       "expression": "self.sql(\"select current_setting('fsync') || ':' || current_setting('synchronous_commit') || ':' || current_setting('full_page_writes') || ':' || current_setting('data_directory')\")",
       "sha256": "7ceb0a48dc34b93711ce3f18bed17c9c6de395823502cb9367a55bffd5998a7c",
@@ -4481,7 +4481,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 248,
+      "line": 246,
       "method": "guest",
       "expression": "self.guest(source, fault)",
       "sha256": "6fbec62636e18884220fc673ae41f5d46e907274ef5f99a2768fc59887307764",
@@ -4496,7 +4496,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 288,
+      "line": 286,
       "method": "admin_json",
       "expression": "self.admin_json('server', 'show', source['nova_id'])",
       "sha256": "cf79afd9fce892fd056b1fcb2afd2c33eaaa52d0ea2a8dba5836eb4901587cf5",
@@ -4511,7 +4511,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 277,
+      "line": 275,
       "method": "admin_json",
       "expression": "self.admin_json('volume', 'show', self.record['volume_id'])",
       "sha256": "b339429418cccf18f7d495af2ac664b5ef7bcf0b90d2aa2c332bea61e0e0ee67",
@@ -4526,7 +4526,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 280,
+      "line": 278,
       "method": "sql",
       "expression": "self.sql(query)",
       "sha256": "78e5e4224cdf8f255876f954dcc821e50c54a91c3b8274d7eec7f378ab0f746f",
@@ -4541,7 +4541,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 281,
+      "line": 279,
       "method": "sql",
       "expression": "self.sql(rows_query)",
       "sha256": "719334cddd6178b7b95f92abc0b3fe0d9f8243387ec46209335429a236670462",
@@ -4556,7 +4556,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 283,
+      "line": 281,
       "method": "sql",
       "expression": "self.sql(\"begin; insert into evidence values (1001, 'after-recovery'); commit;\")",
       "sha256": "455b1c9f70871f2ebed3c870d4774a31e4b05e11fac67f9cc6f2919b25953eee",
@@ -4571,7 +4571,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 284,
+      "line": 282,
       "method": "sql",
       "expression": "self.sql('select value from evidence where id=1001')",
       "sha256": "97e9635f885486b2d461feb9f6f367c6d4786d040c02e57ae83601d96df93a99",
@@ -4586,7 +4586,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 288,
+      "line": 286,
       "method": "admin_json",
       "expression": "self.admin_json('server', 'show', source['nova_id'])",
       "sha256": "cf79afd9fce892fd056b1fcb2afd2c33eaaa52d0ea2a8dba5836eb4901587cf5",
@@ -4601,7 +4601,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.run",
-      "line": 289,
+      "line": 287,
       "method": "operational_remote",
       "expression": "self.operational_remote('s3-hypervisor-state', 'sudo docker exec nova_libvirt virsh domstate ' + shlex.quote(source['instance_name']), host=source['host'])",
       "sha256": "d571a50c38a3e8d34f7d8994d9b8640cb397e21cc234be47802c8ce1f21e773d",
@@ -4616,7 +4616,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.clear_fault",
-      "line": 329,
+      "line": 327,
       "method": "guest",
       "expression": "self.guest(source, clear, timeout=30)",
       "sha256": "e4321203e80788af3537e6b462c74cf0ad4006fba23a456f0a74fc4483373946",
@@ -4631,7 +4631,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.clear_fault",
-      "line": 332,
+      "line": 330,
       "method": "read_guest",
       "expression": "self.read_guest(source, check, timeout=90)",
       "sha256": "7d3f109202011094673eac53cebe8f1343c5a39e4d1404dc38818999ad2a6f00",
@@ -4646,7 +4646,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.clear_fault",
-      "line": 332,
+      "line": 330,
       "method": "read_guest",
       "expression": "self.read_guest(source, check, timeout=90)",
       "sha256": "7d3f109202011094673eac53cebe8f1343c5a39e4d1404dc38818999ad2a6f00",
@@ -4661,7 +4661,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.cleanup",
-      "line": 367,
+      "line": 365,
       "method": "admin_json",
       "expression": "self.admin_json('server', 'show', source['nova_id'])",
       "sha256": "cf79afd9fce892fd056b1fcb2afd2c33eaaa52d0ea2a8dba5836eb4901587cf5",
@@ -4676,7 +4676,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.cleanup",
-      "line": 360,
+      "line": 358,
       "method": "admin_json",
       "expression": "self.admin_json('volume', 'list', '--all-projects')",
       "sha256": "e9ad048a013cebc174cfda18779dcd144252945b6f1f9d1799239bad31b04e52",
@@ -4691,7 +4691,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.cleanup",
-      "line": 367,
+      "line": 365,
       "method": "admin_json",
       "expression": "self.admin_json('server', 'show', source['nova_id'])",
       "sha256": "cf79afd9fce892fd056b1fcb2afd2c33eaaa52d0ea2a8dba5836eb4901587cf5",
@@ -4706,7 +4706,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.cleanup",
-      "line": 364,
+      "line": 362,
       "method": "k",
       "expression": "self.k('cordon', source['node'])",
       "sha256": "579b3704ffd2c62c01e27c4f1a04918b2fc170c11d51741bbecf4fbfd294ff91",
@@ -4721,7 +4721,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.cleanup",
-      "line": 366,
+      "line": 364,
       "method": "admin",
       "expression": "self.admin('server', 'start', source['nova_id'])",
       "sha256": "e54aaefb3ac8b33b3a5a6283f0ee2a94890e7d0d8f41fd50690291beb9e1e1ce",
@@ -4736,7 +4736,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.cleanup",
-      "line": 367,
+      "line": 365,
       "method": "admin_json",
       "expression": "self.admin_json('server', 'show', source['nova_id'])",
       "sha256": "cf79afd9fce892fd056b1fcb2afd2c33eaaa52d0ea2a8dba5836eb4901587cf5",
@@ -4751,7 +4751,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.cleanup",
-      "line": 374,
+      "line": 372,
       "method": "k",
       "expression": "self.k('taint', 'node', source['node'], OUT + ':NoExecute-')",
       "sha256": "f7e030a19dcab50a35e5d1a084cc3fc10eebd7a727952202009967c6923e1d9f",
@@ -4766,7 +4766,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.cleanup",
-      "line": 376,
+      "line": 374,
       "method": "k",
       "expression": "self.k('uncordon', source['node'])",
       "sha256": "d8c0cfd52fd93d19cc993a85648613f4544348ca0ebabb66bc2c6bda44316a94",
@@ -4781,7 +4781,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.cleanup",
-      "line": 381,
+      "line": 379,
       "method": "k",
       "expression": "self.k('-n', self.client.ns, 'annotate', 'machine', source['machine'], SKIP + '-', plane='m')",
       "sha256": "852da9b7bbea79fd3c43deb74f90f6126fb66743781ef3d818fea742ac67b359",
@@ -4796,7 +4796,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.cleanup",
-      "line": 402,
+      "line": 400,
       "method": "read_guest",
       "expression": "self.read_guest(cp, 'cat ' + path)",
       "sha256": "cb41e314918b359fa8ecc888b5f9ac301152f0acb3897dc4d076740c6296816c",
@@ -4811,7 +4811,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.cleanup",
-      "line": 393,
+      "line": 391,
       "method": "guest",
       "expression": "self.guest(cp, 'python3 -c ' + shlex.quote(code))",
       "sha256": "9648541af8b62a985b04bf9f547e218951e0ed965ad820632c06c4acd19cd8f3",
@@ -4826,7 +4826,7 @@
     {
       "file": "experiments/graduation_s3.py",
       "scope": "S3.cleanup",
-      "line": 402,
+      "line": 400,
       "method": "read_guest",
       "expression": "self.read_guest(cp, 'cat ' + path)",
       "sha256": "cb41e314918b359fa8ecc888b5f9ac301152f0acb3897dc4d076740c6296816c",
@@ -4841,7 +4841,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.k",
-      "line": 96,
+      "line": 95,
       "method": "command",
       "expression": "command(['kubectl', '--kubeconfig', kubeconfig, '--request-timeout=20s', *args], data=data, timeout=timeout)",
       "sha256": "6b828199cc8eba2f2b3168e1caa7ecdbfc33df69a438c28340710bc1b7d903d1",
@@ -4856,7 +4856,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.object",
-      "line": 103,
+      "line": 102,
       "method": "k",
       "expression": "self.k(plane, *args, '--ignore-not-found', '-o', 'json')",
       "sha256": "e3ee9002f34862338b59bf908fa820480238e7371deace9e5d72e02231ed73ed",
@@ -4871,7 +4871,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.preflight",
-      "line": 111,
+      "line": 110,
       "method": "command",
       "expression": "command([ROOT / 'scripts/gcp-workload-api-tunnel.sh', 'ensure'], timeout=180)",
       "sha256": "cc3d66eb3029ff34f260eaca16699adf57f2a99052b172460994c0f2d4d492ef",
@@ -4886,7 +4886,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.render_and_validate",
-      "line": 128,
+      "line": 127,
       "method": "k",
       "expression": "self.k('m', 'apply', '--dry-run=server', '-f', self.mhc_manifest)",
       "sha256": "fbda8e28a5e6be2db865aa14abc7e9dfa8c0354e8243a2d89f977ac7bcfedda5",
@@ -4901,7 +4901,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.render_and_validate",
-      "line": 129,
+      "line": 128,
       "method": "k",
       "expression": "self.k('w', 'apply', '--dry-run=client', '-f', self.app_manifest)",
       "sha256": "a8b9d984ae4da26bdc5c27e8710efda8e60b937c0ceb9e93e74ababad21c2770",
@@ -4916,7 +4916,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.ensure_two_fixed_workers",
-      "line": 159,
+      "line": 158,
       "method": "command",
       "expression": "command([ROOT / 'scripts/cluster-autoscaler.sh', 'mode', 'fixed'], timeout=480)",
       "sha256": "f999a9863eb467c9920ea5324f93f92ca5d519f0064cd37de69570ce82e463fb",
@@ -4931,7 +4931,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.ensure_two_fixed_workers",
-      "line": 161,
+      "line": 160,
       "method": "command",
       "expression": "command([ROOT / 'scripts/workload-cluster.sh', 'scale', '2'], timeout=4200)",
       "sha256": "cca9531fc9521a264875630164bf53a4638390cd5443485f11386be2bb738308",
@@ -4946,7 +4946,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.verify_http",
-      "line": 212,
+      "line": 211,
       "method": "k",
       "expression": "self.k('w', 'get', '--raw=' + path, timeout=30)",
       "sha256": "9faedc5a644ea46177dde8206641f24334341a12f0ced6bdf7af116b6364d325",
@@ -4961,7 +4961,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.prepare",
-      "line": 270,
+      "line": 269,
       "method": "k",
       "expression": "self.k('m', 'apply', '-f', self.mhc_manifest)",
       "sha256": "923360ad8e2e8d2207e89f9ff7550c940995f5db54d59c75d71594a55da11d18",
@@ -4976,7 +4976,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.prepare",
-      "line": 276,
+      "line": 275,
       "method": "k",
       "expression": "self.k('w', 'apply', '-f', self.app_manifest)",
       "sha256": "0248248406119c983e782bdcf5e4b45aaefabcb36632899148c13a74536b899e",
@@ -4991,7 +4991,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.prepare",
-      "line": 283,
+      "line": 282,
       "method": "k",
       "expression": "self.k('w', '-n', NAMESPACE, 'rollout', 'status', 'deployment/' + HTTP_NAME, '--timeout=10m', timeout=660)",
       "sha256": "ee838f4a3c2c77383e2ef92e889a34d854fbcf328f82fc0115f89ca94c441c1e",
@@ -5006,7 +5006,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.cleanup",
-      "line": 346,
+      "line": 345,
       "method": "k",
       "expression": "self.k('w', 'get', 'pods,deployments,services,configmaps,secrets,persistentvolumeclaims', '-n', NAMESPACE, '-o', 'json')",
       "sha256": "a41e750053fe6e99483ebbbbfa6b15cf1188cabbb1e07741380b21ecce4afc6c",
@@ -5021,7 +5021,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.cleanup",
-      "line": 355,
+      "line": 354,
       "method": "k",
       "expression": "self.k('m', 'delete', 'machinehealthcheck', MHC_NAME, '-n', self.client.ns, '--wait=true', '--timeout=3m', timeout=210)",
       "sha256": "d9431a5349d2572ff4e3d74686d6117cc03bdff56e07cfd9a31a9eb104b4ca48",
@@ -5036,7 +5036,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.cleanup",
-      "line": 358,
+      "line": 357,
       "method": "k",
       "expression": "self.k('w', 'delete', '-f', self.app_manifest, '--ignore-not-found=true', '--wait=true', '--timeout=5m', timeout=330)",
       "sha256": "69e7db96d61b9f9e6aa2b2497ceb2c113637d4a0fa427560510b4524c9fd1515",
@@ -5051,7 +5051,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.cleanup",
-      "line": 367,
+      "line": 366,
       "method": "command",
       "expression": "command([ROOT / 'scripts/workload-cluster.sh', 'scale', str(original_workers)], timeout=4200)",
       "sha256": "a655f4e32bbc959d33f5c42c22ec48c5f75bece7f49284f5b8cf9f802bb8f5e2",
@@ -5066,7 +5066,7 @@
     {
       "file": "experiments/graduation_s4.py",
       "scope": "S4Preparation.cleanup",
-      "line": 369,
+      "line": 368,
       "method": "command",
       "expression": "command([ROOT / 'scripts/cluster-autoscaler.sh', 'mode', record['original_mode']], timeout=480)",
       "sha256": "f98fc2e7c82de119efa3a6513331b076e0126364e452f02c3af7f3d735e72808",

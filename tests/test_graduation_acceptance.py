@@ -1,6 +1,5 @@
 """Regression cases for false-positive recovery and invalid statistics."""
 import contextlib
-import copy
 import datetime as dt
 import hashlib
 import io
@@ -9,7 +8,6 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / d) for d in ('scripts', 'experiments', 'evaluation')]

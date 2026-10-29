@@ -7,7 +7,7 @@ import copy
 import difflib
 from pathlib import Path
 
-from fresh_stability_release import artifact,sha,qualification_source_match
+from fresh_stability_release import artifact, qualification_source_match
 
 KIND='user-authorized-inventory-continuation-v5'
 MAIN=['s4-b03-off','s4-b03-on']

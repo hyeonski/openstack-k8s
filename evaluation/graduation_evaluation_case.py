@@ -10,14 +10,12 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import time
 
 # Optional evaluation consumes core and scenario modules.
 sys.path[:0] = [str(Path(__file__).resolve().parents[1] / d) for d in ('scripts', 'experiments')]
 
 from lib.state import atomic_json, utc_now
 from graduation_recovery import RecoveryLab
-from graduation_s1 import NAMESPACE
 from graduation_s1_auto import S1Automatic
 from graduation_s2 import S2
 from graduation_s3 import S3, OUT, volume_matches

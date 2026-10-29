@@ -13,7 +13,7 @@ import time
 from lib.state import atomic_json
 from graduation_evaluation import Campaign
 from graduation_recovery import RecoveryLab
-from fresh_evidence import epoch, utc
+from fresh_evidence import epoch
 from fresh_operations import phase, case_time_gate, BedLedger
 from fresh_identity import validate_controller_policy, read_controller_architecture, identity_matches
 

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import concurrent.futures
 from contextlib import contextmanager
 import os
@@ -154,7 +153,7 @@ class FreshS1(EvaluationS1):
             result=super().observe_contention(record,*args)
             self.ev.event('diagnosis_completed',target=record['service_before']['pod_uid'])
             return result
-        except RuntimeError as exc:
+        except RuntimeError:
             if record.get('phase')!='deferred' or record.get('defer_reason')!='sustained_service_and_host_evidence_missing':
                 raise
             # An ordinary policy defer is an observed negative-control outcome; unexpected exceptions still abort.
@@ -499,8 +498,7 @@ class FreshS2(FreshOwnedLab, EvaluationS2):
         return True
 
     def finish(self):
-        import concurrent.futures
-        from graduation_s2 import next_rate, stable, impacted
+        from graduation_s2 import next_rate, stable
         workers=self.start()
         try:
             a, b = workers

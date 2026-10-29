@@ -4,7 +4,6 @@ Installed service code is root-owned; requests contain data, never commands or
 paths. The user's original network-time setting is restored, not assumed on.
 """
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path

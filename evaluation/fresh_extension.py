@@ -4,7 +4,6 @@ The extension reuses the v11 scientific contract in the v12 operational profile 
 manifest-level cases. S is the Kubernetes-only arm: the same uploader
 relocation as P without Neutron QoS. One attempt per case, no retry.
 """
-import json
 import os
 from pathlib import Path
 import shutil

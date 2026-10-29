@@ -22,7 +22,7 @@ sys.path[:0] = [str(ROOT / d) for d in ('scripts', 'experiments')]
 from lib.state import atomic_json
 from lib.runtime import LabRuntime
 from fresh_baseline import baseline_metrics
-from fresh_analysis import quantile, request_metrics, rows
+from fresh_analysis import request_metrics, rows
 from fresh_evidence import Evidence, append, clock_check, epoch, utc
 from fresh_operations import BedLedger, phase
 from fresh_campaign import source_hashes

@@ -5,7 +5,6 @@ baseline. It never pretends an interrupted measurement was continuous.
 """
 from __future__ import annotations
 
-import datetime as dt
 import json
 import os
 from pathlib import Path

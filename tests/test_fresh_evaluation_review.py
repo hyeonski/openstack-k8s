@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/d) for d in ('evaluation','scripts','experiments')]
 import test_fresh_evaluation as fixtures
 from fresh_analysis import judge, read, rows, uploader_metrics
-from fresh_campaign import FreshCampaign, check_frozen, report, source_hashes
+from fresh_campaign import FreshCampaign, check_frozen, source_hashes
 from fresh_contract import validate, SUPPORTED_FAULTS, SUPPORTED_FIXTURE
 from fresh_evidence import Evidence, OpenLoopProbe, utc
 from fresh_fake import FakeBackend, synthetic_profile

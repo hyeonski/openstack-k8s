@@ -1,7 +1,6 @@
 """Independent fresh evidence adapter and judgement; runner success flags are ignored."""
 from __future__ import annotations
 
-from collections import Counter
 import json
 import hashlib
 import math

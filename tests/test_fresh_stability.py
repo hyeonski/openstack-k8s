@@ -119,13 +119,12 @@ class BoundaryIntegrationTests(unittest.TestCase):
     def test_measurement_snapshot_survives_cleanup_failure_and_detects_tampering(self):
         from fresh_seal import seal_measurement,verify_measurement
         from lib.state import atomic_json
-        from fresh_analysis import rows
         profile=synthetic_profile(json.loads((ROOT/'config/graduation-evaluation-fresh.json').read_text()))
         for scenario,mode in (('s1','P'),('s2','P'),('s3','P3600'),('s4','on')):
             with self.subTest(scenario=scenario),tempfile.TemporaryDirectory() as root:
                 ev=Evidence(root);case=next(c for c in profile['cases'] if c['scenario']==scenario and c['mode']==mode)
                 FakeBackend().execute(case,profile,ev);atomic_json(Path(root)/'identity.json',{'case_id':case['id']})
-                seal=seal_measurement(ev,case,profile)
+                seal_measurement(ev,case,profile)
                 original=(Path(root)/'measurement/requests.jsonl').read_bytes()
                 ev.event('execution_error',phase='cleanup',detail='TLS handshake timeout')
                 atomic_json(Path(root)/'cleanup.json',{'checks':{'same_uid':False}})

@@ -1,9 +1,9 @@
-import copy,json,sys,tempfile,unittest
+import json, sys, tempfile, unittest
 from pathlib import Path
 from unittest.mock import Mock,patch
 ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/x) for x in ('evaluation','scripts','experiments')]
-from fresh_s1_read_release import KIND,ORIGINS,PLAN,validate_scope,validate_delta,validate_operational_changes
+from fresh_s1_read_release import KIND, ORIGINS, PLAN, validate_scope, validate_delta
 from fresh_transport_release import select_cases,supplemental_plan
 from fresh_live import LiveBackend
 from fresh_evidence import Evidence

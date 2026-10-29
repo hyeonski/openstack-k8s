@@ -7,7 +7,6 @@ cluster is an error: the greenfield lab-up path is always explicit.
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import fcntl
 import json
 import os

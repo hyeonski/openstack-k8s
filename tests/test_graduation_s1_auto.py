@@ -1,5 +1,4 @@
 """Automatic S1 actions require complete evidence and an eligible destination."""
-import copy
 from pathlib import Path
 import sys
 import unittest

@@ -7,13 +7,11 @@ import datetime as dt
 import fcntl
 import hashlib
 import json
-import os
 from pathlib import Path
 import uuid
 
 from lib.state import atomic_json, utc_now
 from lib.runtime import LabRuntime, LABEL, percentile, host_cpu_utilization
-from worker_control import WorkerControl
 from workload_state import Client, artifact_dir, command, condition
 
 

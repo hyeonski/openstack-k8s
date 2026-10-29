@@ -13,7 +13,7 @@ sys.path[:0]=[str(ROOT/d) for d in ('evaluation','scripts','experiments')]
 from lib.host_lifetime import host_deadline
 from fresh_host_lifetime import validate_host_lifetime_policy, effective_host_deadline, DOCUMENT
 from fresh_pause import pause_decision
-from fresh_scenarios import horizon, injection_guard
+from fresh_scenarios import horizon
 from fresh_operations import case_time_gate, reservation, BedLedger
 from fresh_evidence import utc
 from fresh_fake import operational_fixture

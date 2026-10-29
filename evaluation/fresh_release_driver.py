@@ -8,9 +8,8 @@ from pathlib import Path
 import datetime as dt
 import json,os,subprocess,sys,time,traceback,fcntl,hashlib
 ROOT=Path.cwd();sys.path[:0]=[str(ROOT/d) for d in ('evaluation','scripts','experiments')]
-from fresh_campaign import check_frozen, report, operational_failure_action
+from fresh_campaign import check_frozen, operational_failure_action
 from fresh_operations import BedLedger
-from fresh_pause import pause_decision
 from fresh_host_lifetime import effective_host_deadline, validate_host_lifetime_policy
 from fresh_evidence import epoch,utc
 from lib.state import atomic_json

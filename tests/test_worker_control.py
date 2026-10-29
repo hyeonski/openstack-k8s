@@ -275,7 +275,7 @@ class OwnedProbeReadTests(unittest.TestCase):
     def test_probe_ast_guard_rejects_probe_mutation_or_workload_change(self):
         import ast
         root=Path(__file__).resolve().parents[1];sys.path.insert(0,str(root/'evaluation'))
-        from fresh_transport_release import validate_probe_read_diff,PROBE_READ_EXPECTED
+        from fresh_transport_release import validate_probe_read_diff
         current=(root/'scripts/test_resources.py').read_text();tree=ast.parse(current);cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='OwnedProbeReads');lines=current.splitlines(True);del lines[cls.lineno-1:cls.end_lineno];original=''.join(lines).replace('    reads = OwnedProbeReads(client, path, cluster)\n','').replace('reads.get(','client.get(').replace('reads.k(','client.k(').replace(', owned=obj','')
         validate_probe_read_diff(original,current)
         with self.assertRaises(ValueError):validate_probe_read_diff(original,current.replace("'activeDeadlineSeconds': 240","'activeDeadlineSeconds': 300"))

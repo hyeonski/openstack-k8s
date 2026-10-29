@@ -2,9 +2,7 @@
 """S2 shared egress experiment and bounded Neutron QoS controller."""
 import argparse
 import json
-from pathlib import Path
 import shlex
-import time
 
 from lib.state import utc_now
 from graduation_recovery import RecoveryLab, wait_for

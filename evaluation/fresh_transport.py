@@ -5,13 +5,11 @@ The caller's original deadline includes reconnect, identity reads and backoff.
 """
 from contextlib import contextmanager
 import fcntl
-import math
 from pathlib import Path
 import re
 import socket
 import time
 
-from fresh_evidence import append, utc
 
 
 def transient_transport_error(exc):

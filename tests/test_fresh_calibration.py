@@ -9,12 +9,11 @@ import tempfile
 import threading
 import unittest
 from unittest.mock import Mock, patch
-from types import SimpleNamespace
 from http.server import ThreadingHTTPServer
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/d) for d in ('evaluation','scripts','experiments')]
-from fresh_calibration import assess, choose, admission, normal_job, RULE, check_root, exclusive_json, measure, validate_binding, close_session, TransportWatch
+from fresh_calibration import assess, choose, admission, normal_job, check_root, exclusive_json, measure, validate_binding, close_session, TransportWatch
 from fresh_campaign import freeze
 from fresh_evidence import utc, Evidence
 
