@@ -23,13 +23,13 @@ compute01의 기존 `neutron_openvswitch_agent`만 재시작했다. 동일 컨�
 
 v10 source259 대비 과학·계측·장애·판정 코드와 설정은 byte 단위 동일하다. 새 source263은 마지막 보충03 게이트와 dispatch, 준비 probe 직전의 Neutron 캐시 가드, 원격 호출 등록부, 회귀 및 예산 추정만 변경한다. 기존 probe 본문은 선행 hook을 제거한 AST 비교로 불변이며, 기존 343개 원격 호출 정책도 유지한다(새 등록부 348개). 이전 main29 및 보충10의 판정/정리/증거 해시를 보존하고 마지막 원본 하나만 허용한다.
 
-221개 fresh 회귀가 통과했다(`tests.json`, `tests.log`). 초기 신규 테스트는 보충 block 이름까지 원본과 같다고 잘못 가정하여 실패했고, 시나리오/모드의 동일성만 검사하도록 바로잡았다. 초기 실패 로그도 별도로 보존했다.
+221개 fresh 회귀가 통과했다(`tests.json`, `tests.log`). 초기 신규 테스트는 보충 block 이름까지 원본과 같다고 잘못 가정하여 실패했고, 시나리오/모드의 동일성만 검사하도록 바로잡았다. 초기 실패 로그도 별도로 보존했다. 추가 worker-control/lifecycle 50개 테스트에서는 48개가 통과했고, 2개 오류는 수정 전 v10 frozen source의 임시 복사에서도 같은 테스트·같은 예외로 재현됐다. 하나는 옛 OwnedProbeReads AST 템플릿, 하나는 get/k mock 가정이다. 이번 변경의 새 회귀로 판정하지 않으며 `related-tests-baseline.json`과 양쪽 로그를 보존한다.
 
 첫 1→2→1의 원래 DNS probe는 모두 통과했지만 삭제된 새 워커 `10.6.0.237`이 compute01 캐시에 남아 엄격 정합 검증이 실패했다. 수 분 뒤에도 남음을 확인하고 첫 검증 파일과 로그를 보존했다. 단회 재시작만으로 충분하다고 판정하지 않았다.
 
 `scripts/lib/neutron_members.py`는 fresh 준비 probe 이전에 Kubernetes node/Nova host/Neutron SG 포트를 묶어 확인하고, 불일치가 있는 기존 agent만 한 번 재시작한다. 보안 규칙은 바꾸지 않는다. 측정 token 또는 미복원 clock guard가 있으면 차단한다. 재시작은 durable journal을 먼저 기록하고, 응답이 불명확하면 다시 보내지 않는다. 다음 호출은 실제 캐시·동일 컨테이너를 읽어 완료만 확인하거나 수동 복구를 요구한다. 전체 450초와 호출별 최대 45초 안에서 수행하며 기존 준비/정리 phase 한도를 늘리지 않는다.
 
-새 실제 검증(`live-qualification-02`): 동일 보안정책에서 기존 워커 1→2→1 명령과 각 단계 원래 DNS probe, 양쪽 호스트의 worker/CP SG 멤버 정합, 최종 auto/1·소유 정리·동일 인프라 identity를 확인한다. 이 검증에는 실험 장애를 주입하지 않는다.
+새 실제 검증(`live-qualification-02`)은 UTC 04:13:17에 통과했다. 실제 잔류 캐시를 production hook으로 복구했고, 건강한 증설 단계는 재시작 없이 통과했으며, 축소 후 다시 남은 주소도 필요한 compute01 agent만 재시작하여 정리했다. 동일 보안정책에서 기존 워커 1→2→1 명령과 각 단계 원래 DNS probe, 양쪽 호스트의 worker/CP SG 멤버 정합, 최종 auto/1·소유 정리·동일 인프라 identity를 확인한다. 이 검증에는 실험 장애를 주입하지 않았다. `qualification.json`에 source263, runner 해시, 양쪽 SG 정합, 원래 probe 통과, auto/1 소유 정리 및 동일 환경 ID를 기록했다.
 
 ## 재개 상태
 
