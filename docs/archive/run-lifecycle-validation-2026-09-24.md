@@ -6,7 +6,7 @@
 
 단일 운영 클라이언트의 worker 자동 증감 시험에 실행 상태·취소·재시작 후 대조·
 정리 후 재측정·전체 시간 상한을 추가했다. 사용법과 보존 정책은
-[실행 수명주기](operations.md#run-lifecycle)를 따른다. 고객 실행 격리와 분산 실행 관리는
+[실행 수명주기](../operations.md#run-lifecycle)를 따른다. 고객 실행 격리와 분산 실행 관리는
 이 검증의 범위 밖이다.
 
 실행 기록은 `artifacts/lifecycle-validation-20260924/`에 저장한다.

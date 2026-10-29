@@ -31,7 +31,7 @@ compute01에는 workload control plane과 복구 목적지 worker가 함께 있�
 
 ## 결과 해석과 전환 조건
 
-실측 수치와 정리 상태는 [통합 검증 기록](../graduation/recovery-validation-2026-10-02.md)에
+실측 수치와 정리 상태는 [통합 검증 기록](../graduation/archive/first-evaluation-2026-10/recovery-validation-2026-10-02.md)에
 남긴다. 4 vCPU 구성의 실패를 새 기준으로 재분류하지 않는다. 용량 변경과 함께
 호스트 재기동·worker 재생성이 있었으므로 CPU 증설만의 인과 효과를 분리한 실험은 아니다.
 S2·S3의 최종 실행은 증설 전 구성에서 수행했으며 S1의 증설 후 실행과 구분한다.

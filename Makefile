@@ -61,7 +61,7 @@ help-observability:
 
 help-evaluation:
 	@echo "Optional fixed-profile repeat/comparison/negative tests; separate from a single experiment."
-	@echo "Read docs/graduation/final-evaluation.md and config/graduation-evaluation.json first."
+	@echo "Read docs/graduation/archive/first-evaluation-2026-10/final-evaluation.md and config/graduation-evaluation.json first."
 	@echo "  make graduation-evaluation-freeze"
 	@echo "  make graduation-evaluation-status CAMPAIGN=<absolute-path>"
 	@echo "  make graduation-evaluation-run CAMPAIGN=<absolute-path>"

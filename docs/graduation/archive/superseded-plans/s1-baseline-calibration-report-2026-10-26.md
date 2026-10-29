@@ -4,7 +4,7 @@
 
 ## 사전 등록과 구현
 
-[사전 등록 프로토콜](s1-baseline-calibration-protocol-2026-10-26.md)을 새 측정 전에 작성했다. calibration3×300초→후보 동결→validation2×300초, 추가 진단0회다. 최대45개 bin의 선형보간p95에1.20을 곱해10ms 단위 올림, 최소200ms·상한500ms를 등록했다. 20초 bin·bad.05·고정 index0 첫60초·최종120초·warmup0을 유지한다. 외부 SLA가 없는 합성 workload의 실험 목표이며, 높은 SLO는 작은 저하를 정상으로 보는 연구상 대가를 갖는다. 이번에는 이 규칙에 넣을 새 정상 자료가 없다.
+[사전 등록 프로토콜](../../s1-baseline-calibration-protocol-2026-10-26.md)을 새 측정 전에 작성했다. calibration3×300초→후보 동결→validation2×300초, 추가 진단0회다. 최대45개 bin의 선형보간p95에1.20을 곱해10ms 단위 올림, 최소200ms·상한500ms를 등록했다. 20초 bin·bad.05·고정 index0 첫60초·최종120초·warmup0을 유지한다. 외부 SLA가 없는 합성 workload의 실험 목표이며, 높은 SLO는 작은 저하를 정상으로 보는 연구상 대가를 갖는다. 이번에는 이 규칙에 넣을 새 정상 자료가 없다.
 
 정상 전용 진입점은 `evaluation/s1-baseline-calibration.sh`, 실행·판정은 `evaluation/fresh_calibration.py`다. 정상 Job factory만 호출하고 DEV/scenario 실행기·경쟁 VM·조치 함수를 dispatch하지 않는다. profile/source/doc/override SHA와 복사본을 등록하고, 후보와 validation raw·문서·source의 후속 live freeze 검증을 연결했다. calibration schema는 일반 campaign의 stage/purpose로 허용되지 않는다.
 
@@ -50,7 +50,7 @@
 
 새 정상 요청·20초 bin이 없으므로 기존200ms와 새 후보의 민감도 표, 첫60초 baseline, 지속300초 안정, 재악화 비교는 모두 미산출이다. 빈 표본을0ms·정상으로 채우지 않는다. calibration 반복은 향후에도 같은 host session의 반복이며 독립 환경으로 세지 않는다.
 
-기존 DEV2 attempts·preparation0/8·main0/29·primary0 상태다. A 실제 restart 전달, V1 조건, S2~S4 효과는 계속 미검증이다. 다음 작업은 [정상 보정 재개 프롬프트](s1-baseline-calibration-resume-prompt-2026-10-26.md)를 따른다. 보정 통과 후 새 profile로 별도 DEV→필수preparation8→main29 순서이며 이번에는 실행하지 않는다.
+기존 DEV2 attempts·preparation0/8·main0/29·primary0 상태다. A 실제 restart 전달, V1 조건, S2~S4 효과는 계속 미검증이다. 다음 작업은 정상 보정 재개 프롬프트(삭제됨, `evaluation-final-20261029` tag에 보존)를 따른다. 보정 통과 후 새 profile로 별도 DEV→필수preparation8→main29 순서이며 이번에는 실행하지 않는다.
 
 ## 증거와 검증
 

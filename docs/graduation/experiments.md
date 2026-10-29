@@ -2,7 +2,7 @@
 
 현재 코드의 실행 전제·순서·복원 경계를 설명한다. 시나리오의 목적은
 [장애 정의서](failure-scenarios.md), 고정 반복 평가의 조건·비교군·해석은
-[평가 계약](final-evaluation.md), 실측 결과는 [최종 평가](final-evaluation-results-2026-10-03.md)를 따른다.
+[평가 계약](archive/first-evaluation-2026-10/final-evaluation.md), 실측 결과는 [최종 평가](archive/first-evaluation-2026-10/final-evaluation-results-2026-10-03.md)를 따른다.
 
 ## 기본 진입점
 
@@ -102,7 +102,7 @@ Pod–Node–Nova 관계와 자료 신선도를 재확인한 뒤 UID·resourceVe
 
 중단 시 `make graduation-s1-auto-status`로 기록을 확인한 뒤 동일 실행의 cleanup을 사용한다.
 Job이 남은 상태에서 새 측정을 시작하지 않는다. worker 복원이 실패하면 정리 실패 기록을
-보존하고 수렴 후 다시 cleanup한다. [초기 S1 기록](s1-validation-2026-09-26.md)은 당시 조건으로 보존한다.
+보존하고 수렴 후 다시 cleanup한다. [초기 S1 기록](archive/first-evaluation-2026-10/s1-validation-2026-09-26.md)은 당시 조건으로 보존한다.
 
 <a id="foundation"></a>
 
@@ -163,7 +163,7 @@ Pod 강제 삭제·Cinder 강제 detach·finalizer 제거를 사용하지 않는
 cleanup은 DB/PVC·볼륨 제거 확인 후 기존 VM을 다시 시작하고, 네트워크 규칙·taint·MHC 예외·
 controller 설정·worker 상태를 복원한다. fencing이나 소유권 확인 실패 시 후속 변경을 강행하지 않는다.
 S2·S3 중단 뒤에는 각 cleanup을 먼저 수행하고 기록을 새 실행으로 덮어쓰지 않는다.
-[통합 검증](recovery-validation-2026-10-02.md)과 최종 평가의 사양·표본을 구분한다.
+[통합 검증](archive/first-evaluation-2026-10/recovery-validation-2026-10-02.md)과 최종 평가의 사양·표본을 구분한다.
 
 <a id="s4"></a>
 
@@ -197,8 +197,8 @@ EVIDENCE_DIR=/absolute/path/to/graduation-s4-experiment make graduation-s4-analy
 불명확하면 중단한다. 관측 공백은 `incomplete`/`completed_with_gap`으로 보존하며 무중단
 관측으로 바꾸지 않는다. 정리도 UID·소유권을 확인하고 원래 worker 상태를 복원한다.
 
-[초기 S4 검증](s4-validation-2026-09-26.md), [중간보고서 재측정](interim-report/s4-rerun-2026-09-27.md),
-[최종 평가](final-evaluation-results-2026-10-03.md)의 코드·사양·조건이 다르므로 같은 반복 집합으로 합산하지 않는다.
+[초기 S4 검증](archive/first-evaluation-2026-10/s4-validation-2026-09-26.md), [중간보고서 재측정](interim-report/s4-rerun-2026-09-27.md),
+[최종 평가](archive/first-evaluation-2026-10/final-evaluation-results-2026-10-03.md)의 코드·사양·조건이 다르므로 같은 반복 집합으로 합산하지 않는다.
 
 ## 증거와 동작 근거
 

@@ -89,7 +89,7 @@ SIGKILL/클라이언트 소실 시에는 저장된 값을 근거로 별도 복�
 
 ## 검증과 한계
 
-[실행 절차와 이번 결과](../worker-autoscaling-validation.md)를 따른다. 구현·로컬
+[실행 절차와 이번 결과](../archive/worker-autoscaling-validation.md)를 따른다. 구현·로컬
 회귀 테스트 통과와 실환경 수용을 구분한다. 본 범위는 인프라 자동 증감과 상태
 검증이며 고객 HTTP 요청의 무중단 처리, 성능·비용 개선, worker 자동 복구를
 입증하지 않는다.

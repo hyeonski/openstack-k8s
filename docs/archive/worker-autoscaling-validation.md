@@ -3,7 +3,7 @@
 이 문서는 2026-09-11 당시의 기록이다. 이후 제어 복구·관측·수명주기를 포함한 시험은 [1순위 종합 검증](foundation-priority1-final-validation-2026-09-24.md)에 기록한다.
 
 - 작성일: 2026-09-11
-- 설계: [ADR-0016](adr/0016-separate-observation-and-enable-worker-scale-in.md)
+- 설계: [ADR-0016](../adr/0016-separate-observation-and-enable-worker-scale-in.md)
 - 과거 실환경 결과: [2026-08-24 기준선](gcp-validation-baseline.md). 당시 자동 시험은 **1→2 증설만** 통과했다.
 - 1차 실환경 결과: 자동 전이·최종 시험 정리·API/CNI/DNS **통과**(2026-09-11 19:32:39 KST). 호출 셸의 종료 오류를 구분해 아래에 기록했다.
 - 최종 코드 실환경 결과: 수동·자동 전체 경로와 시험 자원 제거 후 API/CNI/DNS **통과**(2026-09-11 20:56:53 KST). 호출 프로세스도 exit 0으로 종료했고 코드 해시 5개가 모두 일치했다.
@@ -308,7 +308,7 @@ SHUTOFF가 확인되어 Machine providerID와 Nova UUID를 대조한 후 별도 
 
 ## 2026-09-11 당시 후속 항목
 
-아래는 당시 범위 기록이다. 이후 구현 상태는 [현재 우선순위](product/infrastructure-priorities.md)를 따른다.
+아래는 당시 범위 기록이다. 이후 구현 상태는 [현재 우선순위](../product/infrastructure-priorities.md)를 따른다.
 
 | 후속 항목 | 이번에 구현하지 않은 내용 |
 |---|---|

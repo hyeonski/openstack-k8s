@@ -11,7 +11,7 @@
 - DEV campaign: `artifacts/fresh-evaluation-development-calibrated-2026-10-26/dev-v1`, case `dev-s1-a`.
 - 운영·분석·보류 증거: `artifacts/fresh-evaluation-calibrated-2026-10-26`.
 
-기존 [정상 보정 3회와 별도 validation 2회](s1-baseline-calibration-result-2026-10-26.md)는 완료한 정상25분이며 DEV·pilot·main으로 세지 않는다. 당시 source와 모든 frozen profile/raw/judgement를 보존했다. 정상 측정에 등록한 여섯 source 파일은 변경하지 않았다. 이번 controller 계약은 [controller architecture amendment](controller-platform-amendment-2026-10-26.md)에 따라 동일 E2 ID/type에서 실제 `uname -m=x86_64`를 확인하고 provider-selected Intel/AMD 모델을 별도 기록한다. 실제 controller는 AMD Rome, 두 N2 compute는 Intel Cascade Lake였다. 같은 architecture가 성능 동등성을 보장한다고 주장하지 않는다.
+기존 [정상 보정 3회와 별도 validation 2회](../../s1-baseline-calibration-result-2026-10-26.md)는 완료한 정상25분이며 DEV·pilot·main으로 세지 않는다. 당시 source와 모든 frozen profile/raw/judgement를 보존했다. 정상 측정에 등록한 여섯 source 파일은 변경하지 않았다. 이번 controller 계약은 [controller architecture amendment](../../controller-platform-amendment-2026-10-26.md)에 따라 동일 E2 ID/type에서 실제 `uname -m=x86_64`를 확인하고 provider-selected Intel/AMD 모델을 별도 기록한다. 실제 controller는 AMD Rome, 두 N2 compute는 Intel Cascade Lake였다. 같은 architecture가 성능 동등성을 보장한다고 주장하지 않는다.
 
 S1 SLO200ms, rate5, 100000rounds, warmup0, index0–299 고정 첫60초 baseline, 총1800초 stream, 주입 후 H1200초와 30초 여유, bin20초·bad≤.05·선형 p95·stable120초를 유지했다. V1의100ms/ratio1.5와 S2~S4는 실행하지 않았으며 설정을 변경하지 않았다. 코드·정책 변경은 DEV 전 완료했고 312개 테스트와 정적 shell 검증을 통과했다. 이후 운영용 artifact script와 결과 문서는 실험 source/policy 변경이 아니다.
 

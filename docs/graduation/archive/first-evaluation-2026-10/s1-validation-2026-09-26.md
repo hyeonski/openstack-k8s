@@ -10,7 +10,7 @@
 
 ### 범위와 환경
 
-이 검증은 [S1 준비 절차](experiments.md#s1-baseline)의 서비스·부하·정상 기준선 단계다. CPU 경합 주입과 Pod 재배치 실험은 포함하지 않는다.
+이 검증은 [S1 준비 절차](../../experiments.md#s1-baseline)의 서비스·부하·정상 기준선 단계다. CPU 경합 주입과 Pod 재배치 실험은 포함하지 않는다.
 
 - 환경 실행: `env-df6a58352542`, workload control-plane 1대와 worker 2대.
 - 서비스: 단일 HTTP Pod, PBKDF2-SHA256 100,000회, CPU request 250m, CPU limit 없음.
@@ -48,7 +48,7 @@ S1 namespace를 삭제하고 worker 제어를 실험 전 `auto`·1대로 복원�
 
 ### 조건과 증거
 
-[실행 절차](experiments.md#s1-contention)에 따라 기존 S1 HTTP 서비스에 PBKDF2-SHA256 100,000회 연산을 요청했다. workload control-plane의 Job에서 직접 Service로 5 RPS를 780초 동안 유지했다. 먼저 서비스를 `osk8s-compute02`의 worker VM `305f27e8-b1e7-4366-af9a-f1007f9dcd09`에 고정했다. 요청 VM과 목적지 worker VM `5d44af5c-a379-4c0b-8965-8e86740ff776`은 `osk8s-compute01`에 있었다. 경쟁 VM `4e2226aa-9c33-427d-81a6-63c686a5e280`은 Nova의 host 조회로 서비스와 같은 `osk8s-compute02`에 `ACTIVE`임을 확인했다.
+[실행 절차](../../experiments.md#s1-contention)에 따라 기존 S1 HTTP 서비스에 PBKDF2-SHA256 100,000회 연산을 요청했다. workload control-plane의 Job에서 직접 Service로 5 RPS를 780초 동안 유지했다. 먼저 서비스를 `osk8s-compute02`의 worker VM `305f27e8-b1e7-4366-af9a-f1007f9dcd09`에 고정했다. 요청 VM과 목적지 worker VM `5d44af5c-a379-4c0b-8965-8e86740ff776`은 `osk8s-compute01`에 있었다. 경쟁 VM `4e2226aa-9c33-427d-81a6-63c686a5e280`은 Nova의 host 조회로 서비스와 같은 `osk8s-compute02`에 `ACTIVE`임을 확인했다.
 
 최종 실행 ID는 `s1c-757d9ad8ebed`다. 원본은 `artifacts/cloud-gcp-amd64-greenfield/graduation-s1-contention-20260926T095057Z-a6845aa3/`에 보관한다. 이 디렉터리는 로컬 실험 산출물로 Git에 포함하지 않는다. `run.json`에는 Pod·Node·Machine·Nova 식별자와 주입·이동 시각이 있고, `http.jsonl`은 3,900개 요청 원본이다. `hosts-*.json`, `pod-cpu-*.json`, `contender-server.json`, `contender-console.txt`, `summary.json`은 경합과 판정의 근거다.
 

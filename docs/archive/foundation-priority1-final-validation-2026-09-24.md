@@ -129,19 +129,19 @@ Kubernetes OTLP queue와 호스트의 GMP metric queue에 `num_consumers: 1`을 
 
 | 검증 | 로컬 원본 |
 |---|---|
-| timeout·cancel·cleanup 중단·실제 create 중 SIGKILL·전체 resume | [수명주기 결과](../artifacts/foundation-final-20260924/lifecycle/exercise.json) |
-| 수동 실패·복구·fixed/auto | [수동 제어 결과](../artifacts/foundation-final-20260924/manual/result.json) |
-| 실패 Pod 삭제 후 로그·재시작 지표 | [Pod 실패 결과](../artifacts/foundation-final-20260924/pod-failure/result.json) |
-| 최종 배포 설정 대조 | [7개 설정 해시](../artifacts/foundation-final-20260924/final-transport/applied-config-check.json) |
-| 최종 gateway 오류·queue 배출 | [최종 손실 검사](../artifacts/foundation-final-20260924/final-transport/gateway-loss-check-final.json) |
-| 중단 구간의 지연 지표·로그 재조회 | [backfill 조회](../artifacts/foundation-final-20260924/final-transport/gateway-backfill/coverage.json) |
-| 제어 시험 이후의 변경 범위 | [실행 파일 해시 비교](../artifacts/foundation-final-20260924/final-transport/revision-comparison.json) |
-| 최종 정상 30분의 대상별 연속성 | [중앙 수집 판정](../artifacts/foundation-final-20260924/final-transport/normal-final/normal-coverage.json) |
-| 최종 정상 구간의 수집기 전후 오류 증가량 | [카운터 비교](../artifacts/foundation-final-20260924/final-transport/normal-final/collector-comparison.json) |
-| 최종 전체 증감의 대상별 연속성 | [중앙 수집 판정](../artifacts/foundation-final-20260924/final-transport/cycle-observability/coverage.json) |
-| 전체 UID 색인·삭제된 worker 로그 및 Nova 관계 | [UID 추적 결과](../artifacts/foundation-final-20260924/final-transport/cycle-observability/result.json) |
-| 최종 중앙·로컬 수집기 오류 및 해시 검사 | [종료 증거 검사](../artifacts/foundation-final-20260924/final-transport/final-evidence-check.json) |
-| worker·CA·journal·소유 자원 정리 | [종료 상태](../artifacts/foundation-final-20260924/final-transport/final-state.json) |
-| GCP 호스트 3대 원상 복원 | [중지 확인](../artifacts/foundation-final-20260924/final-host-stop-result.json) |
+| timeout·cancel·cleanup 중단·실제 create 중 SIGKILL·전체 resume | [수명주기 결과](../../artifacts/foundation-final-20260924/lifecycle/exercise.json) |
+| 수동 실패·복구·fixed/auto | [수동 제어 결과](../../artifacts/foundation-final-20260924/manual/result.json) |
+| 실패 Pod 삭제 후 로그·재시작 지표 | [Pod 실패 결과](../../artifacts/foundation-final-20260924/pod-failure/result.json) |
+| 최종 배포 설정 대조 | [7개 설정 해시](../../artifacts/foundation-final-20260924/final-transport/applied-config-check.json) |
+| 최종 gateway 오류·queue 배출 | [최종 손실 검사](../../artifacts/foundation-final-20260924/final-transport/gateway-loss-check-final.json) |
+| 중단 구간의 지연 지표·로그 재조회 | [backfill 조회](../../artifacts/foundation-final-20260924/final-transport/gateway-backfill/coverage.json) |
+| 제어 시험 이후의 변경 범위 | [실행 파일 해시 비교](../../artifacts/foundation-final-20260924/final-transport/revision-comparison.json) |
+| 최종 정상 30분의 대상별 연속성 | [중앙 수집 판정](../../artifacts/foundation-final-20260924/final-transport/normal-final/normal-coverage.json) |
+| 최종 정상 구간의 수집기 전후 오류 증가량 | [카운터 비교](../../artifacts/foundation-final-20260924/final-transport/normal-final/collector-comparison.json) |
+| 최종 전체 증감의 대상별 연속성 | [중앙 수집 판정](../../artifacts/foundation-final-20260924/final-transport/cycle-observability/coverage.json) |
+| 전체 UID 색인·삭제된 worker 로그 및 Nova 관계 | [UID 추적 결과](../../artifacts/foundation-final-20260924/final-transport/cycle-observability/result.json) |
+| 최종 중앙·로컬 수집기 오류 및 해시 검사 | [종료 증거 검사](../../artifacts/foundation-final-20260924/final-transport/final-evidence-check.json) |
+| worker·CA·journal·소유 자원 정리 | [종료 상태](../../artifacts/foundation-final-20260924/final-transport/final-state.json) |
+| GCP 호스트 3대 원상 복원 | [중지 확인](../../artifacts/foundation-final-20260924/final-host-stop-result.json) |
 
 `artifacts/`는 Git 추적 대상이 아니다. 위 링크는 이번 검증을 수행한 로컬 workspace의 원본을 가리킨다.

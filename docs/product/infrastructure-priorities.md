@@ -10,11 +10,11 @@
 |---|---|---|
 | 기반 구축·운영 | GCP·Kolla·CAPI/CAPO·worker 증감, 기존 환경 기동·소유 자원 정리 | [루트 README](../../README.md), [운영 가이드](../operations.md) |
 | 장애 실험 | S1 CPU 경합·재배치, S2 QoS, S3 DB/볼륨 복구, S4 VM 교체 관측 | [실험 운영](../graduation/experiments.md) |
-| 반복 평가 | 조건 고정·반복·비교군·거절·중단 시험과 독립 검증. 필요 시 명시적으로 실행 | [평가 계약](../graduation/final-evaluation.md) |
+| 반복 평가 | 조건 고정·반복·비교군·거절·중단 시험과 독립 검증. 필요 시 명시적으로 실행 | [평가 계약](../graduation/archive/first-evaluation-2026-10/final-evaluation.md) |
 | 상시 관측 | OTel·GCP 지표/로그·GCS 반출. 실험의 직접 측정·로컬 원본 저장과 구분 | [관측 운영](../../observability/README.md) |
 
-제어·관측·수명주기의 [기반 종합 검증](../foundation-priority1-final-validation-2026-09-24.md)과
-S1~S4 [최종 평가](../graduation/final-evaluation-results-2026-10-03.md)는 당시 조건의 근거다.
+제어·관측·수명주기의 [기반 종합 검증](../archive/foundation-priority1-final-validation-2026-09-24.md)과
+S1~S4 [최종 평가](../graduation/archive/first-evaluation-2026-10/final-evaluation-results-2026-10-03.md)는 당시 조건의 근거다.
 단일 운영 클라이언트·고정 샘플의 결과이며 임의 고객 서비스나 다중 운영자의 지원 완료를 뜻하지 않는다.
 
 ## 남은 실환경 안정화
@@ -41,4 +41,4 @@ Ingress 품질로 확대 해석하지 않는다. 현재 구현의 이 제한을 
 로컬 회귀 검사와 실환경 수용을 구분하며 코드 정리만으로 새 실환경 검증을 선언하지 않는다.
 
 초기 1~14번 제품 확장 우선순위는 Git 이력에서 확인한다. 당시 자동 증감의 미구현 범위는
-[2026-09-11 기록](../worker-autoscaling-validation.md#follow-ups-2026-09-11)에 보존한다.
+[2026-09-11 기록](../archive/worker-autoscaling-validation.md#follow-ups-2026-09-11)에 보존한다.

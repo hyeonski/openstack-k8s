@@ -3,7 +3,7 @@
 2026-09-26의 단계별 기록을 시간순으로 통합했다.
 [준비](#preparation) → [첫 장애 주입](#fault) → [자동 실행·분석](#automated) → [통합·재개 경로](#integration).
 각 절의 “아직”, “남은 검증”과 명령 예제는 당시 구현 시점에 해당한다.
-현재 절차는 [S4 실행 가이드](experiments.md#s4), 이후 실환경 중단·재개와 반복 결과는
+현재 절차는 [S4 실행 가이드](../../experiments.md#s4), 이후 실환경 중단·재개와 반복 결과는
 [최종 평가](final-evaluation-results-2026-10-03.md)를 따른다. 원래 실행의 수치·예외·증거 경로는 유지했다.
 
 <a id="preparation"></a>
@@ -38,8 +38,8 @@ make graduation-env-down
 - management cluster에 worker 전용 `MachineHealthCheck`를 배포했다. `cluster.x-k8s.io/deployment-name=osk8s-workload-md-0` 선택자로 MachineSet 소유 worker 2대만 선택하고 control plane 1대는 제외했다. MHC 상태는 `expectedMachines=2`, `currentHealthy=2`였다.
 - workload cluster에 PVC 없는 stateless HTTP Deployment 1개와 Service를 배포했다. Pod 1개가 Ready였고, 실제 배치 Node와 Machine UID, `openstack:///` providerID의 Nova VM ID를 연결했다.
 - 장애 대상 worker 밖의 클라이언트에서 workload API의 Service 프록시를 통해 `/healthz`를 요청했다. 준비 직후 5회와 독립 재검증 5회, 총 **10/10회 `ok`**였다. 관측 지연의 중앙값은 **273.22ms**, 최대는 **293.98ms**다. 이 값은 API 터널·서비스 프록시를 포함하므로 일반 사용자 ingress 지연으로 해석하지 않는다.
-- 원본 snapshot의 `errors`는 비어 있었고, Machine 3대·Node 3대·Nova VM 3대가 기록됐다. 원본과 MHC 객체, worker Machine, 두 차례 HTTP 결과는 [실행 증거](../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-preparation-20260926T013427Z-a71fe05b)에 있다.
-- 두 번째 독립 준비 실행에서도 MHC `expectedMachines=2`·`currentHealthy=2`, HTTP **10/10회 `ok`**, snapshot 조회 오류 없음으로 통과했다. HTTP 측정 지연 중앙값은 **265.42ms**였다. [두 번째 실행 증거](../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-preparation-20260926T020803Z-3d94dc4b)에 원본을 보존했다.
+- 원본 snapshot의 `errors`는 비어 있었고, Machine 3대·Node 3대·Nova VM 3대가 기록됐다. 원본과 MHC 객체, worker Machine, 두 차례 HTTP 결과는 [실행 증거](../../../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-preparation-20260926T013427Z-a71fe05b)에 있다.
+- 두 번째 독립 준비 실행에서도 MHC `expectedMachines=2`·`currentHealthy=2`, HTTP **10/10회 `ok`**, snapshot 조회 오류 없음으로 통과했다. HTTP 측정 지연 중앙값은 **265.42ms**였다. [두 번째 실행 증거](../../../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-preparation-20260926T020803Z-3d94dc4b)에 원본을 보존했다.
 
 ### 정리와 남은 검증
 
@@ -88,7 +88,7 @@ MHC는 Node `Ready=Unknown`이 2분 넘게 지속됐다는 이유로 원래 Mach
 
 ### 원본과 해석상 주의
 
-- [실행 원본](../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-experiment-20260926T025550Z-e022fb3e): `baseline.json`, `stopped-nova.json`, `http.jsonl`, `observations/*.json`, `result.json`, `run.json`.
+- [실행 원본](../../../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-experiment-20260926T025550Z-e022fb3e): `baseline.json`, `stopped-nova.json`, `http.jsonl`, `observations/*.json`, `result.json`, `run.json`.
 - 실행 도중 초기 집계기가 `SHUTOFF` **확인 이후**의 HTTP 요청만 계산해 6회 실패로 표시했다. 전체 중단 명령 이후 구간을 재계산해 `result.json`과 `run.json`을 정정했으며, 이전 결과는 `result-original.json`에 보존했다. 정정 시각·이유도 `analysis_revision`에 남겼다.
 - API 요청은 약 1초 간격으로 시작하도록 했지만 5초 타임아웃 때 다음 표본 간격이 늘었다. 관측 시작 시각 간 최대 공백은 약 6.114초다. 이 실험만으로 엄밀한 사용자 체감 중단 시간이나 통계적 성공률을 주장하지 않는다.
 - 복구 동작은 Kubernetes의 Pod 재배치와 MHC·CAPI·CAPO의 Machine/VM 교체가 수행했다. 자체 S4 모듈은 정확한 대상 확인, 단일 장애 주입, 서비스와 용량의 별도 관측·판정 및 원본 보존을 담당했다.
@@ -109,8 +109,8 @@ S4 전용 MHC·HTTP 서비스·검사 Pod를 제거하고 원래 `auto` 모드·
 
 | 실행 | stop 이후 HTTP 성공/전체 | API 프록시 오류 / 엔드포인트 부재 | 첫 실패→첫 정상 응답 | Node 이상 판정 대기 | Pod 퇴출 대기 | `SHUTOFF`→worker 안정화 |
 |---|---:|---:|---:|---:|---:|---:|
-| [1차 원본](../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-experiment-20260926T025550Z-e022fb3e) `s4-e7a4fd084e56` | 197/226 | 7 / 22 | 71.515초 | 39.011초 | 30.000초 | 246.697초 |
-| [2차 원본](../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-experiment-20260926T034042Z-3bd154aa) `s4-055ac54a8adf` | 191/221 | 7 / 23 | 73.413초 | 41.161초 | 30.000초 | 246.495초 |
+| [1차 원본](../../../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-experiment-20260926T025550Z-e022fb3e) `s4-e7a4fd084e56` | 197/226 | 7 / 22 | 71.515초 | 39.011초 | 30.000초 | 246.697초 |
+| [2차 원본](../../../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-experiment-20260926T034042Z-3bd154aa) `s4-055ac54a8adf` | 191/221 | 7 / 23 | 73.413초 | 41.161초 | 30.000초 | 246.495초 |
 
 두 실행 모두 Node 이상 판정 후 명시한 30초 toleration이 만료됐고, 새 Pod는 그 약 2초 뒤 Ready였다. MHC가 기존 Machine을 삭제하고 CAPO가 다른 Nova VM을 만든 뒤 worker 2대와 신규 worker HTTP 검사 Pod가 안정화됐다. 첫 실패→첫 정상 응답 값은 표본 간격과 5초 API 타임아웃의 영향을 받는 **관측값**이다. 검사 경로가 Kubernetes API Service proxy이므로 일반 사용자 ingress 중단시간이나 성공률로 해석하지 않는다. 두 번의 독립 성공은 경로 재현을 보여주지만 통계적 신뢰도나 모든 장애 조건의 성공률을 뜻하지 않는다.
 
@@ -134,7 +134,7 @@ S4 전용 MHC·HTTP 서비스·검사 Pod를 제거하고 원래 `auto` 모드·
 
 ### 세 번째 독립 실험
 
-원본: [S4 실행 디렉터리](../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-experiment-20260926T041611Z-c2b2e5c3). 실행 ID `s4-ec4f3851e726`, 원본 기반 [분석 요약](../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-experiment-20260926T041611Z-c2b2e5c3/analysis/summary.json), [보고서 표](../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-experiment-20260926T041611Z-c2b2e5c3/analysis/report-table.md).
+원본: [S4 실행 디렉터리](../../../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-experiment-20260926T041611Z-c2b2e5c3). 실행 ID `s4-ec4f3851e726`, 원본 기반 [분석 요약](../../../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-experiment-20260926T041611Z-c2b2e5c3/analysis/summary.json), [보고서 표](../../../../artifacts/cloud-gcp-amd64-greenfield/graduation-s4-experiment-20260926T041611Z-c2b2e5c3/analysis/report-table.md).
 
 | 항목 | 관측값 |
 |---|---:|

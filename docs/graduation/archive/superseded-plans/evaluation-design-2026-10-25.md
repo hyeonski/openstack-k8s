@@ -16,9 +16,9 @@
 
 | 문서 | 역할 | 이 문서와의 관계 |
 |---|---|---|
-| [장애 시나리오 정의서](failure-scenarios.md) | S1~S4의 설계 기준선 | RQ1·RQ2의 전제(서비스 영향, 계층 연결 이유)를 제공 |
-| [평가 계약](final-evaluation.md) | 반복·대조군·거절 시험의 실행 계약 | RQ3·RQ4의 기존 증거를 생산. 조건·임계값은 바꾸지 않는다 |
-| [재시험 기록](retest-2026-10-23.md) | 활성 34건의 결과·개입 이력 | 기존 수치의 출처. 개입·재측정 이력은 타당성 위협에 반영 |
+| [장애 시나리오 정의서](../../failure-scenarios.md) | S1~S4의 설계 기준선 | RQ1·RQ2의 전제(서비스 영향, 계층 연결 이유)를 제공 |
+| [평가 계약](../first-evaluation-2026-10/final-evaluation.md) | 반복·대조군·거절 시험의 실행 계약 | RQ3·RQ4의 기존 증거를 생산. 조건·임계값은 바꾸지 않는다 |
+| [재시험 기록](../first-evaluation-2026-10/retest-2026-10-23.md) | 활성 34건의 결과·개입 이력 | 기존 수치의 출처. 개입·재측정 이력은 타당성 위협에 반영 |
 | [두 축 평가 계획](two-axis-evaluation-plan-2026-10-24.md) | ① 자동 대응의 유효성, ② 운영 작업 자동화의 효과, S1 사람 런북 | 아래 3절과 같이 RQ에 흡수한다 |
 
 ### 2.1 두 축 계획과의 대응
@@ -79,7 +79,7 @@ RQ3·RQ4의 통합·완료 판정 정확성 사례로 보고한다.
 
 | ID | 비교 | 조건 | 상태 |
 |---|---|---|---|
-| A1 | S2 무제어 → 분리만 → 분리 + QoS | 분리만은 업로드를 다른 worker로 옮긴 뒤 포트 QoS를 해제한 `split-unlimited` 구간 ([graduation_s2.py](../../experiments/graduation_s2.py)) | 집계 완료. 분리만으로 미회복 ([A단계 분석](analysis-2026-10-25.md) 1절) |
+| A1 | S2 무제어 → 분리만 → 분리 + QoS | 분리만은 업로드를 다른 worker로 옮긴 뒤 포트 QoS를 해제한 `split-unlimited` 구간 ([graduation_s2.py](../../../../experiments/graduation_s2.py)) | 집계 완료. 분리만으로 미회복 ([A단계 분석](analysis-2026-10-25.md) 1절) |
 | A2 | S1 같은 worker 재시작 vs 다른 compute 재배치 | 같은 경합에서 같은 worker로 rollout restart. 재시작 효과와 호스트 변경 효과를 분리 | 새 실행 필요(2~3회) |
 | A3 | 판단 규칙 replay | 기록된 창에 K8s 신호만·호스트 신호만·교차 계층 규칙을 재적용 | 오프라인 분석. 실환경 결과로 기재하지 않는다 |
 | A4 | 계층 의존 행렬 | 탐지·원인 판단·대상 선택·안전 확인·조치·검증 단계별로 사용한 계층 정보와 API | 정성 분석. 가능하면 `decisions.jsonl` 등의 실제 참조 필드로 근거를 단다 |
@@ -175,9 +175,9 @@ A3에서 음성 조건 원본(V1·V2)이 없으면 오탐에 관한 결론은 �
 
 | 신청서 항목 | 결과 | 비고 |
 |---|---|---|
-| 물리 서버 3대 OpenStack 테스트베드 | GCP 호스트 3대의 nested 구성 | [ADR 0013](../adr/0013-use-gcp-as-the-only-runtime.md) |
+| 물리 서버 3대 OpenStack 테스트베드 | GCP 호스트 3대의 nested 구성 | [ADR 0013](../../../adr/0013-use-gcp-as-the-only-runtime.md) |
 | Kubernetes 1 control plane, worker 2대 이상 | 충족 | 평가 중 fixed 2대 |
-| Prometheus/Grafana 모니터링 | OTel 기반 수집으로 대체, Grafana 미구현 | [관측 가이드](../../observability/README.md) |
+| Prometheus/Grafana 모니터링 | OTel 기반 수집으로 대체, Grafana 미구현 | [관측 가이드](../../../../observability/README.md) |
 | 대표 장애 3종 | 4종(S1~S4)으로 재정의 | 아래 변경 논리 |
 | 탐지·1차 복구 구현 | 충족 | |
 | 수동·자동 복구 시간·성공률 비교 | 부분 달성 | RQ5 수행 범위에 따라 갱신 |
@@ -190,7 +190,7 @@ S3·S4로 구체화했다. RQ1의 계층별 신호 표를 이 변경의 근거�
 
 ## 7. 공통 원칙
 
-- 새 실행은 두 축 계획 3절의 비교 조건·사건 시각·개입 규칙과 [평가 계약](final-evaluation.md)의 freeze·분모 보존을 따른다.
+- 새 실행은 두 축 계획 3절의 비교 조건·사건 시각·개입 규칙과 [평가 계약](../first-evaluation-2026-10/final-evaluation.md)의 freeze·분모 보존을 따른다.
 - 기존 캠페인의 원본·집계·해시를 덮어쓰지 않는다. 기존 원본에서 새로 집계한 값(A1 등)은
   별도 분석 산출물과 계산 스크립트, 원본 해시로 남긴다.
 - 합성 입력·replay 결과는 실환경 결과와 다른 표에 둔다.

@@ -4,7 +4,7 @@ GCP·OpenStack·Kubernetes의 **선택 기능인 상시 관측** 배포·조회�
 `lab-start`와 단일 실험은 이 수집·전송 시스템을 설치하거나 평가 캠페인을 실행하지 않는다.
 로컬 증거 생성과 guest 기동은 `scripts/`의 공통 기능이며 관측 설치 없이도 사용한다.
 **2026-09-24에 정상 30분·전체 증감·Pod 실패 후 추적·수집기/gateway 중단·복귀를 검증했다.**
-범위·예외는 [종합 검증](../docs/foundation-priority1-final-validation-2026-09-24.md),
+범위·예외는 [종합 검증](../docs/archive/foundation-priority1-final-validation-2026-09-24.md),
 초기 상태는 [최초 배포 기록](live-validation-2026-09-24.md)에 있다. 현재 클라우드 상태를 새로 확인한 기록은 아니다.
 
 ## 경로와 책임
@@ -108,5 +108,5 @@ CA·키는 `.state/<environment>/secrets/observability/`에 두고 Git에 넣지
 
 현재 Cloud Logging 검색 보존은 30일, GCS 자동 삭제는 없으며 호스트 JSONL은 일 단위 7개를
 유지한다. 관리형 지표 보존은 서비스 정책을 따른다. 수집기 자원·비용·실험 영향의 측정과
-[최종 평가의 API·DNS·Neutron 후속 과제](../docs/graduation/final-evaluation-results-2026-10-03.md)는 남아 있다.
+[최종 평가의 API·DNS·Neutron 후속 과제](../docs/graduation/archive/first-evaluation-2026-10/final-evaluation-results-2026-10-03.md)는 남아 있다.
 물리 서버 이전 시에는 별도 관리망·저장소·인증·백업·장애 감지 경로를 새 ADR과 실측으로 검증한다.

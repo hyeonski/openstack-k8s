@@ -12,7 +12,7 @@
 
 - `cloud-gcp-amd64-greenfield`, Kubernetes v1.35.7, Kolla 2025.2, Neutron OVS.
 - 3번: S1 증거 기반 자동 재배치. 4번: S2 업로드 분리·QoS. 5번: S3 Cinder·CSI·PostgreSQL fencing 복구.
-- 서비스 기준과 실행 계약은 [복구 자동화](experiments.md)에 기록한다.
+- 서비스 기준과 실행 계약은 [복구 자동화](../../experiments.md)에 기록한다.
 
 ## 기반 서비스 확인
 
@@ -160,7 +160,7 @@ S3 정리는 08:51:06 UTC에 `phase: cleaned`로 완료됐다. DB/PVC와 Cinder 
 
 요청 원본으로 기준선·경합·온라인 안정 구간·최종 구간 p95를 각각 독립 재계산해 요약과 일치함을 확인했다. 소스 스냅샷 4개의 해시와 실행 중 저장소 파일도 일치했다. 근거는 `summary.json`, `http.jsonl`, `decisions.jsonl`, `run.json`, `independent-verification.json`, `source/`다. 실행 종료 코드는 0, `summary_state: passed`, `phase: completed`였으며 경쟁 VM·flavor·요청 Job 제거까지 완료됐다.
 
-최종 통과는 증설한 구성에서의 1회 결과다. 목적지 하드웨어 변경과 재기동·worker 재생성을 동반했으므로, 이전 실패와 비교해 CPU 증설만의 효과나 장시간 반복 신뢰도를 확정하지 않는다. 현행 용량 결정과 원복 조건은 [ADR-0017](../adr/0017-increase-recovery-target-compute-capacity.md)에 기록했다.
+최종 통과는 증설한 구성에서의 1회 결과다. 목적지 하드웨어 변경과 재기동·worker 재생성을 동반했으므로, 이전 실패와 비교해 CPU 증설만의 효과나 장시간 반복 신뢰도를 확정하지 않는다. 현행 용량 결정과 원복 조건은 [ADR-0017](../../../adr/0017-increase-recovery-target-compute-capacity.md)에 기록했다.
 
 ## 코드와 기반 구성 검증
 

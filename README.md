@@ -136,7 +136,7 @@ OpenStack bootstrap 이후에 별도로 적용한다. 수동으로 단계를 진
 | 상태만 조회·수렴 대기 | `workload-cluster-status` / `workload-cluster-verify`. 기존 kubeconfig·터널을 사용하며 설정·시험 자원을 변경하지 않음 |
 | 의도한 설정 적용·능동 통신 검사 | `workload-cluster-prepare` / `workload-cluster-probe`. probe는 소유 임시 Pod를 사용하고 실패 증거를 보존 |
 | worker 수동·자동 제어 및 시험 복구 | [worker 운영 가이드](docs/operations.md) |
-| 장애 실험·최종 평가 | [S1~S4 운영](docs/graduation/experiments.md), [평가 계약](docs/graduation/final-evaluation.md) |
+| 장애 실험·최종 평가 | [S1~S4 운영](docs/graduation/experiments.md), [평가 계약](docs/graduation/archive/first-evaluation-2026-10/final-evaluation.md) |
 | 관측 배포·조회 | [관측 가이드](observability/README.md) |
 
 `gcp-host-verify` 외에 controller→compute SSH와 실제 nested kernel boot 검사가 필요하다.
@@ -162,10 +162,11 @@ kind와 전용 네트워크·클라이언트 kubeconfig, 지정 CAPI Cluster와 
 확인한다. 로컬 검사의 통과와 실환경 수용을 구분한다.
 
 자동 증감 시험은 Pod CPU requests와 replica를 바꿔 CA의 확장·축소와 자원 회수를 검증한다.
-실제 CPU 사용량에 따른 성능·고객 HTTP 무중단 보장은 별도다. 최신 종합 실험 결과는
-[2026-10-04 마감 평가](docs/graduation/final-evaluation-results-2026-10-03.md),
+실제 CPU 사용량에 따른 성능·고객 HTTP 무중단 보장은 별도다. 최신 평가 결과는
+[평가 결과 통합 분석](docs/graduation/evaluation-results-analysis-2026-10-29.md)(2026-10-29, 본평가·보충·S2 확장),
+1차 평가는 [2026-10-04 마감 평가](docs/graduation/archive/first-evaluation-2026-10/final-evaluation-results-2026-10-03.md),
 남은 구현·운영 과제는 [기반 우선순위](docs/product/infrastructure-priorities.md)를 따른다.
 
 향후 고객용 제품 아이디어는 [기획 한 문서](docs/product/plan.md)에 보관한다. 현재 테스트베드의 필수 구현 범위는 아니다.
 
-새 S1~S4 F-repeated 평가(본시험 29·준비 8)는 [로컬 구현·검증 및 pilot 인계](docs/graduation/fresh-evaluation-implementation.md)를 따른다. `make graduation-fresh-schedule`은 오프라인 일정 확인이며, 초안 profile의 미확정 값은 live freeze를 차단한다. 기존 평가 profile과 과거 raw는 별도로 보존한다.
+S1~S4 F-repeated 평가(본시험 29·준비 8)의 하네스는 [평가 하네스 구현](docs/graduation/fresh-evaluation-implementation.md)에 설명한다. `make graduation-fresh-schedule`은 오프라인 일정 확인이며, 초안 profile의 미확정 값은 live freeze를 차단한다. 기존 평가 profile과 과거 raw는 별도로 보존한다.

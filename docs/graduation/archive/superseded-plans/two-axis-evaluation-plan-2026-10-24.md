@@ -32,7 +32,7 @@ H1의 횟수(수동 3회, 비교군 S1 자동 4회)와 일정은 [최종 평가 
 ## 2. 기존 결과의 보존과 해석
 
 기존 캠페인: `graduation-evaluation-20261023T070441Z-30fdde87`.
-[기존 결과 요약](retest-2026-10-23.md)과 원본·해시·중단·재측정 이력을 그대로 유지한다.
+[기존 결과 요약](../first-evaluation-2026-10/retest-2026-10-23.md)과 원본·해시·중단·재측정 이력을 그대로 유지한다.
 최종 활성 34건의 수용·독립 검증 완료는 무조치 대조군과 거절·중단 시험을 포함한다.
 이를 자동 복구 성공률 또는 무개입 운영 성공률 100%로 표현하지 않는다.
 
@@ -139,7 +139,7 @@ UID·resourceVersion 확인과 갱신 충돌 거절, cooldown 기록은 공통 �
 
 ### 4.3 현재 정책을 그대로 적용할 판단 기준
 
-근거: [S1 자동 정책](../../experiments/graduation_s1_auto.py)의 `POLICY`, `diagnose`,
+근거: [S1 자동 정책](../../../../experiments/graduation_s1_auto.py)의 `POLICY`, `diagnose`,
 `candidate_reasons`, `stable_window`.
 
 - 지연형 경합에서는 p95가 정상 기준선의 1.5배를 초과하고 호스트 CPU 사용률이 70% 이상,
@@ -298,12 +298,12 @@ Pod Ready·첫 정상 응답·서비스 안정화·용량 안정화 시각을 �
 
 ## 9. 관련 문서·구현
 
-- [장애 시나리오 정의](failure-scenarios.md)
-- [기존 평가 계약](final-evaluation.md)
-- [기존 재측정 결과와 개입 이력](retest-2026-10-23.md)
-- [S1 정책·판정·재배치](../../experiments/graduation_s1_auto.py)
-- [S2 관측·QoS 정책](../../experiments/graduation_s2.py)
-- [S3 안전한 복구](../../experiments/graduation_s3.py)
-- [S4 관측·안정화 판정](../../experiments/graduation_s4_run.py)
-- [기존 평가 변형](../../evaluation/graduation_evaluation_case.py)
-- [기존 독립 검증](../../evaluation/graduation_evaluation_verify.py)
+- [장애 시나리오 정의](../../failure-scenarios.md)
+- [기존 평가 계약](../first-evaluation-2026-10/final-evaluation.md)
+- [기존 재측정 결과와 개입 이력](../first-evaluation-2026-10/retest-2026-10-23.md)
+- [S1 정책·판정·재배치](../../../../experiments/graduation_s1_auto.py)
+- [S2 관측·QoS 정책](../../../../experiments/graduation_s2.py)
+- [S3 안전한 복구](../../../../experiments/graduation_s3.py)
+- [S4 관측·안정화 판정](../../../../experiments/graduation_s4_run.py)
+- [기존 평가 변형](../../../../evaluation/graduation_evaluation_case.py)
+- [기존 독립 검증](../../../../evaluation/graduation_evaluation_verify.py)

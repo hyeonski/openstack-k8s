@@ -80,7 +80,7 @@ manifest가 MachineDeployment replicas를 1로 되돌릴 수 있기 때문이다
 
 ### 최종 검증 기록
 
-수동 실패 후 CA 중지 유지, 명시적 복구, fixed/auto 전환, 실제 변경 명령 중 SIGKILL과 전체 증감 재개 결과는 [2026-09-24 종합 검증](foundation-priority1-final-validation-2026-09-24.md)에 있다.
+수동 실패 후 CA 중지 유지, 명시적 복구, fixed/auto 전환, 실제 변경 명령 중 SIGKILL과 전체 증감 재개 결과는 [2026-09-24 종합 검증](archive/foundation-priority1-final-validation-2026-09-24.md)에 있다.
 
 <a id="run-lifecycle"></a>
 
@@ -153,4 +153,4 @@ worker 제어 잠금을 실행 전체에 유지한다. 미완료 실행이 있�
   실행의 `attempt-001`이 충돌하지 않는다. manifest의 `run_id`는 attempt 폴더 이름이며
   전체 실행은 상위 경로와 `workload_owner_id`로 구분한다.
 
-실환경 검증 결과는 [2026-09-24 검증 기록](run-lifecycle-validation-2026-09-24.md)에서 실제 수행 범위와 한계를 확인한다.
+실환경 검증 결과는 [2026-09-24 검증 기록](archive/run-lifecycle-validation-2026-09-24.md)에서 실제 수행 범위와 한계를 확인한다.
