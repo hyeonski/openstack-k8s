@@ -167,6 +167,4 @@ kind와 전용 네트워크·클라이언트 kubeconfig, 지정 CAPI Cluster와 
 1차 평가는 [2026-10-04 마감 평가](docs/graduation/archive/first-evaluation-2026-10/final-evaluation-results-2026-10-03.md),
 남은 구현·운영 과제는 [기반 우선순위](docs/product/infrastructure-priorities.md)를 따른다.
 
-향후 고객용 제품 아이디어는 [기획 한 문서](docs/product/plan.md)에 보관한다. 현재 테스트베드의 필수 구현 범위는 아니다.
-
 S1~S4 F-repeated 평가(본시험 29·준비 8)의 하네스는 [평가 하네스 구현](docs/graduation/fresh-evaluation-implementation.md)에 설명한다. `make graduation-fresh-schedule`은 오프라인 일정 확인이며, 초안 profile의 미확정 값은 live freeze를 차단한다. 기존 평가 profile과 과거 raw는 별도로 보존한다.

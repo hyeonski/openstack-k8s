@@ -47,7 +47,6 @@
 | [관측 운영](../observability/README.md) | 수집 구조·책임, 배포·조회·증거 반출과 현재 제한 |
 | [S1~S4 실험 운영](graduation/experiments.md) | 공통 준비, 기준선·재배치·QoS·DB 복구·VM 교체, 정리·재개 |
 | [기반 작업 우선순위](product/infrastructure-priorities.md) | 실험 구현과 고객용 일반화의 진행 상태·후속 과제 |
-| [제품 확장 기획](product/plan.md) | 향후 아이디어 기록. 현재 테스트베드의 필수 작업 아님 |
 
 ## 기술 결정
 
@@ -61,8 +60,8 @@
 
 ## 보고서 근거와 외부 코드 출처
 
-- [최종보고서 개요](graduation/final-report-outline.md): 장별 구성, 그림·표 목록. 그림은 모두 새로 그린다
-- [S4 동일 코드 재측정](graduation/interim-report/s4-rerun-2026-09-27.md): 중간보고서 표의 원본 근거
+- [최종보고서 개요](graduation/archive/report-drafting/final-report-outline.md): 장별 구성, 그림·표 목록. 그림은 모두 새로 그린다
+- [S4 동일 코드 재측정](graduation/archive/interim-report/s4-rerun-2026-09-27.md): 중간보고서 표의 원본 근거
 - [Cinder CSI 출처](../kubernetes/graduation-s3/csi/SOURCE.md)와 [라이선스](../kubernetes/graduation-s3/csi/LICENSE)
 
 ## 보관 (과거 이력)
@@ -73,6 +72,6 @@
 |---|---|
 | [docs/archive/](archive/) | 인프라 검증 기록: [초기 GCP 기준선](archive/gcp-validation-baseline.md)(08-24), [worker 자동 증감](archive/worker-autoscaling-validation.md)(09-11), [실행 수명주기](archive/run-lifecycle-validation-2026-09-24.md)(09-24), [기반작업 종합 검증](archive/foundation-priority1-final-validation-2026-09-24.md)(09-24) |
 | [graduation/archive/first-evaluation-2026-10/](graduation/archive/first-evaluation-2026-10/) | 1차 평가(~10-24): [S1 검증](graduation/archive/first-evaluation-2026-10/s1-validation-2026-09-26.md), [S4 검증](graduation/archive/first-evaluation-2026-10/s4-validation-2026-09-26.md), [S1~S3 복구 검증](graduation/archive/first-evaluation-2026-10/recovery-validation-2026-10-02.md), [평가 계약](graduation/archive/first-evaluation-2026-10/final-evaluation.md), [1차 결과](graduation/archive/first-evaluation-2026-10/final-evaluation-results-2026-10-03.md), [중단·재개](graduation/archive/first-evaluation-2026-10/evaluation-resume-2026-10-03.md), [보완 재시험](graduation/archive/first-evaluation-2026-10/retest-2026-10-23.md) |
-| [graduation/archive/superseded-plans/](graduation/archive/superseded-plans/) | 본평가 이전 설계안(10-24~27): 두 축 계획, 평가 설계, A단계 분석, B단계 계획, 완전 평가 원안, 잔여 계획, 실행 검증, DEV 결과, S1 보정 보고 |
 
 검증 원본 `artifacts/`는 Git에서 제외된다. 해당 링크는 로컬 증거가 있는 환경에서만 열린다.
+2026-10-30 제출 정리에서 본평가·S1 기준선 보정·하네스 최종 검증·제외 실험 압축본 등 평가 코드와 결과 문서가 쓰는 원본만 남기고, 9월 인프라 검증·10월 사전 검증 원본은 삭제했다. 본평가 이전 설계안(`superseded-plans/`)과 제품 확장 기획은 tag `evaluation-final-20261029`에서 확인한다.

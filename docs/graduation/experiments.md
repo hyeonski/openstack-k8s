@@ -197,7 +197,7 @@ EVIDENCE_DIR=/absolute/path/to/graduation-s4-experiment make graduation-s4-analy
 불명확하면 중단한다. 관측 공백은 `incomplete`/`completed_with_gap`으로 보존하며 무중단
 관측으로 바꾸지 않는다. 정리도 UID·소유권을 확인하고 원래 worker 상태를 복원한다.
 
-[초기 S4 검증](archive/first-evaluation-2026-10/s4-validation-2026-09-26.md), [중간보고서 재측정](interim-report/s4-rerun-2026-09-27.md),
+[초기 S4 검증](archive/first-evaluation-2026-10/s4-validation-2026-09-26.md), [중간보고서 재측정](archive/interim-report/s4-rerun-2026-09-27.md),
 [최종 평가](archive/first-evaluation-2026-10/final-evaluation-results-2026-10-03.md)의 코드·사양·조건이 다르므로 같은 반복 집합으로 합산하지 않는다.
 
 ## 증거와 동작 근거
