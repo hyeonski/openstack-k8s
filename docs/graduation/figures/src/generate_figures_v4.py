@@ -145,9 +145,8 @@ text(a,3.4,9.65,'실패',size=9);text(a,11.6,9.65,'실패',size=9)
 save(f,'3-5')
 
 f,a=canvas(8, coord_height=9.7)
-# 코드·설정 고정은 전체 평가 구성을 감싼다.
+# 전체 평가 구성을 감싸는 바깥 틀은 유지한다.
 box(a,.2,.65,14.6,8.65,'')
-text(a,2.3,.65,'코드·설정 고정',bold=True).set_bbox(dict(facecolor='white',edgecolor='none',pad=3))
 box(a,.65,1.25,4,1.0,'장애 주입기',accent=True)
 box(a,9.8,1.25,4.5,1.0,'대응 정책',accent=True)
 box(a,5.2,3.0,4.5,1.2,'대상 시스템\n(Kubernetes·OpenStack)',GRAY,size=9.5)
