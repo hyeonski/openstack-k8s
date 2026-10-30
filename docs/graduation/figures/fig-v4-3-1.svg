@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="425.19685pt" height="255.11811pt" viewBox="0 0 425.19685 255.11811" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 255.11811 
+L 425.19685 255.11811 
+L 425.19685 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 4.251969 9.92126 
+L 195.590551 9.92126 
+L 195.590551 80.787402 
+L 4.251969 80.787402 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #eeeeee; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 11.338583 34.015748 
+L 96.377953 34.015748 
+L 96.377953 72.283465 
+L 11.338583 72.283465 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #ffffff; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 103.464567 34.015748 
+L 188.503937 34.015748 
+L 188.503937 72.283465 
+L 103.464567 72.283465 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #ffffff; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 4.251969 89.291339 
+L 195.590551 89.291339 
+L 195.590551 160.15748 
+L 4.251969 160.15748 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #eeeeee; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 11.338583 113.385827 
+L 96.377953 113.385827 
+L 96.377953 151.653543 
+L 11.338583 151.653543 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #ffffff; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 103.464567 113.385827 
+L 188.503937 113.385827 
+L 188.503937 151.653543 
+L 103.464567 151.653543 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #ffffff; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 4.251969 168.661417 
+L 195.590551 168.661417 
+L 195.590551 239.527559 
+L 4.251969 239.527559 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #eeeeee; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 11.338583 192.755906 
+L 96.377953 192.755906 
+L 96.377953 231.023622 
+L 11.338583 231.023622 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #ffffff; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 103.464567 192.755906 
+L 188.503937 192.755906 
+L 188.503937 231.023622 
+L 103.464567 231.023622 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #ffffff; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 214.015748 8.503937 
+L 344.409449 8.503937 
+L 344.409449 36.850394 
+L 214.015748 36.850394 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #eeeeee; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 223.937008 53.858268 
+L 333.070866 53.858268 
+L 333.070866 73.700787 
+L 223.937008 73.700787 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #ffffff; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 223.937008 89.291339 
+L 333.070866 89.291339 
+L 333.070866 109.133858 
+L 223.937008 109.133858 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #ffffff; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 223.937008 124.724409 
+L 333.070866 124.724409 
+L 333.070866 144.566929 
+L 223.937008 144.566929 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #ffffff; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 223.937008 160.15748 
+L 333.070866 160.15748 
+L 333.070866 180 
+L 223.937008 180 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #ffffff; stroke: #315f7c; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_16">
+    <path d="M 223.937008 223.937008 
+L 333.070866 223.937008 
+L 333.070866 243.779528 
+L 223.937008 243.779528 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #ffffff; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_17">
+    <path d="M 278.503937 36.850394 
+Q 278.503937 44.853977 278.503937 51.963133 
+" clip-path="url(#pcdc7b79909)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 280.103937 48.763133 
+L 278.503937 51.963133 
+L 276.903937 48.763133 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_18">
+    <path d="M 278.503937 73.700787 
+Q 278.503937 80.995536 278.503937 87.395858 
+" clip-path="url(#pcdc7b79909)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 280.103937 84.195858 
+L 278.503937 87.395858 
+L 276.903937 84.195858 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_19">
+    <path d="M 278.503937 109.133858 
+Q 278.503937 116.428607 278.503937 122.828929 
+" clip-path="url(#pcdc7b79909)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 280.103937 119.628929 
+L 278.503937 122.828929 
+L 276.903937 119.628929 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_20">
+    <path d="M 278.503937 144.566929 
+Q 278.503937 151.861678 278.503937 158.262 
+" clip-path="url(#pcdc7b79909)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 280.103937 155.062 
+L 278.503937 158.262 
+L 276.903937 155.062 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_21">
+    <path d="M 278.503937 180 
+Q 278.503937 201.468366 278.503937 222.042306 
+" clip-path="url(#pcdc7b79909)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 280.103937 218.842306 
+L 278.503937 222.042306 
+L 276.903937 218.842306 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_22">
+    <path d="M 361.417323 138.897638 
+L 420.944882 138.897638 
+L 420.944882 167.244094 
+L 361.417323 167.244094 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #eeeeee; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_23">
+    <path d="M 361.417323 195.590551 
+L 420.944882 195.590551 
+L 420.944882 223.937008 
+L 361.417323 223.937008 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #eeeeee; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_24">
+    <path d="M 347.244094 153.070866 
+Q 353.830701 153.070866 359.52288 153.070866 
+" clip-path="url(#pcdc7b79909)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 356.32288 151.470866 
+L 359.52288 153.070866 
+L 356.32288 154.670866 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_25">
+    <path d="M 347.244094 209.76378 
+Q 353.830701 209.76378 359.52288 209.76378 
+" clip-path="url(#pcdc7b79909)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 356.32288 208.16378 
+L 359.52288 209.76378 
+L 356.32288 211.36378 
+z
+" clip-path="url(#pcdc7b79909)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="line2d_1">
+    <path d="M 333.070866 165.826772 
+L 347.244094 165.826772 
+L 347.244094 153.070866 
+" clip-path="url(#pcdc7b79909)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_2">
+    <path d="M 333.070866 174.330709 
+L 347.244094 174.330709 
+L 347.244094 209.76378 
+" clip-path="url(#pcdc7b79909)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: square"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="99.92126" y="24.619374" transform="rotate(-0 99.92126 24.619374)">controller</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(32.08319 49.742263)">OpenStack</text>
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(29.776236 62.357028)">제어 서비스</text>
+   </g>
+   <g id="text_3">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(108.829018 49.718356)">kind management</text>
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(127.984252 62.357028)">클러스터</text>
+   </g>
+   <g id="text_4">
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="99.92126" y="103.404453" transform="rotate(-0 99.92126 103.404453)">compute 호스트 1</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="53.858268" y="134.872341" transform="rotate(-0 53.858268 134.872341)">control plane VM</text>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(117.402221 130.207107)">재배치 목적지</text>
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(123.654408 141.641326)">worker VM</text>
+   </g>
+   <g id="text_7">
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="99.92126" y="182.774531" transform="rotate(-0 99.92126 182.774531)">compute 호스트 2</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(25.276236 209.577186)">서비스의 원래</text>
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(31.528424 221.011404)">worker VM</text>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(123.923705 209.577186)">시나리오 1</text>
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(128.421596 221.154842)">경쟁 VM</text>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(235.710958 19.245915)">Service · Deployment</text>
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(255.010333 31.849431)">· StatefulSet</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="278.503937" y="67.141168" transform="rotate(-0 278.503937 67.141168)">Pod</text>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="278.503937" y="102.574239" transform="rotate(-0 278.503937 102.574239)">Node</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="278.503937" y="138.00731" transform="rotate(-0 278.503937 138.00731)">Machine</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="278.503937" y="173.258271" transform="rotate(-0 278.503937 173.258271)">Nova VM</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="278.503937" y="236.593424" transform="rotate(-0 278.503937 236.593424)">compute 호스트</text>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: start; fill: #252525" x="284.88189" y="84.999436" transform="rotate(-0 284.88189 84.999436)">nodeName</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: start; fill: #252525" x="284.88189" y="119.423522" transform="rotate(-0 284.88189 119.423522)">providerID</text>
+   </g>
+   <g id="text_18">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: start; fill: #252525" x="284.88189" y="154.856593" transform="rotate(-0 284.88189 154.856593)">providerID</text>
+   </g>
+   <g id="text_19">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(374.352509 150.490397)">Neutron</text>
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(382.499618 160.755319)">port</text>
+   </g>
+   <g id="text_20">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(377.906805 207.36542)">Cinder</text>
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(376.244618 218.88542)">volume</text>
+   </g>
+   <g id="text_21">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="382.677165" y="131.722784" transform="rotate(-0 382.677165 131.722784)">device_id</text>
+   </g>
+   <g id="text_22">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(359.644197 237.1292)">attachment</text>
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(364.637087 248.033965)">server_id</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pcdc7b79909">
+   <rect x="0" y="0" width="425.19685" height="255.11811"/>
+  </clipPath>
+ </defs>
+</svg>

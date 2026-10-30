@@ -10,6 +10,7 @@
 | [본평가 최종 결과](graduation/fresh-evaluation-final-results-2026-10-29.md) | main29·보충11의 strict 판정·지표, 무효 보존, 사후 측정완전성 감사, 종료 증거 |
 | [S2 확장 실험(v13) 결과](graduation/s2-extension-v13-results-2026-10-29.md) | S2 분리만(S) ablation 4건의 실행·판정·종료 기록 |
 | [평가 운영·수리 기록 통합본](graduation/archive/evaluation-operations-log-2026-10-27-29.md) | 본평가 중 운영 결정·수리·보충·중단·확장 준비, v12 측정 전 거부 기록을 시간순으로 합친 것 |
+| [33회에 포함하지 않은 실험 기록](graduation/archive/excluded-attempts-2026-10.md) | 제대로 완료되지 않은 실행 15회의 색인과 압축 보관본(원자료 정리 전 보존) 위치·해시 |
 
 ## 연구 설계와 평가 하네스
 

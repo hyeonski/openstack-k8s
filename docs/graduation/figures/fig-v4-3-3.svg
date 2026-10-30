@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="425.19685pt" height="226.771654pt" viewBox="0 0 425.19685 226.771654" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 226.771654 
+L 425.19685 226.771654 
+L 425.19685 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 110.551181 9.627098 
+L 280.629921 9.627098 
+L 280.629921 39.578072 
+L 110.551181 39.578072 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #eeeeee; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 110.551181 71.6684 
+L 280.629921 71.6684 
+L 280.629921 94.13163 
+L 110.551181 94.13163 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #eeeeee; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 110.551181 110.176794 
+L 280.629921 110.176794 
+L 280.629921 132.640024 
+L 110.551181 132.640024 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #eeeeee; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 110.551181 148.685188 
+L 280.629921 148.685188 
+L 280.629921 178.636161 
+L 110.551181 178.636161 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #eeeeee; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 195.590551 39.578072 
+Q 195.590551 55.123783 195.590551 69.775067 
+" clip-path="url(#p3d325f4046)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 197.190551 66.575067 
+L 195.590551 69.775067 
+L 193.990551 66.575067 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 7.086614 53.483881 
+L 86.456693 53.483881 
+L 86.456693 74.877433 
+L 7.086614 74.877433 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #ffffff; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 46.771654 24.602585 
+Q 46.771654 38.544368 46.771654 51.591723 
+" clip-path="url(#p3d325f4046)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 48.371654 48.391723 
+L 46.771654 51.591723 
+L 45.171654 48.391723 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 325.984252 17.114842 
+Q 303.806748 17.114842 282.523672 17.114842 
+" clip-path="url(#p3d325f4046)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 285.723672 18.714842 
+L 282.523672 17.114842 
+L 285.723672 15.514842 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 195.590551 94.13163 
+Q 195.590551 101.654759 195.590551 108.283461 
+" clip-path="url(#p3d325f4046)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 197.190551 105.083461 
+L 195.590551 108.283461 
+L 193.990551 105.083461 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 195.590551 132.640024 
+Q 195.590551 140.163153 195.590551 146.791855 
+" clip-path="url(#p3d325f4046)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 197.190551 143.591855 
+L 195.590551 146.791855 
+L 193.990551 143.591855 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 325.984252 157.242609 
+Q 303.806748 157.242609 282.523672 157.242609 
+" clip-path="url(#p3d325f4046)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 285.723672 158.842609 
+L 282.523672 157.242609 
+L 285.723672 155.642609 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 56.692913 204.308424 
+L 192.755906 204.308424 
+L 192.755906 219.28391 
+L 56.692913 219.28391 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #ffffff; stroke: #315f7c; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 229.606299 204.308424 
+L 365.669291 204.308424 
+L 365.669291 219.28391 
+L 229.606299 219.28391 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #ffffff; stroke: #666666; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 127.559055 178.636161 
+Q 127.559055 190.972448 127.559055 202.414308 
+" clip-path="url(#p3d325f4046)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 129.159055 199.214308 
+L 127.559055 202.414308 
+L 125.959055 199.214308 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_16">
+    <path d="M 263.622047 178.636161 
+Q 263.622047 190.972448 263.622047 202.414308 
+" clip-path="url(#p3d325f4046)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 265.222047 199.214308 
+L 263.622047 202.414308 
+L 262.022047 199.214308 
+z
+" clip-path="url(#p3d325f4046)" style="fill: #252525; stroke: #252525; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="line2d_1">
+    <path d="M 110.551181 24.602585 
+L 46.771654 24.602585 
+" clip-path="url(#p3d325f4046)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_2">
+    <path d="M 280.629921 29.950973 
+L 325.984252 29.950973 
+L 325.984252 17.114842 
+" clip-path="url(#p3d325f4046)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_3">
+    <path d="M 280.629921 170.07874 
+L 325.984252 170.07874 
+L 325.984252 157.242609 
+" clip-path="url(#p3d325f4046)" style="fill: none; stroke: #252525; stroke-width: 0.8; stroke-linecap: square"/>
+   </g>
+   <g id="text_1">
+    <text style="font-size: 9.5px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(163.750707 22.16153)">진단 반복 루프</text>
+    <text style="font-size: 9.5px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(157.94309 34.150085)">60초 창, 최대 6회</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 9.5px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="195.590551" y="86.53896" transform="rotate(-0 195.590551 86.53896)">목적지 후보 필터</text>
+   </g>
+   <g id="text_3">
+    <text style="font-size: 9.5px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="195.590551" y="123.866534" transform="rotate(-0 195.590551 123.866534)">Deployment patch</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 9.5px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(170.170629 161.21962)">안정화 루프</text>
+    <text style="font-size: 9.5px; font-family: 'Malgun Gothic'; fill: #252525" transform="translate(157.94309 173.208174)">60초 창, 최대 8회</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: start; fill: #252525" x="202.677165" y="60.175492" transform="rotate(-0 202.677165 60.175492)">조건 충족</text>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 9.5px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="46.771654" y="67.682297" transform="rotate(-0 46.771654 67.682297)">보류</text>
+   </g>
+   <g id="text_7">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="77.952756" y="45.164849" transform="rotate(-0 77.952756 45.164849)">조건 부족</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 9.5px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="124.724409" y="215.472222" transform="rotate(-0 124.724409 215.472222)">안정화 조건 충족</text>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 9.5px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="297.637795" y="215.48187" transform="rotate(-0 297.637795 215.48187)">검토 필요 종료</text>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="79.370079" y="194.919714" transform="rotate(-0 79.370079 194.919714)">3회 연속 정상</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 9px; font-family: 'Malgun Gothic'; text-anchor: middle; fill: #252525" x="323.149606" y="194.954871" transform="rotate(-0 323.149606 194.954871)">8회 안에 미충족</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p3d325f4046">
+   <rect x="0" y="0" width="425.19685" height="226.771654"/>
+  </clipPath>
+ </defs>
+</svg>
